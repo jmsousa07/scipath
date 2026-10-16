@@ -91,12 +91,24 @@ public class ApiExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ProblemDetail> parametroComTipoErrado(
             MethodArgumentTypeMismatchException ex, HttpServletRequest requisicao) {
-        String tipoEsperado = ex.getRequiredType() == null ? "esperado" : ex.getRequiredType().getSimpleName();
-        List<ErroDeCampo> erros = List.of(
-                new ErroDeCampo(ex.getName(), "deve ser um valor do tipo " + tipoEsperado));
+        // Booleano é o único tipo do contrato cujo valor de recusa está publicado como
+        // exemplo literal ("deve ser true ou false", resposta 400 de /categorias em
+        // contracts/openapi.yaml). Repetir o nome da classe Java ("Boolean") seria
+        // acionável para quem lê o código e ruído para quem consome a API.
+        boolean booleano = Boolean.class.equals(ex.getRequiredType());
+        String motivo = booleano
+                ? "deve ser true ou false"
+                : "deve ser um valor do tipo " + nomeDoTipo(ex.getRequiredType());
+        String detalhe = booleano
+                ? "O parâmetro '" + ex.getName() + "' deve ser true ou false."
+                : "O parâmetro '" + ex.getName() + "' está em formato inválido: corrija e envie novamente.";
+        List<ErroDeCampo> erros = List.of(new ErroDeCampo(ex.getName(), motivo));
         return problema(HttpStatus.BAD_REQUEST, TIPO_VALIDACAO, "Requisição inválida",
-                "O parâmetro '" + ex.getName() + "' está em formato inválido: corrija e envie novamente.",
-                requisicao, erros);
+                detalhe, requisicao, erros);
+    }
+
+    private static String nomeDoTipo(Class<?> tipo) {
+        return tipo == null ? "esperado" : tipo.getSimpleName();
     }
 
     /** Parâmetro de consulta obrigatório ausente. */
