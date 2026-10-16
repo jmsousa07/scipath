@@ -18,7 +18,7 @@ ENV_FILE       := $(if $(wildcard .env),.env,$(wildcard $(MAIN_ROOT)/.env))
 # Carrega o .env exportando cada variável (SPRING_DATASOURCE_*) sem imprimir segredo.
 LOAD_ENV := set -a; if [ -f "$(ENV_FILE)" ]; then . "$(ENV_FILE)"; fi; set +a;
 
-.PHONY: help doctor up db\:migrate db\:reset api\:dev web\:dev test lint e2e contract\:check
+.PHONY: help doctor up db\:migrate db\:migrate\:test db\:reset api\:dev web\:dev test lint e2e contract\:check
 
 help:            ## lista os alvos
 	@grep -E '^[a-zA-Z_:\\]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=" *## "}{gsub(/\\/,"",$$1); sub(/:[ 	]*$$/,"",$$1); printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -36,8 +36,29 @@ doctor:          ## confere ferramentas e banco
 up: db\:migrate  ## sobe o que já existir (banco + API + web)
 	@echo "Suba API e web em terminais separados: make api:dev / make web:dev"
 
-db\:migrate:     ## aplica migrações Flyway (f0.2)
-	@test -f backend/pom.xml && (cd backend && ./mvnw -q flyway:migrate) || echo "backend/ ainda não existe (card f0.2)"
+# Comando compartilhado das migrações. $(1) = variável do .env com a URL do banco alvo.
+# O plugin Flyway do Maven NÃO lê application.yml nem .env: url/user/password vêm por
+# -Dflyway.*, sempre a partir do .env carregado (SPRING_DATASOURCE_*). locations precisa ser
+# filesystem: — com classpath:db/migration o plugin cria a tabela de histórico e não encontra
+# migração nenhuma (exit 0, schema vazio). Procedimento completo em db/migration/README.md.
+# Sem -q: a linha "Successfully applied N migrations" é a evidência exigida (AGENTS.md §17.5).
+# A receita é UMA cadeia de shell, sem "|| echo": falha do Flyway tem de sair com exit != 0.
+define flyway_migrate
+	@test -f backend/pom.xml || { echo "backend/ ausente (card F0.1)"; exit 1; }
+	@$(LOAD_ENV) \
+	  url="$${$(1):?$(1) ausente no .env — rode infra/db-setup.sh}"; \
+	  cd backend && ./mvnw --batch-mode flyway:migrate \
+	    -Dflyway.url="$$url" \
+	    -Dflyway.user="$$SPRING_DATASOURCE_USERNAME" \
+	    -Dflyway.password=<valor-omitido> \
+	    -Dflyway.locations=filesystem:src/main/resources/db/migration
+endef
+
+db\:migrate:     ## aplica as migrações Flyway no banco de dev (.env: SPRING_DATASOURCE_URL)
+	$(call flyway_migrate,SPRING_DATASOURCE_URL)
+
+db\:migrate\:test: ## aplica as migrações Flyway no banco de teste (.env: SPRING_DATASOURCE_URL_TEST)
+	$(call flyway_migrate,SPRING_DATASOURCE_URL_TEST)
 
 db\:reset:       ## recria o banco (destrutivo, só local — precisa confirmar)
 	@bash infra/db-setup.sh --reset

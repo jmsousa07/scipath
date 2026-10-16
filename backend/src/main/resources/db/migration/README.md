@@ -11,6 +11,15 @@ descritivo; o número é a ordem.
 
 ## Como aplicar
 
+```bash
+make db:migrate        # banco de dev   (SPRING_DATASOURCE_URL)
+make db:migrate:test   # banco de teste (SPRING_DATASOURCE_URL_TEST)
+```
+
+Os dois alvos do `Makefile` carregam o `.env` da raiz e passam os `-Dflyway.*`; falha de
+migração sai com exit != 0. O comando manual abaixo faz o mesmo, para quem precisa de
+controle fino (outro banco, outro `.env`):
+
 O plugin Flyway do Maven **não** lê o `application.yml` nem o `.env`: a URL, o usuário e a
 senha vêm de `-Dflyway.*` (ou de um `flyway.conf` fora do repositório). O `.env` da raiz
 tem as variáveis e é a fonte dos valores:
