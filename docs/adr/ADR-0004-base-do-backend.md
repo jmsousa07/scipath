@@ -52,6 +52,13 @@ src/test/java/com/scipath/{SciPathApplicationTests,health/HealthControllerTest,h
    (foi o que atendeu o critério 4 do F0.1), **inaceitável em produção**: serviria com schema
    desatualizado silenciosamente. Restringir a estratégia tolerante a `dev`/`test` por perfil;
    em produção a subida falha rápido.
+   **Fechado no card E1.4 (2026-10-16):** `FlywayConfig` registra a estratégia tolerante sob
+   `@Profile({"dev","test"})`; fora deles vale o fail-fast do Spring Boot e a aplicação não
+   sobe com migração quebrada (cenário verificado em `docs/qa/e1-4-*`, executando a aplicação
+   com `java -cp` e uma migração `V__quebrada.sql`).
+   Não existe perfil padrão: sem perfil explícito o comportamento é o seguro, e o alvo
+   `make api:dev` exporta `SPRING_PROFILES_ACTIVE=dev` para preservar o uso local; a suíte roda
+   no perfil `test` (surefire).
 4. **A suíte de testes depende do ambiente e a evidência não é reproduzível de um shell limpo.**
    Verificado em 2026-10-16: `./mvnw test` num shell sem as variáveis `SPRING_DATASOURCE_*`
    termina em **BUILD FAILURE** (5 testes, 1 erro) com
@@ -71,6 +78,13 @@ src/test/java/com/scipath/{SciPathApplicationTests,health/HealthControllerTest,h
 7. Estrutura de pacotes por domínio (`account`, `profile`, `material`, `file`, `taxonomy`)
    quando o domínio chegar; `health` permanece como está.
 8. Sem CORS/segurança configurados — esperado: é a Etapa 3 (ADR-0003).
+   **Nota de 2026-10-16 (card E1.4):** CORS e segurança continuam fora desta etapa e
+   seguem sendo entregues na Etapa 3, sem código agora. O que o E1.4 fez foi deixar a
+   *fronteira* pronta para eles: o tratamento de erro único já responde 401 e 403 no
+   formato `ProblemDetail` do contrato (`urn:scipath:erro:nao_autenticado` e
+   `urn:scipath:erro:acesso_negado`) e o ajuste 3 (Flyway por perfil) foi fechado no
+   mesmo card. A Etapa 3 só precisa lançar as exceções e configurar o filtro — nenhum
+   segundo formato de erro nasce depois.
 
 ## Decisão
 
