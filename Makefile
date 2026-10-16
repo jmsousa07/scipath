@@ -44,7 +44,8 @@ db\:reset:       ## recria o banco (destrutivo, só local — precisa confirmar)
 
 api\:dev:        ## API em :8080
 	@test -f backend/pom.xml || { echo "backend/ ainda não existe (card F0.1)"; exit 1; }
-	@$(LOAD_ENV) cd backend && exec ./mvnw -q spring-boot:run
+	@# Perfil dev: tolera banco fora na subida (ADR-0004 ajuste 3). Sem perfil o backend falha rápido.
+	@$(LOAD_ENV) export SPRING_PROFILES_ACTIVE=dev; cd backend && exec ./mvnw -q spring-boot:run
 
 web\:dev:        ## Next em :3000 (f0.3)
 	@test -f frontend/package.json && (cd frontend && npm run dev) || echo "frontend/ ainda não existe (card f0.3)"
