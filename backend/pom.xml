@@ -79,12 +79,18 @@
                migração tolera falha na subida — a máquina tem 954 MB e, sob pressão de
                memória, o Hikari deixa de obter conexão em 2 s (medido em 2026-10-16),
                o que não é motivo para reprovar teste que não é de schema. É também onde
-               o card E1.5 vai declarar o datasource de scipath_test. Sem perfil, a
-               suíte herdaria o fail-fast e um Postgres fora do ar derrubaria até o
-               teste de /api/health, que existe justamente para tolerar banco fora. -->
+               o card E1.5 declarar o datasource de scipath_test
+               (src/test/resources/application-test.yml). Sem perfil, a suíte herdaria o
+               fail-fast e um Postgres fora do ar derrubaria até o teste de /api/health,
+               que existe justamente para tolerar banco fora. -->
           <systemPropertyVariables>
             <spring.profiles.active>test</spring.profiles.active>
           </systemPropertyVariables>
+          <!-- Heap limitado no fork do surefire: a máquina tem 954 MB e roda o Maven
+               (MAVEN_OPTS=-Xmx384m) e a JVM dos testes ao mesmo tempo (AGENTS.md —
+               higiene de recursos). TieredStopAtLevel=1 corta a compilação JIT de nível
+               mais caro: menos CPU e menos metadados de código para uma suíte curta. -->
+          <argLine>-Xmx256m -XX:TieredStopAtLevel=1</argLine>
         </configuration>
       </plugin>
     </plugins>

@@ -71,8 +71,23 @@ src/test/java/com/scipath/{SciPathApplicationTests,health/HealthControllerTest,h
    **Correção obrigatória:** `application-test.yml` (ou `.env.test`) com datasource explícito para
    `scipath_test` e heap limitado no surefire, para que build + testes rodem num clone limpo sem
    depender do ambiente de quem executa (§17.2, §17.5, §21.3).
+   **Fechado no card E1.5 (2026-10-16):** existe `backend/src/test/resources/application-test.yml`
+   apontando para `scipath_test`, com autenticação **sem senha** — role `scipath_test` (LOGIN,
+   `PASSWORD NULL`) e regra `trust` no `pg_hba` restrita ao banco, à role e ao loopback
+   (`infra/db-test-setup.sh`; opção (i) do card). O alvo `make test` deixou de carregar o `.env`
+   e passou a limpar `SPRING_DATASOURCE_*` herdadas — sem isso a variável de ambiente venceria o
+   YAML e a suíte rodaria contra o banco de desenvolvimento. Heap limitado nos dois lados:
+   `MAVEN_OPTS=-Xmx384m` no alvo e `-Xmx256m` no fork do surefire. O critério de reprodutibilidade
+   (`env -i PATH=/usr/bin:/bin HOME=$HOME make test`) fica verde com 24/24, saída em
+   `docs/qa/e1-5-*`.
 5. Não existe teste de integração contra o PostgreSQL real (o caso `database=DOWN` foi
    verificado à mão). §17.2 pede integração com banco real — adicionar contra `scipath_test`.
+   **Fechado no card E1.5 (2026-10-16):** `MigracaoIntegracaoTest` roda contra o Postgres real e
+   prova (a) que as migrações V1 e V2 são aplicadas a partir de schema vazio e (b) que as
+   invariantes que o E1.2/E1.3 verificaram por script agora falham o build: categoria
+   inexistente recusada pela FK `material_category_id_fkey` (RN005) e estado de publicação fora
+   do enum recusado pelo CHECK `material_estado_valido` (ADR-0005 §3). O teste também confirma
+   que o datasource da suíte é `scipath_test` e não `scipath`.
 6. Observabilidade mínima (RNF029) ainda é só o `/health` próprio. Decidir na Etapa 1 entre
    Actuator (com endpoints restritos) ou log estruturado + o `/health` do contrato.
 7. Estrutura de pacotes por domínio (`account`, `profile`, `material`, `file`, `taxonomy`)
