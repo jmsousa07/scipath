@@ -39,7 +39,7 @@ src/test/java/com/scipath/{SciPathApplicationTests,health/HealthControllerTest,h
 | Configuração sem segredos; nada commitado (RNF012) | `application.yml` usa `${SPRING_DATASOURCE_*}` sem valor padrão — se o `.env` faltar, `/health` responde `database=DOWN` em vez de inventar destino |
 | DTO separado da regra (§14.3 — "não retornar entidades") | `HealthResponse` é record próprio; `HealthService` não é exposto |
 | Migrações versionadas (RNF028) | Flyway configurado com `flyway-database-postgresql` |
-| Testes proporcionais (§17.1/§17.2) | teste de serviço + teste do controller com `MockMvc` standalone |
+| Testes proporcionais (§17.1/§17.2) | teste de serviço + teste do controller com `MockMvc` standalone — porém dependentes de variável de ambiente (ver ajuste 4) |
 | Legibilidade e "porquê" documentados (§21.4) | comentários explicam a decisão, não o óbvio |
 
 **Desvios e ajustes obrigatórios** (viram critério de aceite de cards da Etapa 1):
@@ -52,17 +52,29 @@ src/test/java/com/scipath/{SciPathApplicationTests,health/HealthControllerTest,h
    (foi o que atendeu o critério 4 do F0.1), **inaceitável em produção**: serviria com schema
    desatualizado silenciosamente. Restringir a estratégia tolerante a `dev`/`test` por perfil;
    em produção a subida falha rápido.
-4. Não existe teste de integração contra o PostgreSQL real (o caso `database=DOWN` foi
+4. **A suíte de testes depende do ambiente e a evidência não é reproduzível de um shell limpo.**
+   Verificado em 2026-10-16: `./mvnw test` num shell sem as variáveis `SPRING_DATASOURCE_*`
+   termina em **BUILD FAILURE** (5 testes, 1 erro) com
+   `Failed to determine a suitable driver class` — o contexto Spring não sobe porque
+   `spring.datasource.url` está vazio. O alvo `make test` do Makefile **não** carrega o `.env`
+   (linha 38: `cd backend && ./mvnw -q test`), e não existe `src/test/resources/application-test.yml`.
+   O log de evidência do implementador (`docs/qa/f0-1-backend.log`) registra a mesma suíte com
+   5/5 verdes no ambiente dele — a diferença **não é explicada pelo Makefile** e fica registrada
+   como ponto aberto para o card de QA, não como acusação de log fabricado.
+   **Correção obrigatória:** `application-test.yml` (ou `.env.test`) com datasource explícito para
+   `scipath_test` e heap limitado no surefire, para que build + testes rodem num clone limpo sem
+   depender do ambiente de quem executa (§17.2, §17.5, §21.3).
+5. Não existe teste de integração contra o PostgreSQL real (o caso `database=DOWN` foi
    verificado à mão). §17.2 pede integração com banco real — adicionar contra `scipath_test`.
-5. Observabilidade mínima (RNF029) ainda é só o `/health` próprio. Decidir na Etapa 1 entre
+6. Observabilidade mínima (RNF029) ainda é só o `/health` próprio. Decidir na Etapa 1 entre
    Actuator (com endpoints restritos) ou log estruturado + o `/health` do contrato.
-6. Estrutura de pacotes por domínio (`account`, `profile`, `material`, `file`, `taxonomy`)
+7. Estrutura de pacotes por domínio (`account`, `profile`, `material`, `file`, `taxonomy`)
    quando o domínio chegar; `health` permanece como está.
-7. Sem CORS/segurança configurados — esperado: é a Etapa 3 (ADR-0003).
+8. Sem CORS/segurança configurados — esperado: é a Etapa 3 (ADR-0003).
 
 ## Decisão
 
-**Aproveitar o esqueleto como base da Etapa 1**, aplicando os ajustes 1–7 como critérios de
+**Aproveitar o esqueleto como base da Etapa 1**, aplicando os ajustes 1–8 como critérios de
 aceite dos cards correspondentes. Não descartar e não reescrever.
 
 Justificativa: nada nele contraria o DRS — os desvios são de **completude**, não de direção.
