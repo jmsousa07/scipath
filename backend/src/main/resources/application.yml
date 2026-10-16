@@ -1,0 +1,26 @@
+# Configuração da API. Nenhum segredo aqui: banco, usuário e senha vêm do .env
+# (ver infra/db-setup.sh), exportado pelo Makefile como SPRING_DATASOURCE_*.
+spring:
+  application:
+    name: scipath-backend
+  datasource:
+    # Sem valor padrão embutido: se o .env não estiver carregado, a URL fica vazia
+    # e /health reporta database=DOWN em vez de a API inventar um destino de banco.
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    hikari:
+      # Banco é opcional na subida: com o Postgres fora, a API sobe e responde
+      # database=DOWN em vez de derrubar o processo (critério 4 do card F0.1).
+      initialization-fail-timeout: -1
+      connection-timeout: 2000
+      validation-timeout: 1000
+  flyway:
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+scipath:
+  # Preenchido pelo Maven (filtragem de recursos do spring-boot-starter-parent).
+  version: '@project.version@'
