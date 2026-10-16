@@ -28,9 +28,16 @@ foi executado está listado ao final.
 
 ## Ressalvas registradas (não são "tudo ok")
 
-1. **"Lint verde" do frontend não foi confirmado.** O card `E1.10` (aberto pelo próprio worker
-   do frontend) relata ESLint 9 sem suporte e versões não travadas. Se for real, o critério de
-   lint do E1.6/E1.7 pode ter passado **por vacuidade**. Hipótese, não fato — o `E1.8` testa.
+1. ~~"Lint verde" do frontend não foi confirmado.~~ **Resolvido por leitura em 2026-10-16.** O
+   `npm run lint` roda `eslint .` com flat config de `eslint-config-next` — e o comentário no
+   `eslint.config.mjs` explica que `next lint` foi removido no Next 16, então o lint é **real**,
+   não vacuidade. Melhor que isso: o projeto traz `scripts/check-*.mjs` com modo `--check`, e o
+   `check:tokens` **reextrai os tokens do `design_system_2.html` e compara** com
+   `src/styles/tokens.css` — provando que os valores não foram inventados. Conferido por
+   amostragem: `--sc-blue:#3186ff` e `.sc-h1 clamp(2.75rem,5.4vw,4rem)` / lh 1.04 / ls −.035em
+   batem com o que extraí do DS2. Há um alvo `npm run verify` que encadeia tokens, estilo,
+   layout, typecheck, lint, build e estados — o card `E1.8` foi instruído a usá-lo. O card
+   `E1.10` continua válido para travar as versões das dependências.
 2. **O E1.2a expõe a senha do banco no `argv`** (`-Dflyway.password=<valor-omitido> visível em `ps`).
    Regressão de segurança introduzida pela própria correção; já registrada no card `E1.2b`,
    que precisa fechar isso antes de qualquer uso fora desta máquina (RNF012).
