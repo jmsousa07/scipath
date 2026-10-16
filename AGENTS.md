@@ -121,7 +121,9 @@ card volta. Se um teste falhar, isso é evidência — nunca opinião, nunca sil
 - Decisão tomada em conversa → `docs/adr/ADR-XXXX-*.md`.
 - Convenção combinada → este arquivo.
 - Fronteira de API → `contracts/openapi.yaml`.
-- Evidência → arquivo em `docs/qa/`.
+- Evidência → arquivo em `docs/qa/`, **versionado**: `docs/qa/*.log` é exceção explícita à regra
+  `*.log` do `.gitignore`. Evidência que não está no repositório não é evidência (§17.5, §21.3);
+  mantenha o log em texto e enxuto.
 - **Se só existe no chat, vai ser comprimido e perdido.** Escreva no repositório.
 
 ## Ambiente e comandos
