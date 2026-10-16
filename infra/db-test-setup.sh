@@ -13,6 +13,12 @@
 # Idempotente: pode rodar de novo sem quebrar nada. NUNCA imprime senha (não há nenhuma).
 # O banco `scipath_test` é RECRIADO do zero — é banco de teste, não guarda nada durável,
 # e recriá-lo é o que permite a suíte provar que as migrações são aplicadas a partir vazio.
+#
+# Card E1.12: além de recriar o banco, este script neutraliza o DONO dos objetos do banco de
+# teste. As duas formas de migrar (`make test`, que usa a role de teste, e `make
+# db:migrate:test`/scripts de evidência, que usam a role de dev) passam a produzir um banco
+# utilizável pela outra role — antes disso, migrar pela role de dev deixava a suíte com
+# "permission denied for table category". Detalhes no passo 4.
 set -euo pipefail
 
 HBA="/etc/postgresql/16/main/pg_hba.conf"
@@ -79,6 +85,21 @@ psql_su -d "${DB}" -c "GRANT ALL ON SCHEMA public TO ${DEV_ROLE};" >/dev/null
 psql_su -d "${DB}" -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${ROLE} IN SCHEMA public GRANT ALL ON TABLES TO ${DEV_ROLE};" >/dev/null
 psql_su -d "${DB}" -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${ROLE} IN SCHEMA public GRANT ALL ON SEQUENCES TO ${DEV_ROLE};" >/dev/null
 
+# --- card E1.12: o DONO dos objetos do banco de teste é irrelevante ---------------------
+# Há DUAS formas de migrar este banco e elas usam roles diferentes:
+#   (a) o Flyway da própria aplicação (`make test` → o contexto sobe com a role de teste
+#       `scipath_test`, que fica dona das tabelas); e
+#   (b) o plugin Flyway do Maven (`make db:migrate:test` e os scripts de evidência dos cards
+#       E1.2/E1.3/E1.2a, que usam SPRING_DATASOURCE_USERNAME do .env = role de dev `scipath`).
+# Sem o par de privilégios padrão abaixo, quem migrava por (b) deixava as tabelas com dono
+# `scipath` e a suíte — que conecta como `scipath_test` — morria com "permission denied for
+# table category" (achado reproduzível do card E1.8 → card E1.12).
+# O sentido `scipath_test` → `scipath` já existia desde o E1.5; aqui fecha-se a recíproca,
+# de modo que objetos criados por QUALQUER uma das duas roles sejam legíveis/graváveis pela
+# outra, sem que ninguém precise adivinhar quem migrou por último.
+psql_su -d "${DB}" -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${DEV_ROLE} IN SCHEMA public GRANT ALL ON TABLES TO ${ROLE};" >/dev/null
+psql_su -d "${DB}" -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${DEV_ROLE} IN SCHEMA public GRANT ALL ON SEQUENCES TO ${ROLE};" >/dev/null
+
 echo "== 5. prova de conexão sem senha (trust) =="
 PGPASSWORD="" psql -h 127.0.0.1 -p 5432 -U "${ROLE}" -d "${DB}" \
   -t -A -c "SELECT 'conexao sem senha ok: ' || current_user || ' @ ' || current_database();"
@@ -86,4 +107,6 @@ PGPASSWORD="" psql -h 127.0.0.1 -p 5432 -U "${ROLE}" -d "${DB}" \
 echo "== 6. estado inicial do banco de teste (vazio, sem migração aplicada) =="
 PGPASSWORD="" psql -h 127.0.0.1 -p 5432 -U "${ROLE}" -d "${DB}" -c "\dt"
 
-echo "== pronto. A suíte (make test) aplica as migrações em ${DB} com a role ${ROLE}. =="
+echo "== pronto. banco de teste recriado e provisão de acesso concluída. =="
+echo "   O dono dos objetos em ${DB} é irrelevante (card E1.12): migrar pela role ${ROLE}"
+echo "   ou pela role ${DEV_ROLE} deixa o banco utilizável pela outra. Ver infra/README.md."

@@ -48,3 +48,31 @@ Reversão da preparação: apagar as duas linhas entre os marcadores `# BEGIN sc
 
 A role de desenvolvimento continua com acesso ao banco de teste: os scripts de evidência
 dos cards E1.2/E1.3 usam `SPRING_DATASOURCE_URL_TEST` do `.env` e não podem quebrar.
+
+## Quem é o dono do banco/esquema de teste — e por quê (card E1.12)
+
+| Objeto | Dono | Por quê |
+|---|---|---|
+| banco `scipath_test` | role `scipath_test` | é assim que `db-test-setup.sh` o cria (`CREATE DATABASE ... OWNER`). |
+| esquema `public` | `pg_database_owner` = a role dona do banco (`scipath_test`) | no PostgreSQL 15+ o esquema `public` pertence ao dono do banco, não ao superusuário. |
+| tabelas, sequências, histórico do Flyway | **role de teste (`scipath_test`) ou role de dev (`scipath`) — tanto faz** | há duas formas de migrar este banco e cada uma usa uma role; a posse é deliberadamente irrelevante (abaixo). |
+
+**As duas formas de migrar.** A suíte (`make test`) sobe o contexto Spring com a role de
+teste (`application-test.yml`) e o Flyway da aplicação cria as tabelas — dono
+`scipath_test`. Já `make db:migrate:test` e os scripts de evidência dos cards E1.2/E1.3/E1.2a
+migram pelo plugin do Maven usando `SPRING_DATASOURCE_USERNAME` do `.env`, isto é a role de
+dev `scipath` — dono `scipath`.
+
+**Por que não se escolhe um dono só.** `DROP`/`ALTER` de tabela são privilégios do dono e não
+se concedem; os scripts de evidência do E1.2 derrubam e recriam as tabelas do `scipath_test`
+como role de dev, e a suíte precisa do banco utilizável como role de teste. Em vez de proibir
+uma das duas formas (o que quebraria a outra), `db-test-setup.sh` fecha o acesso nos **dois
+sentidos** com `ALTER DEFAULT PRIVILEGES` — objetos criados pela role de teste são concedidos
+à role de dev (desde o E1.5) e objetos criados pela role de dev são concedidos à role de teste
+(desde o E1.12). Resultado: migrar por qualquer uma das roles deixa o banco utilizável pela
+outra, e o achado do E1.8 (`permission denied for table category` depois de
+`make db:migrate:test`) não se reproduz.
+
+Consequência prática: quem quer o banco de teste num estado conhecido roda
+`infra/db-test-setup.sh`; depois disso `make test` e `make db:migrate:test` são
+intercambiáveis na ordem, sem deixar o banco meio-migrado "inutilizável" para a suíte.
