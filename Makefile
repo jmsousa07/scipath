@@ -75,11 +75,17 @@ test:            ## testes do backend
 	@test -f backend/pom.xml || { echo "backend/ ainda não existe (card F0.1)"; exit 1; }
 	@$(LOAD_ENV) cd backend && ./mvnw test
 
+# Alvos de frontend/e2e: a ausência do projeto é declarada numa linha e o alvo sai 1
+# (mesma forma dos alvos de backend). A receita NÃO usa "|| echo": com o projeto presente,
+# falha do lint/typecheck/teste tem de sair com exit != 0 — mascarar faria o alvo passar
+# verde sobre um frontend quebrado (defeito do E2.6-f1; precedente do E1.2a em db:migrate).
 lint:            ## lint + typecheck (f0.3)
-	@test -f frontend/package.json && (cd frontend && npm run lint && npm run typecheck) || echo "frontend/ ainda não existe (card f0.3)"
+	@test -f frontend/package.json || { echo "frontend/ ainda não existe (card f0.3)"; exit 1; }
+	@cd frontend && npm run lint && npm run typecheck
 
 e2e:             ## Playwright (f0.4)
-	@test -f e2e/package.json && (cd e2e && npx playwright test) || echo "e2e/ ainda não existe (card f0.4)"
+	@test -f e2e/package.json || { echo "e2e/ ainda não existe (card f0.4)"; exit 1; }
+	@cd e2e && npx playwright test
 
 contract\:check: ## valida o contrato OpenAPI
 	@npx --yes @stoplight/spectral-cli@6 lint contracts/openapi.yaml --ruleset .spectral.yaml
