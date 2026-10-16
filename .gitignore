@@ -1,0 +1,36 @@
+# --- ambiente
+.env
+.env.local
+*.log
+
+# --- java / maven
+backend/target/
+*.class
+.mvn/wrapper/maven-wrapper.jar
+
+# --- node / next
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+*.tsbuildinfo
+
+# --- testes
+e2e/test-results/
+e2e/playwright-report/
+e2e/.cache/
+playwright-report/
+
+# --- editores / so
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# --- artefatos locais de trabalho
+.worktrees/
+*.pid
+tmp/
+assets/w_*.html
+assets/debug2.html
+assets/probe.html

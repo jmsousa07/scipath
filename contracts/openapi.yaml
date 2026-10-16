@@ -1,0 +1,154 @@
+openapi: 3.1.0
+info:
+  title: SciPath API
+  version: 0.1.0
+  description: |
+    Fronteira entre backend e frontend do SciPath. Este arquivo é a fonte de verdade:
+    mudança de API começa aqui, no mesmo card da implementação (ver AGENTS.md).
+    v0.1.0 — esqueleto da fatia 0: saúde e materiais (listar/criar).
+servers:
+  - url: http://localhost:8080/api
+    description: ambiente local
+
+tags:
+  - name: sistema
+  - name: materiais
+
+paths:
+  /health:
+    get:
+      tags: [sistema]
+      summary: Estado da API
+      operationId: getHealth
+      responses:
+        '200':
+          description: API no ar
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, version, database]
+                properties:
+                  status: { type: string, enum: [UP, DEGRADED] }
+                  version: { type: string, example: 0.1.0 }
+                  database: { type: string, enum: [UP, DOWN] }
+
+  /materiais:
+    get:
+      tags: [materiais]
+      summary: Lista materiais publicados
+      operationId: listMateriais
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: tipo
+          in: query
+          description: Filtra por tipo de material
+          schema: { $ref: '#/components/schemas/TipoMaterial' }
+      responses:
+        '200':
+          description: Página de materiais, sempre ordenada por criadoEm desc
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginaMateriais' }
+    post:
+      tags: [materiais]
+      summary: Publica um material
+      operationId: criarMaterial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NovoMaterial' }
+      responses:
+        '201':
+          description: Material criado
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Material' }
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+
+components:
+  responses:
+    ErroValidacao:
+      description: Payload inválido (RFC 7807 com lista de erros)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+
+  schemas:
+    TipoMaterial:
+      type: string
+      enum: [NOTA_DE_AULA, SLIDE, ARTIGO, EXPLICACAO, AULA_GRAVADA]
+
+    Material:
+      type: object
+      required: [id, titulo, tipo, resumo, autor, criadoEm]
+      properties:
+        id: { type: string, format: uuid }
+        titulo: { type: string, minLength: 3, maxLength: 200 }
+        tipo: { $ref: '#/components/schemas/TipoMaterial' }
+        resumo: { type: string, maxLength: 600 }
+        tags:
+          type: array
+          maxItems: 12
+          items: { type: string, minLength: 2, maxLength: 40 }
+        autor: { $ref: '#/components/schemas/AutorResumo' }
+        criadoEm: { type: string, format: date-time }
+        atualizadoEm: { type: string, format: date-time }
+
+    NovoMaterial:
+      type: object
+      required: [titulo, tipo, resumo]
+      properties:
+        titulo: { type: string, minLength: 3, maxLength: 200 }
+        tipo: { $ref: '#/components/schemas/TipoMaterial' }
+        resumo: { type: string, minLength: 10, maxLength: 600 }
+        tags:
+          type: array
+          maxItems: 12
+          items: { type: string, minLength: 2, maxLength: 40 }
+
+    AutorResumo:
+      type: object
+      required: [id, nome]
+      properties:
+        id: { type: string, format: uuid }
+        nome: { type: string }
+
+    PaginaMateriais:
+      type: object
+      required: [conteudo, page, size, total]
+      properties:
+        conteudo:
+          type: array
+          items: { $ref: '#/components/schemas/Material' }
+        page: { type: integer, minimum: 0 }
+        size: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+
+    Problema:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [campo, mensagem]
+            properties:
+              campo: { type: string }
+              mensagem: { type: string }
