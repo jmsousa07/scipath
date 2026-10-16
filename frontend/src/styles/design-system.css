@@ -1,0 +1,246 @@
+/* ============================================================================
+   design-system.css — CAMADA DE COMPONENTES DO CONTRATO VISUAL
+   ----------------------------------------------------------------------------
+   ARQUIVO GERADO. Não edite à mão: rode `npm run tokens` (frontend/).
+   Gerador:  frontend/scripts/extract-ds-layer.mjs
+   Origem:   assets/design_system_2.html (extração verbatim; cada regra cita a linha de origem)
+   Conteúdo: apenas o que o DS2 define. As regras de PROJETO (breakpoints, container,
+             adaptação para 375 px) vivem em src/styles/layout.css.
+   Valores:  nenhum valor é inventado aqui — se o DS2 mudar, rode o gerador
+             (`npm run tokens`) e o diff aparece no git.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   Fundação e fundações de acessibilidade
+   --------------------------------------------------------------------------- */
+main, .main-content { padding-top:0 !important; overflow:visible !important; }
+/* assets/design_system_2.html:108 */
+.sc-root, .sc-page-root { color:var(--sc-ink); }
+/* assets/design_system_2.html:787 */
+.sc-visually-hidden { position:absolute !important; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+/* assets/design_system_2.html:788 */
+.sc-svg-defs { position:absolute; width:0; height:0; overflow:hidden; }
+/* assets/design_system_2.html:789 */
+
+/* ---------------------------------------------------------------------------
+   Estrutura de página (container, seções)
+   --------------------------------------------------------------------------- */
+.sc-main { position:relative; z-index:2; }
+/* assets/design_system_2.html:361 */
+.sc-page { max-width:1200px; margin:0 auto; padding:5.5rem 1.5rem; position:relative; }
+/* assets/design_system_2.html:362 */
+.sc-page--tight { padding:3.5rem 1.5rem; }
+/* assets/design_system_2.html:363 */
+.sc-page--dark { background:var(--glue-grey-1200); color:#fff; max-width:none; }
+/* assets/design_system_2.html:364 */
+.sc-page--dark .sc-sec__title, .sc-page--dark h2, .sc-page--dark h3 { color:#fff !important; }
+/* assets/design_system_2.html:365 */
+.sc-page--dark .sc-sec__lead { color:rgba(255,255,255,.72); }
+/* assets/design_system_2.html:366 */
+.sc-sec__head { display:flex; flex-direction:column; gap:.9rem; margin-bottom:2.5rem; max-width:56rem; }
+/* assets/design_system_2.html:368 */
+.sc-sec__num {
+  display:inline-flex; align-items:center; gap:.75rem;
+  font-family:var(--font-mono); font-size:.6875rem; letter-spacing:.18em; text-transform:uppercase; color:var(--sc-ink-muted);
+}
+/* assets/design_system_2.html:369 */
+.sc-sec__num i { font-style:normal; color:var(--sc-blue); }
+/* assets/design_system_2.html:373 */
+.sc-sec__num::after { content:''; height:1px; width:74px; background:linear-gradient(90deg,var(--sc-line-strong),transparent); }
+/* assets/design_system_2.html:374 */
+.sc-sec__title { font-family:var(--font-display); font-size:clamp(2rem,4.4vw,3.25rem); font-weight:500; line-height:1.06; letter-spacing:-.028em; }
+/* assets/design_system_2.html:375 */
+.sc-sec__title em, .sc-sec__title .sc-grad {
+  font-style:normal;
+  background:linear-gradient(96deg,var(--sc-blue),var(--sc-purple) 46%,var(--sc-red) 82%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+/* assets/design_system_2.html:376 */
+.sc-sec__lead { font-family:var(--font-text); font-size:1.0625rem; line-height:1.62; color:var(--sc-ink-soft); max-width:46rem; }
+/* assets/design_system_2.html:381 */
+.sc-subhead {
+  display:flex; align-items:baseline; gap:.75rem; margin:3rem 0 1.25rem;
+  font-family:var(--font-display); font-size:1.375rem; font-weight:500; letter-spacing:-.015em;
+}
+/* assets/design_system_2.html:382 */
+.sc-subhead__note { font-family:var(--font-mono); font-size:.6875rem; color:var(--sc-ink-muted); letter-spacing:.02em; font-weight:400; }
+/* assets/design_system_2.html:386 */
+.sc-subhead::before { content:''; width:8px; height:8px; border-radius:50%; background:var(--sc-blue); box-shadow:0 0 0 4px rgba(49,134,255,.14); }
+/* assets/design_system_2.html:387 */
+
+/* ---------------------------------------------------------------------------
+   Cabeçalho (fixo, com busca)
+   --------------------------------------------------------------------------- */
+.sc-header {
+  position:fixed; top:0; left:0; right:0; z-index:100; height:64px;
+  display:flex; align-items:center; gap:1rem; padding:0 1.5rem;
+  background:rgba(255,255,255,.78); backdrop-filter:saturate(180%) blur(14px);
+  border-bottom:1px solid transparent; transition:border-color .3s, box-shadow .3s, background .3s;
+}
+/* assets/design_system_2.html:309 */
+.sc-header.is-scrolled { border-bottom-color:var(--sc-line); box-shadow:0 6px 24px -18px rgba(18,19,23,.35); background:rgba(255,255,255,.9); }
+/* assets/design_system_2.html:315 */
+.sc-header__brand { display:flex; align-items:center; gap:.55rem; font-family:var(--font-display); font-weight:500; font-size:1.0625rem; letter-spacing:-.01em; text-decoration:none; }
+/* assets/design_system_2.html:316 */
+.sc-header__brand svg { width:20px; height:20px; }
+/* assets/design_system_2.html:317 */
+.sc-header__word { display:inline-flex; align-items:baseline; }
+/* assets/design_system_2.html:318 */
+.sc-header__word i { font-style:normal; color:var(--sc-blue); }
+/* assets/design_system_2.html:319 */
+.sc-header__nav { display:flex; align-items:center; gap:.15rem; margin-left:1rem; flex-wrap:wrap; }
+/* assets/design_system_2.html:320 */
+.sc-header__link {
+  position:relative; font-family:var(--font-text); font-size:.875rem; font-weight:500; color:var(--sc-ink-soft);
+  padding:.5rem .78rem; border-radius:var(--sc-radius-pill); text-decoration:none; transition:color .2s, background .2s;
+  letter-spacing:.005em;
+}
+/* assets/design_system_2.html:321 */
+.sc-header__link:hover { color:var(--sc-ink); background:var(--glue-grey-10); }
+/* assets/design_system_2.html:326 */
+.sc-header__link::after {
+  content:''; position:absolute; left:50%; right:50%; bottom:.28rem; height:2px; border-radius:2px;
+  background:linear-gradient(90deg,var(--sc-blue),var(--sc-purple)); transition:left .3s var(--ease-google), right .3s var(--ease-google);
+}
+/* assets/design_system_2.html:327 */
+.sc-header__link:hover::after, .sc-header__link[aria-current="true"]::after { left:.7rem; right:.7rem; }
+/* assets/design_system_2.html:331 */
+.sc-header__spacer { flex:1; }
+/* assets/design_system_2.html:332 */
+.sc-header__search { display:flex; align-items:center; gap:.5rem; }
+/* assets/design_system_2.html:333 */
+.sc-header__kbd { font-family:var(--font-mono); font-size:.625rem; color:var(--sc-ink-muted); border:1px solid var(--sc-line); border-radius:6px; padding:.15rem .35rem; background:#fff; }
+/* assets/design_system_2.html:334 */
+
+/* ---------------------------------------------------------------------------
+   Busca e campos
+   --------------------------------------------------------------------------- */
+.sc-search {
+  display:flex; align-items:center; gap:.6rem; padding:.6rem .85rem; background:#fff;
+  border:1px solid var(--sc-line-strong); border-radius:999px; box-shadow:var(--sc-shadow-s); max-width:520px;
+}
+/* assets/design_system_2.html:543 */
+.sc-search input { border:0; outline:0; flex:1; font-family:var(--font-primary); font-size:.9375rem; }
+/* assets/design_system_2.html:547 */
+.sc-search__hint { font-family:var(--font-mono); font-size:.625rem; color:var(--sc-ink-muted); }
+/* assets/design_system_2.html:548 */
+.sc-field { display:flex; flex-direction:column; gap:.4rem; max-width:360px; }
+/* assets/design_system_2.html:518 */
+.sc-field__label { font-family:var(--font-text); font-size:.8125rem; font-weight:500; color:var(--sc-ink-soft); }
+/* assets/design_system_2.html:519 */
+.sc-field__box {
+  display:flex; align-items:center; gap:.6rem; padding:.55rem .75rem 0;
+  border:1px solid var(--sc-line-strong); border-radius:var(--sc-radius); background:#fff;
+  transition:border-color .25s, box-shadow .25s;
+}
+/* assets/design_system_2.html:520 */
+.sc-field__box:focus-within { border-color:var(--sc-blue); box-shadow:0 0 0 4px rgba(49,134,255,.14); }
+/* assets/design_system_2.html:525 */
+.sc-field input, .sc-field textarea {
+  border:0; outline:0; background:transparent; font-family:var(--font-primary); font-size:.9375rem; color:var(--sc-ink);
+  width:100%; padding:.35rem 0; resize:none;
+}
+/* assets/design_system_2.html:526 */
+.sc-field--float { position:relative; padding-top:1.35rem; }
+/* assets/design_system_2.html:530 */
+.sc-field--float label {
+  position:absolute; left:.75rem; top:1.05rem; font-family:var(--font-text); font-size:.9375rem; color:var(--sc-ink-muted);
+  transition:all .22s var(--ease-google); pointer-events:none;
+}
+/* assets/design_system_2.html:531 */
+.sc-field--float input:focus + label, .sc-field--float input:not(:placeholder-shown) + label {
+  top:.32rem; font-size:.6875rem; letter-spacing:.04em; color:var(--sc-blue); text-transform:uppercase;
+}
+/* assets/design_system_2.html:535 */
+.sc-field--error .sc-field__box { border-color:var(--sc-red); box-shadow:0 0 0 4px rgba(252,65,61,.12); }
+/* assets/design_system_2.html:538 */
+.sc-field--error .sc-field__msg { color:var(--sc-red); }
+/* assets/design_system_2.html:539 */
+.sc-field--ok .sc-field__box { border-color:var(--sc-green); }
+/* assets/design_system_2.html:540 */
+.sc-field__msg { font-family:var(--font-text); font-size:.75rem; color:var(--sc-ink-muted); }
+/* assets/design_system_2.html:541 */
+.sc-field--mono input { font-family:var(--font-mono); font-size:.8125rem; }
+/* assets/design_system_2.html:542 */
+
+/* ---------------------------------------------------------------------------
+   Botões
+   --------------------------------------------------------------------------- */
+.sc-btn {
+  position:relative; display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+  font-family:var(--font-primary); font-size:.875rem; font-weight:500; letter-spacing:.01em;
+  padding:.68rem 1.1rem; border-radius:var(--sc-radius-pill); border:1px solid transparent;
+  cursor:pointer; text-decoration:none; overflow:hidden; isolation:isolate;
+  transition:transform .22s var(--ease-google), box-shadow .3s var(--ease-google), background .25s, color .25s, border-color .25s;
+}
+/* assets/design_system_2.html:475 */
+.sc-btn:active { transform:translateY(1px) scale(.99); }
+/* assets/design_system_2.html:482 */
+.sc-btn::after {
+  content:''; position:absolute; inset:0; z-index:-1; opacity:0;
+  background:linear-gradient(105deg, transparent 30%, rgba(255,255,255,.55) 50%, transparent 70%);
+  transform:translateX(-120%); transition:opacity .2s;
+}
+/* assets/design_system_2.html:484 */
+.sc-btn:hover::after { opacity:1; animation:scSheen .9s var(--ease-io); }
+/* assets/design_system_2.html:489 */
+.sc-btn--primary { background:var(--sc-ink); color:#fff; box-shadow:var(--sc-shadow-s); }
+/* assets/design_system_2.html:491 */
+.sc-btn--primary:hover { box-shadow:0 14px 34px -18px rgba(18,19,23,.55); }
+/* assets/design_system_2.html:492 */
+.sc-btn--blue { background:var(--sc-blue); color:#fff; box-shadow:var(--sc-glow-blue); }
+/* assets/design_system_2.html:493 */
+.sc-btn--blue:hover { background:var(--glue-blue-600); }
+/* assets/design_system_2.html:494 */
+.sc-btn--ghost { background:#fff; border-color:var(--sc-line-strong); color:var(--sc-ink); }
+/* assets/design_system_2.html:495 */
+.sc-btn--ghost:hover { background:var(--glue-grey-10); border-color:var(--sc-ink); }
+/* assets/design_system_2.html:496 */
+.sc-btn--text { background:transparent; color:var(--sc-blue); padding:.5rem .3rem; border-radius:8px; text-underline-offset:3px; }
+/* assets/design_system_2.html:497 */
+.sc-btn--text:hover { text-decoration:underline; }
+/* assets/design_system_2.html:498 */
+.sc-btn--sm { font-size:.8125rem; padding:.5rem .85rem; }
+/* assets/design_system_2.html:499 */
+.sc-btn--dis { background:var(--glue-grey-20); color:var(--glue-grey-500); cursor:not-allowed; box-shadow:none; }
+/* assets/design_system_2.html:500 */
+.sc-btn--lg { padding:.85rem 1.35rem !important; font-size:.9375rem !important; gap:.6rem !important; }
+/* assets/design_system_2.html:793 */
+
+/* ---------------------------------------------------------------------------
+   Rodapé
+   --------------------------------------------------------------------------- */
+.sc-footer { position:relative; z-index:2; background:var(--glue-grey-1200); color:#fff; padding:4rem 1.5rem 2rem; }
+/* assets/design_system_2.html:742 */
+.sc-footer__inner { max-width:1200px; margin:0 auto; display:grid; grid-template-columns:1.4fr repeat(3,1fr); gap:2.5rem; }
+/* assets/design_system_2.html:743 */
+.sc-footer__brand { display:flex; align-items:center; gap:.55rem; font-family:var(--font-display); font-size:1.25rem; font-weight:500; }
+/* assets/design_system_2.html:744 */
+.sc-footer__brand svg { width:22px; height:22px; }
+/* assets/design_system_2.html:745 */
+.sc-footer__copy { font-family:var(--font-text); font-size:.875rem; line-height:1.65; color:rgba(255,255,255,.68); margin-top:.9rem; max-width:34ch; }
+/* assets/design_system_2.html:746 */
+.sc-footer__title { font-family:var(--font-mono); font-size:.625rem; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.5); margin-bottom:.75rem; }
+/* assets/design_system_2.html:747 */
+.sc-footer__link { display:block; font-family:var(--font-text); font-size:.875rem; color:rgba(255,255,255,.82); text-decoration:none; padding:.22rem 0; transition:color .2s, transform .2s var(--ease-google); }
+/* assets/design_system_2.html:748 */
+.sc-footer__link:hover { color:#fff; transform:translateX(3px); }
+/* assets/design_system_2.html:749 */
+.sc-footer__bottom { max-width:1200px; margin:3rem auto 0; padding-top:1.25rem; border-top:1px solid rgba(255,255,255,.12); display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; font-family:var(--font-mono); font-size:.625rem; color:rgba(255,255,255,.55); }
+/* assets/design_system_2.html:750 */
+
+/* ---------------------------------------------------------------------------
+   Movimento: brilho do botão
+   --------------------------------------------------------------------------- */
+@keyframes scSheen { from { transform:translateX(-120%); } to { transform:translateX(120%); } }
+/* assets/design_system_2.html:490 */
+
+/* ---------------------------------------------------------------------------
+   Movimento: preferência do usuário (RNF005)
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .sc-reveal, .sc-reveal--left, .sc-reveal--right, .sc-reveal--scale, .sc-reveal--blur { opacity:1 !important; transform:none !important; filter:none !important; }
+  .sc-js .sc-hero__chips > *, .sc-js .sc-hero__actions > *, .sc-js .sc-hero__stats > * { opacity:1 !important; animation:none !important; }
+  * { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; }
+}
+/* assets/design_system_2.html:735 */

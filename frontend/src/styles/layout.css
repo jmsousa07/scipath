@@ -1,0 +1,181 @@
+/* ============================================================================
+   layout.css — REGRAS DE PROJETO (não vêm do DS2)
+   ----------------------------------------------------------------------------
+   Só entra aqui o que é decisão de projeto: casca da página, alvos de toque,
+   breakpoints e a matemática que impede rolagem horizontal em 375 px e 1440 px
+   (RNF002). Todo valor de cor vem de token (var(--sc-*) / var(--glue-*)).
+   Nenhuma regra daqui "corrige" o DS2: quando o DS2 já resolve, ele manda.
+
+   O DS2 é um documento de desktop; a adaptação para telas estreitas entra por
+   `max-width`, de modo que no desktop o contrato fique exatamente como desenhado.
+   A exceção é o `1fr` do rodapé (§3), que precisa de override nos dois lados do
+   breakpoint — está comentado lá.
+
+   Verificação automática: `npm run check:layout`.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   1. Casca (cabeçalho fixo + main + rodapé no fim da tela) e alvos de toque
+   --------------------------------------------------------------------------- */
+.sc-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  position: relative;
+}
+
+.sc-shell > .sc-main {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+/* alvo de teclado/toque confortável (WCAG 2.2 AA — RNF008) */
+.sc-btn,
+.sc-header__link,
+.sc-footer__link {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sc-footer__link {
+  min-height: 2.25rem;
+}
+
+/* "pular para o conteúdo": primeiro elemento focável da página */
+.sc-skip-link {
+  position: absolute;
+  left: 1rem;
+  top: 0.5rem;
+  z-index: 200;
+  transform: translateY(-250%);
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--sc-radius-s);
+  background: var(--sc-ink);
+  color: var(--glue-grey-0);
+  font-family: var(--font-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: transform var(--dur-fast) var(--ease-io);
+}
+
+.sc-skip-link:focus {
+  transform: none;
+}
+
+/* ---------------------------------------------------------------------------
+   2. Busca do cabeçalho
+   `.sc-search input` é `flex:1`; sem `min-width:0` o min-content do input empurra o
+   cabeçalho além da viewport (causa clássica de rolagem horizontal). `max-width`
+   nunca estoura: o limite de 520 px do DS2 continua valendo sem override.
+   --------------------------------------------------------------------------- */
+.sc-search input {
+  min-width: 0;
+  width: 100%;
+}
+
+.sc-search__icon {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  color: var(--sc-ink-muted);
+}
+
+/* O DS2 zera o outline do input (`.sc-search input { border:0; outline:0 }`) e a
+   camada de componentes vence a fundação na cascata — então o foco visível do campo
+   precisa ser reafirmado aqui, na mesma camada (RNF006). Vale para os campos, não
+   para o botão: `:focus-visible` de base.css já cobre botão e links. */
+.sc-search input:focus-visible,
+.sc-field input:focus-visible,
+.sc-field textarea:focus-visible {
+  outline: 2px solid var(--sc-blue);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   3. Grid do rodapé: `1fr` do DS2 → `minmax(0,1fr)`
+   `.sc-footer__inner { grid-template-columns:1.4fr repeat(3,1fr) }` (DS2) usa `1fr`,
+   que tem min-content automático — um título longo pode estourar o container. A
+   troca por `minmax(0,…)` é a correção padrão e precisa valer nos DOIS lados do
+   breakpoint, porque `.sc-footer__inner` sem media query vale em todas as larguras.
+   --------------------------------------------------------------------------- */
+.sc-footer__inner {
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+}
+
+/* ---------------------------------------------------------------------------
+   4. Breakpoints
+   Alvo de verificação do card: 375 px (mobile) e 1440 px (desktop).
+   --------------------------------------------------------------------------- */
+@media (max-width: 60rem) {
+  /* o cabeçalho fixo cresce: a busca ocupa a linha de baixo em vez de espremer
+     marca + navegação + busca numa única linha de 64 px */
+  .sc-header {
+    height: auto;
+    min-height: 4rem;
+    flex-wrap: wrap;
+    padding: 0.5rem 1rem;
+    row-gap: 0.35rem;
+  }
+
+  .sc-header__nav {
+    margin-left: 0;
+  }
+
+  .sc-header__search {
+    order: 3;
+    width: 100%;
+  }
+
+  /* rodapé: de 4 colunas para 1 */
+  .sc-footer {
+    padding: 3rem 1rem 1.5rem;
+  }
+
+  .sc-footer__inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+  }
+
+  .sc-footer__bottom {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .sc-page {
+    padding: 3rem 1rem 4rem;
+  }
+
+  .sc-page--tight {
+    padding: 2rem 1rem;
+  }
+}
+
+@media (min-width: 40rem) and (max-width: 60rem) {
+  /* faixa intermediária: duas colunas de rodapé em vez de quatro espremidas */
+  .sc-footer__inner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 75rem) {
+  .sc-page {
+    padding: 6rem 2rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   5. Medida de leitura
+   O DS2 usa 46rem de medida no lead (`.sc-sec__lead`); texto corrido usa a mesma
+   medida, senão a linha vira 1200 px de largura no desktop.
+   --------------------------------------------------------------------------- */
+.sc-measure {
+  max-width: 46rem;
+}
+
+/* ---------------------------------------------------------------------------
+   6. Nada de classe nova sem necessidade
+   Rótulo visível só para leitor de tela usa `.sc-visually-hidden`, que já existe
+   no DS2 (design-system.css) — este arquivo não redefine o que o contrato define.
+   --------------------------------------------------------------------------- */

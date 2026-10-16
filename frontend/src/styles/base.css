@@ -1,0 +1,75 @@
+/* ============================================================================
+   base.css — FUNDAÇÃO DO CANVAS
+   ----------------------------------------------------------------------------
+   Porte das regras de fundação do DS2 (assets/design_system_2.html:99-114),
+   trocando os literais por tokens e registrando as duas divergências intencionais.
+
+   Origem (DS2)                          | Aqui
+   --------------------------------------|------------------------------------------
+   html { scroll-behavior:smooth }       | igual
+   html, body { background:#fff !import }| background:var(--sc-surface)  (§0.1: nada de hex solto)
+   body { … font-size:16px … }           | font-size:1rem
+   body { … overflow-x:hidden }          | OMITIDO — esconder overflow esconde o defeito;
+                                         | a correção é a matemática de container (layout.css)
+                                         | e a verificação é `npm run check:layout`.
+   ::selection { rgba(49,134,255,.18) }  | color-mix() sobre --sc-blue
+   :focus-visible { outline:2px solid … }| igual (RNF006)
+   ============================================================================ */
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  background: var(--sc-surface);
+}
+
+body {
+  margin: 0;
+  color: var(--sc-ink);
+  font-family: var(--font-primary);
+  font-weight: 400;
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* os templates trazem resets fortes (Google Sans Flex em h1..h6, Glue pintando main) */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  color: var(--sc-ink);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+img,
+video,
+svg {
+  max-width: 100%;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--sc-blue) 18%, transparent);
+}
+
+/* foco visível por teclado — RNF006. Nunca removido: é critério de aceite. */
+:focus-visible {
+  outline: 2px solid var(--sc-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

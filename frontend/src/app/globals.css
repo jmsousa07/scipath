@@ -1,0 +1,58 @@
+/* ============================================================================
+   globals.css — ponto único de entrada do CSS
+   ----------------------------------------------------------------------------
+   Ordem (Tailwind 4 usa camadas CSS, então a ordem é explícita e não depende de
+   especificidade):
+
+     theme       → @theme abaixo, que só APONTA para os tokens do DS2
+     base        → tokens.css (gerado) · fonts.css (gerado) · base.css (fundação)
+     components  → design-system.css (gerado, extraído do DS2) · layout.css (projeto)
+     utilities   → Tailwind (por último: utilitário pode sobrescrever componente)
+
+   Regra do projeto (DESIGN_SYSTEM.md §0.1): componente não carrega valor mágico.
+   Cor, raio, sombra, easing e tamanho de tipo vêm de token, seja por `var(--sc-*)`
+   na camada de componentes, seja por utilitário `bg-surface` / `text-ink` mapeado
+   no `@theme` abaixo. Verificação: `npm run check:style`.
+   ============================================================================ */
+
+@import 'tailwindcss';
+
+@import '../styles/tokens.css' layer(base);
+@import '../styles/fonts.css' layer(base);
+@import '../styles/base.css' layer(base);
+@import '../styles/design-system.css' layer(components);
+@import '../styles/layout.css' layer(components);
+
+/* Mapeamento token → utilitário do Tailwind. Nenhum valor é digitado duas vezes:
+   cada entrada aponta para uma variável de `tokens.css` (extraída do DS2). */
+@theme inline {
+  /* cor — sempre por papel semântico, nunca por hex */
+  --color-ink: var(--sc-ink);
+  --color-ink-soft: var(--sc-ink-soft);
+  --color-ink-muted: var(--sc-ink-muted);
+  --color-surface: var(--sc-surface);
+  --color-surface-2: var(--sc-surface-2);
+  --color-surface-3: var(--sc-surface-3);
+  --color-line: var(--sc-line);
+  --color-line-strong: var(--sc-line-strong);
+  --color-brand: var(--sc-blue);
+  --color-alert: var(--sc-red);
+  --color-highlight: var(--sc-yellow);
+  --color-success: var(--sc-green);
+
+  /* tipografia */
+  --font-ui: var(--font-primary);
+  --font-heading: var(--font-display);
+  --font-body: var(--font-text);
+  --font-code: var(--font-mono);
+
+  /* forma, elevação e movimento */
+  --radius-s: var(--sc-radius-s);
+  --radius-m: var(--sc-radius);
+  --radius-l: var(--sc-radius-l);
+  --shadow-s: var(--sc-shadow-s);
+  --shadow-m: var(--sc-shadow);
+  --shadow-l: var(--sc-shadow-l);
+  --ease-ds: var(--ease-google);
+  --ease-ds-io: var(--ease-io);
+}
