@@ -208,6 +208,76 @@ main, .main-content { padding-top:0 !important; overflow:visible !important; }
 /* assets/design_system_2.html:793 */
 
 /* ---------------------------------------------------------------------------
+   Cards e superfícies (E1.7)
+   --------------------------------------------------------------------------- */
+.sc-card {
+  position:relative; background:#fff; border:1px solid var(--sc-line); border-radius:var(--sc-radius);
+  padding:1.25rem; box-shadow:var(--sc-shadow-s); overflow:hidden;
+  transition:transform .35s var(--ease-google), box-shadow .35s var(--ease-google), border-color .3s;
+}
+/* assets/design_system_2.html:395 */
+.sc-card--pad { padding:1.65rem; }
+/* assets/design_system_2.html:400 */
+.sc-card--hoverable:hover { transform:translateY(-4px); box-shadow:var(--sc-shadow); border-color:var(--sc-line-strong); }
+/* assets/design_system_2.html:401 */
+.sc-card__eyebrow { font-family:var(--font-mono); font-size:.625rem; letter-spacing:.16em; text-transform:uppercase; color:var(--sc-ink-muted); }
+/* assets/design_system_2.html:404 */
+.sc-card__title { font-family:var(--font-display); font-size:1.0625rem; font-weight:500; letter-spacing:-.01em; margin-top:.35rem; }
+/* assets/design_system_2.html:405 */
+.sc-card__copy { font-family:var(--font-text); font-size:.875rem; line-height:1.6; color:var(--sc-ink-soft); margin-top:.5rem; }
+/* assets/design_system_2.html:406 */
+.sc-helper { font-family:var(--font-text); font-size:.75rem; line-height:1.55; color:var(--sc-ink-muted); }
+/* assets/design_system_2.html:407 */
+
+/* ---------------------------------------------------------------------------
+   Sinais: badges e chips (E1.7)
+   --------------------------------------------------------------------------- */
+.sc-badges { display:flex; flex-wrap:wrap; gap:.5rem; }
+/* assets/design_system_2.html:576 */
+.sc-badge {
+  display:inline-flex; align-items:center; gap:.35rem; font-family:var(--font-primary); font-size:.6875rem; font-weight:500;
+  padding:.25rem .55rem; border-radius:999px; border:1px solid var(--sc-line); background:var(--glue-grey-10); color:var(--sc-ink-soft);
+}
+/* assets/design_system_2.html:577 */
+.sc-badge--blue { background:rgba(49,134,255,.12); border-color:rgba(49,134,255,.28); color:var(--glue-blue-900); }
+/* assets/design_system_2.html:581 */
+.sc-badge--red { background:rgba(252,65,61,.1); border-color:rgba(252,65,61,.26); color:var(--glue-red-900); }
+/* assets/design_system_2.html:582 */
+.sc-badge--green { background:rgba(0,175,87,.12); border-color:rgba(0,175,87,.28); color:var(--glue-green-900); }
+/* assets/design_system_2.html:583 */
+.sc-badge--yellow { background:rgba(251,188,4,.16); border-color:rgba(251,188,4,.34); color:#7a5a00; }
+/* assets/design_system_2.html:584 */
+.sc-badge--purple { background:rgba(104,29,168,.1); border-color:rgba(104,29,168,.26); color:var(--glue-purple-900); }
+/* assets/design_system_2.html:585 */
+.sc-badge--dark { background:var(--sc-ink); color:#fff; border-color:var(--sc-ink); }
+/* assets/design_system_2.html:586 */
+.sc-badge--pulse i { width:6px; height:6px; border-radius:50%; background:currentColor; animation:scPulse 1.8s infinite; }
+/* assets/design_system_2.html:587 */
+.sc-chip {
+  display:inline-flex; align-items:center; gap:.4rem;
+  font-family:var(--font-sans,var(--font-primary)); font-size:.6875rem; font-weight:500;
+  letter-spacing:.02em; padding:.3rem .6rem; border-radius:var(--sc-radius-pill);
+  background:rgba(255,255,255,.86); border:1px solid var(--sc-line); color:var(--sc-ink-soft);
+  box-shadow:var(--sc-shadow-s); backdrop-filter:blur(8px);
+  animation:scFloat 7s var(--ease-io) infinite;
+}
+/* assets/design_system_2.html:245 */
+.sc-chip__dot { width:6px; height:6px; border-radius:50%; background:var(--sc-blue); box-shadow:0 0 0 3px rgba(49,134,255,.16); }
+/* assets/design_system_2.html:253 */
+.sc-chip--red .sc-chip__dot { background:var(--sc-red); box-shadow:0 0 0 3px rgba(252,65,61,.16); }
+/* assets/design_system_2.html:254 */
+.sc-chip--green .sc-chip__dot { background:var(--sc-green); box-shadow:0 0 0 3px rgba(0,175,87,.16); }
+/* assets/design_system_2.html:255 */
+.sc-chip--yellow .sc-chip__dot { background:var(--sc-yellow); box-shadow:0 0 0 3px rgba(251,188,4,.2); }
+/* assets/design_system_2.html:256 */
+
+/* ---------------------------------------------------------------------------
+   Indicador de atividade em botão (E1.7)
+   --------------------------------------------------------------------------- */
+.sc-spin { width:12px; height:12px; border-radius:50%; border:2px solid rgba(255,255,255,.35); border-top-color:#fff; animation:scSpin .8s linear infinite; display:inline-block; }
+/* assets/design_system_2.html:1991 */
+
+/* ---------------------------------------------------------------------------
    Rodapé
    --------------------------------------------------------------------------- */
 .sc-footer { position:relative; z-index:2; background:var(--glue-grey-1200); color:#fff; padding:4rem 1.5rem 2rem; }
@@ -234,6 +304,24 @@ main, .main-content { padding-top:0 !important; overflow:visible !important; }
    --------------------------------------------------------------------------- */
 @keyframes scSheen { from { transform:translateX(-120%); } to { transform:translateX(120%); } }
 /* assets/design_system_2.html:490 */
+
+/* ---------------------------------------------------------------------------
+   Movimento: flutuação dos chips (E1.7)
+   --------------------------------------------------------------------------- */
+@keyframes scFloat { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
+/* assets/design_system_2.html:260 */
+
+/* ---------------------------------------------------------------------------
+   Movimento: pulso do badge (E1.7)
+   --------------------------------------------------------------------------- */
+@keyframes scPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.45; transform:scale(.7); } }
+/* assets/design_system_2.html:588 */
+
+/* ---------------------------------------------------------------------------
+   Movimento: giro do indicador de atividade (E1.7)
+   --------------------------------------------------------------------------- */
+@keyframes scSpin { to { transform:rotate(360deg); } }
+/* assets/design_system_2.html:1992 */
 
 /* ---------------------------------------------------------------------------
    Movimento: preferência do usuário (RNF005)

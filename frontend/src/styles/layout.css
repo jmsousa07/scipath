@@ -179,3 +179,220 @@
    Rótulo visível só para leitor de tela usa `.sc-visually-hidden`, que já existe
    no DS2 (design-system.css) — este arquivo não redefine o que o contrato define.
    --------------------------------------------------------------------------- */
+
+/* ===========================================================================
+   PRIMITIVOS QUE O DS2 NÃO TEM (card E1.7)
+   ---------------------------------------------------------------------------
+   Três famílias que o produto precisa e o contrato visual não define:
+   tabela de dados, paginação e a mensagem de estado (página e formulário).
+   Todas usam só token de `tokens.css`, nenhum hex e nenhuma largura fixa — a
+   verificação é `npm run check:style` e `npm run check:layout`.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   7. Tabela de dados — `.sc-table`
+   O DS2 define `.sc-table` (assets/design_system_2.html:419-431) como tabela de
+   ESPECIFICAÇÃO do próprio documento: `min-width:660px`, `white-space:nowrap` e
+   `th` fixo no topo. Isso é adequado a um documento de leitura, não a uma lista
+   de dados no produto, que precisa caber em 375 px (RNF002). A linguagem visual
+   é a mesma do contrato (mono, `th` maiúsculo com letter-spacing, linha de 1 px
+   entre linhas, cabeçalho em `--glue-grey-10`); as TRÊS divergências são:
+     min-width:660px → sem largura mínima (célula quebra linha);
+     white-space:nowrap → texto pode quebrar;
+     position:sticky do `th` → omitido (o cabeçalho rola com a página).
+   Pendência registrada no card E1.7 e em DESIGN_SYSTEM.md §7.
+   --------------------------------------------------------------------------- */
+.sc-table-wrap {
+  border: 1px solid var(--sc-line);
+  border-radius: var(--sc-radius);
+  overflow-x: auto; /* válvula de segurança para tabela larga (não esconde defeito) */
+  background: var(--sc-surface);
+}
+
+.sc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+}
+
+.sc-table th,
+.sc-table td {
+  text-align: left;
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--sc-line);
+  vertical-align: top;
+}
+
+.sc-table th {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--sc-ink-muted);
+  font-weight: 500;
+  background: var(--glue-grey-10);
+}
+
+.sc-table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   8. Paginação — `.sc-pagination` (RNF021)
+   Sem `class` no DS2. Alvos de 2.75rem (44 px) para caber no dedo e no teclado
+   (WCAG 2.2 AA); a página atual é marcada com `aria-current="page"` — preenchimento
+   ESCURO e não só cor de texto, porque estado não pode depender só de cor (RNF007).
+   --------------------------------------------------------------------------- */
+.sc-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 1rem;
+}
+
+.sc-pagination__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--sc-line-strong);
+  border-radius: var(--sc-radius-s);
+  background: var(--sc-surface);
+  color: var(--sc-ink-soft);
+  font-family: var(--font-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  transition: border-color var(--dur-fast) var(--ease-io), background var(--dur-fast) var(--ease-io);
+}
+
+.sc-pagination__item:hover {
+  border-color: var(--sc-blue);
+  color: var(--sc-ink);
+}
+
+.sc-pagination__item[aria-current='page'] {
+  background: var(--sc-ink);
+  border-color: var(--sc-ink);
+  color: var(--glue-grey-0);
+}
+
+/* borda do limite: não é link, mas continua legível e anunciado (aria-disabled) */
+.sc-pagination__item--dis,
+.sc-pagination__item--dis:hover {
+  border-color: var(--sc-line);
+  color: var(--sc-ink-muted);
+  cursor: not-allowed;
+}
+
+.sc-pagination__info {
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  color: var(--sc-ink-soft);
+  margin-left: 0.25rem;
+}
+
+.sc-pagination__ellipsis {
+  padding: 0 0.25rem;
+  color: var(--sc-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+   9. Mensagem de estado — `.sc-notice`
+   Primitivo ÚNICO de `<PageState>` e `<FormState>`: sete estados de página e seis
+   de formulário não podem virar treze blocos diferentes (RNF003). O DS2 não tem
+   alerta/inline message; o que existe (`.sc-toast`) é sobreposição fixa, não serve
+   para o corpo da página.
+   O estado é dito por TEXTO e por uma barra à esquerda — a cor é reforço, nunca o
+   único portador (RNF007).
+   --------------------------------------------------------------------------- */
+.sc-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--sc-line);
+  border-left-width: 0.25rem;
+  border-left-color: var(--sc-line-strong);
+  border-radius: var(--sc-radius-s);
+  background: var(--sc-surface-2);
+  max-width: 46rem;
+}
+
+.sc-notice--pagina {
+  padding: 1.5rem;
+  border-radius: var(--sc-radius);
+  gap: 0.6rem;
+}
+
+.sc-notice--info {
+  border-left-color: var(--sc-blue);
+  background: color-mix(in srgb, var(--sc-blue) 6%, var(--sc-surface));
+}
+
+.sc-notice--ok {
+  border-left-color: var(--sc-green);
+  background: color-mix(in srgb, var(--sc-green) 7%, var(--sc-surface));
+}
+
+.sc-notice--atencao {
+  border-left-color: var(--sc-yellow);
+  background: color-mix(in srgb, var(--sc-yellow) 10%, var(--sc-surface));
+}
+
+.sc-notice--erro {
+  border-left-color: var(--sc-red);
+  background: color-mix(in srgb, var(--sc-red) 6%, var(--sc-surface));
+}
+
+.sc-notice__title {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--sc-ink);
+}
+
+.sc-notice--pagina .sc-notice__title {
+  font-size: 1.375rem;
+}
+
+.sc-notice__msg {
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--sc-ink-soft);
+}
+
+.sc-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+/* ---------------------------------------------------------------------------
+   10. Ajustes de campo que o DS2 não cobre
+   `.sc-field__box` é uma caixa de UMA linha (`.55rem .75rem 0`, alinhamento ao
+   centro) — serve ao `input`. Para `textarea` a folga inferior e o alinhamento
+   precisam mudar; o arquivo recebe cursor de ponteiro. Nenhum valor novo: só o
+   arranjo do que o contrato já define.
+   --------------------------------------------------------------------------- */
+.sc-field--multiline .sc-field__box {
+  align-items: stretch;
+  padding-bottom: 0.55rem;
+}
+
+.sc-field input[type='file'] {
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+

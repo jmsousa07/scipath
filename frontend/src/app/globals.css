@@ -45,6 +45,10 @@
   --font-heading: var(--font-display);
   --font-body: var(--font-text);
   --font-code: var(--font-mono);
+  /* `--font-sans` é um hook do DS2: `.sc-chip` a usa como primeiro item de
+     `var(--font-sans,var(--font-primary))`, mas o DS2 nunca a define. O alias
+     aponta para o MESMO fallback que o próprio DS2 escreveu — não inventa fonte. */
+  --font-sans: var(--font-primary);
 
   /* forma, elevação e movimento */
   --radius-s: var(--sc-radius-s);

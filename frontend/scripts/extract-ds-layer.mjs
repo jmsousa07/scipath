@@ -161,6 +161,41 @@ const GROUPS = [
     ],
   },
   {
+    title: 'Cards e superfícies (E1.7)',
+    selectors: [
+      '.sc-card',
+      '.sc-card--pad',
+      '.sc-card--hoverable:hover',
+      '.sc-card__eyebrow',
+      '.sc-card__title',
+      '.sc-card__copy',
+      '.sc-helper',
+    ],
+  },
+  {
+    title: 'Sinais: badges e chips (E1.7)',
+    selectors: [
+      '.sc-badges',
+      '.sc-badge',
+      '.sc-badge--blue',
+      '.sc-badge--red',
+      '.sc-badge--green',
+      '.sc-badge--yellow',
+      '.sc-badge--purple',
+      '.sc-badge--dark',
+      '.sc-badge--pulse i',
+      '.sc-chip',
+      '.sc-chip__dot',
+      '.sc-chip--red .sc-chip__dot',
+      '.sc-chip--green .sc-chip__dot',
+      '.sc-chip--yellow .sc-chip__dot',
+    ],
+  },
+  {
+    title: 'Indicador de atividade em botão (E1.7)',
+    selectors: ['.sc-spin'],
+  },
+  {
     title: 'Rodapé',
     selectors: [
       '.sc-footer',
@@ -178,6 +213,9 @@ const GROUPS = [
 
 const atRules = [
   { title: 'Movimento: brilho do botão', rule: extractAtRule('@keyframes scSheen') },
+  { title: 'Movimento: flutuação dos chips (E1.7)', rule: extractAtRule('@keyframes scFloat') },
+  { title: 'Movimento: pulso do badge (E1.7)', rule: extractAtRule('@keyframes scPulse') },
+  { title: 'Movimento: giro do indicador de atividade (E1.7)', rule: extractAtRule('@keyframes scSpin') },
   {
     title: 'Movimento: preferência do usuário (RNF005)',
     rule: extractAtRule('@media (prefers-reduced-motion: reduce)'),
