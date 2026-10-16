@@ -37,20 +37,29 @@ up: db\:migrate  ## sobe o que já existir (banco + API + web)
 	@echo "Suba API e web em terminais separados: make api:dev / make web:dev"
 
 # Comando compartilhado das migrações. $(1) = variável do .env com a URL do banco alvo.
-# O plugin Flyway do Maven NÃO lê application.yml nem .env: url/user/password vêm por
-# -Dflyway.*, sempre a partir do .env carregado (SPRING_DATASOURCE_*). locations precisa ser
-# filesystem: — com classpath:db/migration o plugin cria a tabela de histórico e não encontra
-# migração nenhuma (exit 0, schema vazio). Procedimento completo em db/migration/README.md.
+# O plugin Flyway do Maven NÃO lê application.yml nem .env. Ele lê, como o CLI, as variáveis
+# de ambiente FLYWAY_URL/FLYWAY_USER/FLYWAY_PASSWORD — conferido nesta máquina com o plugin
+# 11.7.2: `flyway:info` conectou por essas três variáveis, sem nenhum -D de credencial
+# (card E1.2b). Por isso a credencial vai pelo AMBIENTE e não pelo argv: /proc/<pid>/cmdline
+# é -r--r--r-- (qualquer processo do host lê via `ps`), enquanto /proc/<pid>/environ é
+# -r-------- (só o mesmo UID — que, nesta máquina, é todo mundo: os workers do kanban rodam
+# como ubuntu. O argv é o vetor do card E1.2b e é ele que fica fechado; o environ é mais
+# restrito que o cmdline, não um canal público). O argv do mvnw continua com um só -D:
+# locations — nada de segredo.
+# O .env da raiz segue como única fonte dos valores; aqui só se traduz o nome da variável.
+# locations precisa ser filesystem: — com classpath:db/migration o plugin cria a tabela de
+# histórico e não encontra migração nenhuma (exit 0, schema vazio). Procedimento completo em
+# db/migration/README.md.
 # Sem -q: a linha "Successfully applied N migrations" é a evidência exigida (AGENTS.md §17.5).
 # A receita é UMA cadeia de shell, sem "|| echo": falha do Flyway tem de sair com exit != 0.
 define flyway_migrate
 	@test -f backend/pom.xml || { echo "backend/ ausente (card F0.1)"; exit 1; }
 	@$(LOAD_ENV) \
 	  url="$${$(1):?$(1) ausente no .env — rode infra/db-setup.sh}"; \
+	  export FLYWAY_URL="$$url" \
+	         FLYWAY_USER="$$SPRING_DATASOURCE_USERNAME" \
+	         FLYWAY_PASSWORD="$$SPRING_DATASOURCE_PASSWORD"; \
 	  cd backend && ./mvnw --batch-mode flyway:migrate \
-	    -Dflyway.url="$$url" \
-	    -Dflyway.user="$$SPRING_DATASOURCE_USERNAME" \
-	    -Dflyway.password=<valor-omitido> \
 	    -Dflyway.locations=filesystem:src/main/resources/db/migration
 endef
 

@@ -16,21 +16,30 @@ make db:migrate        # banco de dev   (SPRING_DATASOURCE_URL)
 make db:migrate:test   # banco de teste (SPRING_DATASOURCE_URL_TEST)
 ```
 
-Os dois alvos do `Makefile` carregam o `.env` da raiz e passam os `-Dflyway.*`; falha de
-migração sai com exit != 0. O comando manual abaixo faz o mesmo, para quem precisa de
-controle fino (outro banco, outro `.env`):
+Os dois alvos do `Makefile` carregam o `.env` da raiz e passam a credencial pelo **ambiente**
+(`FLYWAY_URL`/`FLYWAY_USER`/`FLYWAY_PASSWORD`), nunca pelo `argv`; falha de migração sai com
+exit != 0. O comando manual abaixo faz o mesmo, para quem precisa de controle fino (outro
+banco, outro `.env`):
 
 O plugin Flyway do Maven **não** lê o `application.yml` nem o `.env`: a URL, o usuário e a
-senha vêm de `-Dflyway.*` (ou de um `flyway.conf` fora do repositório). O `.env` da raiz
-tem as variáveis e é a fonte dos valores:
+senha vêm de `-Dflyway.*`, de um `flyway.conf` fora do repositório ou das variáveis de
+ambiente `FLYWAY_*` (o plugin 11.7.2 lê as mesmas `FLYWAY_*` que o CLI — conferido nesta
+máquina, card E1.2b). **Prefira as variáveis de ambiente:** `/proc/<pid>/cmdline` é
+`-r--r--r--`, legível por qualquer processo do host via `ps`, então `-Dflyway.password=<valor-omitido>
+entrega a senha a quem quer que esteja logado; `/proc/<pid>/environ` é `-r--------`, legível só
+pelo **mesmo UID** — que **não** fecha o vetor quando o vizinho roda como o mesmo usuário (todos
+os workers do kanban rodam como `ubuntu` nesta máquina, então um deles lê `environ` via `ps eww`
+ou `/proc/<pid>/environ`). O escopo do card E1.2b é o `argv`, e é ele que fica fechado aqui: o
+`environ` é mais restrito que o `cmdline`, não um canal público. O `.env` da raiz tem as
+variáveis e é a fonte dos valores:
 
 ```bash
 cd backend
 set -a; . ../.env; set +a
+export FLYWAY_URL="$SPRING_DATASOURCE_URL" \
+       FLYWAY_USER="$SPRING_DATASOURCE_USERNAME" \
+       FLYWAY_PASSWORD="$SPRING_DATASOURCE_PASSWORD"
 ./mvnw flyway:migrate \
-  -Dflyway.url="$SPRING_DATASOURCE_URL" \
-  -Dflyway.user="$SPRING_DATASOURCE_USERNAME" \
-  -Dflyway.password=<valor-omitido> \
   -Dflyway.locations=filesystem:src/main/resources/db/migration
 ```
 
@@ -40,8 +49,9 @@ Notas de operação (custaram uma execução silenciosa vazia):
   cria a tabela de histórico e **não encontra nenhuma migração** — sai com código 0 e não
   aplica nada. O `classpath:` só faz sentido para o Flyway dentro da aplicação, não para o
   plugin.
-- `-Dflyway.password` nunca vai para log de evidência; o valor sai do `.env` por expansão
-  da própria shell.
+- Nenhuma credencial vai para o `argv` nem para log de evidência: a senha sai do `.env` por
+  expansão da própria shell e viaja só no ambiente do processo (`ps -eo args` não mostra, e
+  nenhum `-Dflyway.*` de credencial aparece na linha de comando).
 - O banco de teste é `scipath_test` (`SPRING_DATASOURCE_URL_TEST`). Migrar os **dois** bancos
   é requisito do card E1.2.
 
