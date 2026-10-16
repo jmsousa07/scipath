@@ -2,10 +2,18 @@ openapi: 3.1.0
 
 info:
   title: SciPath API
-  version: 0.2.0
+  version: 0.2.1
   description: |
     Fronteira entre backend e frontend do SciPath. Este arquivo é a fonte de verdade:
     mudança de API começa aqui, no mesmo card da implementação (AGENTS.md, DRS §14.3).
+
+    v0.2.1 — vocabulário de erro publicado por inteiro (card E1.1a). O backend já emitia
+    sete classes `urn:scipath:erro:<slug>` desde o E1.4, mas o v0.2.0 só publicava duas
+    (`validacao` e `interno`); as outras cinco ficavam fora da fronteira e o frontend
+    teria de decidir sobre códigos que o contrato não conhecia (DRS §21.1). Nada no
+    payload mudou — o backend não foi tocado e as mesmas respostas continuam valendo —,
+    então a versão sobe em patch. O `type` agora é enumeração fechada no schema
+    `ProblemDetail`, com a situação e o `errors[]` de cada classe.
 
     v0.2.0 — base do produto: estado operacional (RF022) e leitura da taxonomia de
     referência (RF018). Os endpoints de material herdados do esqueleto F0.1 foram
@@ -16,7 +24,12 @@ info:
     Convenções vinculantes para todo endpoint:
     - **Erro único.** Toda resposta 4xx/5xx usa `application/problem+json` com o schema
       `ProblemDetail` (RFC 7807). `errors[]` só aparece em erro de campo. Não existe
-      segundo formato de erro no contrato.
+      segundo formato de erro no contrato. O `type` é um vocabulário **fechado** de sete
+      classes — `validacao` (400), `nao_autenticado` (401), `acesso_negado` (403),
+      `nao_encontrado` (404), `metodo_nao_permitido` (405), `tipo_nao_suportado` (415) e
+      `interno` (500) — enumerado no schema `ProblemDetail`, que também diz em que
+      situação cada uma aparece e se ela carrega `errors[]`. Cliente que precisa de um
+      `type` novo muda o contrato primeiro, nunca o código sozinho.
     - **Lista paginada única.** Toda listagem usa o envelope `Pagina` — `items`, `page`,
       `size`, `total` (RF002, RNF021) — com teto de `size` e ordenação estável
       documentada no endpoint, para que a navegação não duplique nem perca itens.
@@ -82,6 +95,8 @@ paths:
                     status: DEGRADED
                     version: 0.2.0
                     database: DOWN
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
 
   /categorias:
     get:
@@ -126,6 +141,8 @@ paths:
                     total: 13
         '400':
           $ref: '#/components/responses/ErroValidacao'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
         '500':
           $ref: '#/components/responses/ErroInesperado'
 
@@ -168,6 +185,8 @@ paths:
                     total: 6
         '400':
           $ref: '#/components/responses/ErroValidacao'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
         '500':
           $ref: '#/components/responses/ErroInesperado'
 
@@ -218,6 +237,8 @@ paths:
                     total: 7
         '400':
           $ref: '#/components/responses/ErroValidacao'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
         '500':
           $ref: '#/components/responses/ErroInesperado'
 
@@ -280,6 +301,25 @@ components:
                 errors:
                   - campo: ativo
                     mensagem: deve ser true ou false
+
+    ErroMetodoNaoPermitido:
+      description: |
+        Método HTTP não aceito neste endereço. O endereço existe, mas não responde a este
+        método; `detail` diz qual usar. Sem `errors[]`: método não é campo, e o contrato
+        reserva `errors[]` para erro de campo (RNF004 põe a orientação no `detail`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            metodoErrado:
+              summary: POST num endpoint de leitura
+              value:
+                type: urn:scipath:erro:metodo_nao_permitido
+                title: Método não permitido
+                status: 405
+                detail: O método POST não é aceito neste endereço. Use GET.
+                instance: /api/categorias
 
     ErroInesperado:
       description: |
@@ -495,12 +535,47 @@ components:
         texto; `title` é o rótulo curto e estável; `detail` explica o caso concreto e é
         seguro para exibir (RNF012 — sem stack trace, SQL ou caminho de arquivo);
         `errors[]` só aparece em erro de campo, nunca em erro sistêmico.
+
+        Vocabulário fechado: a API emite exatamente estas sete classes, cada uma com o
+        status HTTP correspondente. O `status` no corpo repete o status da resposta; o
+        cliente decide por `type`.
+
+        | `type` | status | situação | `errors[]` |
+        |---|---|---|---|
+        | `urn:scipath:erro:validacao` | 400 | entrada recusada: parâmetro de consulta ou corpo inválido | sim, um item por campo culpado |
+        | `urn:scipath:erro:nao_autenticado` | 401 | a operação exige identidade e não há sessão válida (passa a ocorrer na Etapa 3) | não |
+        | `urn:scipath:erro:acesso_negado` | 403 | há identidade, mas ela não tem permissão para a operação (passa a ocorrer na Etapa 3) | não |
+        | `urn:scipath:erro:nao_encontrado` | 404 | o recurso pedido não existe, ou o endereço não corresponde a nenhum recurso ou endpoint | não |
+        | `urn:scipath:erro:metodo_nao_permitido` | 405 | o endereço existe, mas não responde a este método | não |
+        | `urn:scipath:erro:tipo_nao_suportado` | 415 | o `Content-Type` enviado não é aceito | não |
+        | `urn:scipath:erro:interno` | 500 | falha inesperada; detalhe técnico fica só no log do servidor | não |
+
+        `errors[]` é exclusivo do erro de campo (400): 405, 415 e 500 não carregam a
+        lista porque método, `Content-Type` e falha interna não são campos — nesses
+        casos a orientação está no `detail`.
+
+        Um endpoint só documenta os status que o seu caminho pode produzir: 405 aparece
+        em todo endpoint publicado (o caminho existe, o método errado é recusado); 404
+        entra nos endpoints com recurso no caminho (Etapa 2); 401 e 403 entram quando a
+        operação exigir identidade (Etapa 3). A classe existe neste schema desde já
+        porque o formato foi implementado de uma vez (card E1.4) — o que muda depois é
+        qual endpoint pode devolvê-la, não o formato.
       required: [type, title, status]
       properties:
         type:
           type: string
           format: uri
-          description: Identificador estável da classe do erro.
+          enum:
+            - urn:scipath:erro:validacao
+            - urn:scipath:erro:nao_autenticado
+            - urn:scipath:erro:acesso_negado
+            - urn:scipath:erro:nao_encontrado
+            - urn:scipath:erro:metodo_nao_permitido
+            - urn:scipath:erro:tipo_nao_suportado
+            - urn:scipath:erro:interno
+          description: |
+            Classe do erro, uma das sete do vocabulário. `type` novo é mudança de
+            contrato antes de ser mudança de código (AGENTS.md regra 1).
           example: urn:scipath:erro:validacao
         title:
           type: string
