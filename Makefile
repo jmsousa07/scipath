@@ -42,7 +42,10 @@ up: db\:migrate  ## sobe o que já existir (banco + API + web)
 # 11.7.2: `flyway:info` conectou por essas três variáveis, sem nenhum -D de credencial
 # (card E1.2b). Por isso a credencial vai pelo AMBIENTE e não pelo argv: /proc/<pid>/cmdline
 # é -r--r--r-- (qualquer processo do host lê via `ps`), enquanto /proc/<pid>/environ é
-# -r-------- (só o dono). O argv do mvnw continua com um só -D: locations — nada de segredo.
+# -r-------- (só o mesmo UID — que, nesta máquina, é todo mundo: os workers do kanban rodam
+# como ubuntu. O argv é o vetor do card E1.2b e é ele que fica fechado; o environ é mais
+# restrito que o cmdline, não um canal público). O argv do mvnw continua com um só -D:
+# locations — nada de segredo.
 # O .env da raiz segue como única fonte dos valores; aqui só se traduz o nome da variável.
 # locations precisa ser filesystem: — com classpath:db/migration o plugin cria a tabela de
 # histórico e não encontra migração nenhuma (exit 0, schema vazio). Procedimento completo em

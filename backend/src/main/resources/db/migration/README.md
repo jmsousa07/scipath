@@ -26,8 +26,12 @@ senha vêm de `-Dflyway.*`, de um `flyway.conf` fora do repositório ou das vari
 ambiente `FLYWAY_*` (o plugin 11.7.2 lê as mesmas `FLYWAY_*` que o CLI — conferido nesta
 máquina, card E1.2b). **Prefira as variáveis de ambiente:** `/proc/<pid>/cmdline` é
 `-r--r--r--`, legível por qualquer processo do host via `ps`, então `-Dflyway.password=<valor-omitido>
-entrega a senha a quem quer que esteja logado; `/proc/<pid>/environ` é `-r--------`, só do
-dono. O `.env` da raiz tem as variáveis e é a fonte dos valores:
+entrega a senha a quem quer que esteja logado; `/proc/<pid>/environ` é `-r--------`, legível só
+pelo **mesmo UID** — que **não** fecha o vetor quando o vizinho roda como o mesmo usuário (todos
+os workers do kanban rodam como `ubuntu` nesta máquina, então um deles lê `environ` via `ps eww`
+ou `/proc/<pid>/environ`). O escopo do card E1.2b é o `argv`, e é ele que fica fechado aqui: o
+`environ` é mais restrito que o `cmdline`, não um canal público. O `.env` da raiz tem as
+variáveis e é a fonte dos valores:
 
 ```bash
 cd backend
