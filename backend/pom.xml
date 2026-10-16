@@ -15,7 +15,7 @@
   <artifactId>scipath-backend</artifactId>
   <version>0.1.0</version>
   <name>scipath-backend</name>
-  <description>API do SciPath — conhecimento estruturado e interconectado</description>
+  <description>API do SciPath — plataforma de descoberta e compartilhamento de conhecimento científico e acadêmico (DRS §2.1)</description>
 
   <properties>
     <java.version>21</java.version>
@@ -32,7 +32,17 @@
       <artifactId>spring-boot-starter-jdbc</artifactId>
     </dependency>
 
-    <!-- Flyway: schema versionado por migração imutável (ver AGENTS.md). Sem migração ainda (card F0.3). -->
+    <!-- Validação de entrada no servidor: sem ela o @Valid dos DTOs é ignorado em
+         silêncio e a violação só aparece como 500. Exigida por RNF011 ("validar no
+         servidor para segurança") e §14.3 ("validar entradas e produzir erros
+         consistentes"). Toda dependência nova precisa de requisito (AGENTS.md). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- Flyway: schema versionado por migração imutável (ver AGENTS.md). A estratégia
+         tolerante de falha de migração é só de dev/test — ver FlywayConfig. -->
     <dependency>
       <groupId>org.flywaydb</groupId>
       <artifactId>flyway-core</artifactId>
@@ -60,6 +70,22 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- A suíte roda no perfil 'test' (ADR-0004, ajuste 3): é o perfil em que a
+               migração tolera falha na subida — a máquina tem 954 MB e, sob pressão de
+               memória, o Hikari deixa de obter conexão em 2 s (medido em 2026-10-16),
+               o que não é motivo para reprovar teste que não é de schema. É também onde
+               o card E1.5 vai declarar o datasource de scipath_test. Sem perfil, a
+               suíte herdaria o fail-fast e um Postgres fora do ar derrubaria até o
+               teste de /api/health, que existe justamente para tolerar banco fora. -->
+          <systemPropertyVariables>
+            <spring.profiles.active>test</spring.profiles.active>
+          </systemPropertyVariables>
+        </configuration>
       </plugin>
     </plugins>
   </build>
