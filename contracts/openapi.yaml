@@ -2,10 +2,19 @@ openapi: 3.1.0
 
 info:
   title: SciPath API
-  version: 0.2.1
+  version: 0.3.0
   description: |
     Fronteira entre backend e frontend do SciPath. Este arquivo é a fonte de verdade:
     mudança de API começa aqui, no mesmo card da implementação (AGENTS.md, DRS §14.3).
+
+    v0.3.0 — descoberta pública (card E2.1). Publica a fronteira do visitante sem conta:
+    listar materiais públicos (`GET /api/materiais`), ver o detalhe de um material
+    (`GET /api/materiais/{slug}`) e ver o perfil público de um autor com os materiais dele
+    (`GET /api/autores/{slug}`). Três superfícies, todas somente-leitura, todas regidas
+    pelas mesmas regras: só material PUBLICADO de conta ATIVA aparece (RN002), a licença
+    vem sempre explícita com o que permite (RN006) e nenhum campo privado existe no schema
+    (RNF013). Sobe a versão menor porque é a primeira vez que a busca e a leitura de
+    material entram no contrato — mudança de fronteira real, não de redação.
 
     v0.2.1 — vocabulário de erro publicado por inteiro (card E1.1a). O backend já emitia
     sete classes `urn:scipath:erro:<slug>` desde o E1.4, mas o v0.2.0 só publicava duas
@@ -58,6 +67,10 @@ tags:
     description: Estado operacional da API.
   - name: taxonomia
     description: Leitura da taxonomia de referência — categorias, tipos de material e licenças (RF018).
+  - name: descoberta
+    description: |-
+      Descoberta pública, sem sessão: listar materiais, ver o detalhe de um material e o
+      perfil público de um autor (RF002–RF007). Só material PUBLICADO de conta ATIVA.
 
 paths:
   /health:
@@ -242,6 +255,243 @@ paths:
         '500':
           $ref: '#/components/responses/ErroInesperado'
 
+  /materiais:
+    get:
+      tags: [descoberta]
+      summary: Lista materiais públicos
+      description: |
+        Lista paginada de materiais PUBLICADOS de contas ATIVAS (RF002, RN002, §11.3). É a
+        fronteira da descoberta: o visitante sem conta encontra material por busca (`q`) e
+        filtros explícitos de categoria e tipo, e ordena por um critério documentado.
+
+        Resultado previsível: a ordenação padrão é `recentes` — `publicadoEm` decrescente
+        com desempate **estável** por `id` crescente (§12.2) —, o que garante que navegar
+        entre páginas não duplica nem omite item (RN013). Não existe ordenação por
+        "relevância" nem por popularidade: destaque exigiria regra explícita de seleção
+        (§12.4), e o contrato não publica o que o produto não calcula.
+
+        Conjunto vazio é **200 com `items: []`**, nunca erro (RNF004): é o estado normal de
+        um filtro sem resultado ou de um acervo ainda vazio.
+
+        Cada item carrega título, descrição, autor, categoria, tipo, licença e data
+        (RF002). A licença vem sempre com `descricaoCurta` (RN006): estar público não
+        significa domínio público (§13.2).
+
+        SEO (RNF024): a rota `/explorar` do frontend emite `title`, `description` e
+        `canonical` estáveis; o contrato garante os dados que alimentam esses campos
+        (`titulo`, `descricao`, `slug`) para que a listagem tenha conteúdo real no HTML.
+      operationId: listMateriais
+      parameters:
+        - $ref: '#/components/parameters/FiltroBusca'
+        - $ref: '#/components/parameters/FiltroCategoria'
+        - $ref: '#/components/parameters/FiltroTipo'
+        - $ref: '#/components/parameters/OrdemMateriais'
+        - $ref: '#/components/parameters/NumeroPagina'
+        - $ref: '#/components/parameters/TamanhoPagina'
+      responses:
+        '200':
+          description: Página de materiais, na ordenação pedida (padrão `recentes`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaMateriais'
+              examples:
+                primeiraPagina:
+                  summary: Página inicial na ordenação padrão (recentes)
+                  value:
+                    items:
+                      - slug: introducao-a-algoritmos-de-ordenacao
+                        titulo: Introdução a algoritmos de ordenação
+                        descricao: Nota de aula sobre ordenação por comparação, com análise de complexidade e exemplos em pseudocódigo.
+                        autor:
+                          slug: maria-silva
+                          nomePublico: Maria Silva
+                        categoria:
+                          slug: computacao-e-tecnologia
+                          nome: Computação e Tecnologia
+                        tipo:
+                          slug: nota-de-aula
+                          nome: Nota de aula
+                        licenca:
+                          slug: cc-by-4.0
+                          nome: CC BY 4.0
+                          descricaoCurta: Você pode reutilizar e adaptar o material, inclusive comercialmente, dando crédito ao autor.
+                        publicadoEm: '2026-10-14T15:10:00Z'
+                    page: 0
+                    size: 20
+                    total: 1
+                filtroSemResultado:
+                  summary: Filtro sem resultado — 200 com lista vazia
+                  value:
+                    items: []
+                    page: 0
+                    size: 20
+                    total: 0
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /materiais/{slug}:
+    get:
+      tags: [descoberta]
+      summary: Detalhe do material público
+      description: |
+        Devolve o material identificado pelo `slug` público (RF005), com autoria, categoria,
+        tipo, licença explicada e estado de publicação.
+
+        Visibilidade: material inexistente, RETIRADO ou EXCLUIDO responde **404** — os três
+        de forma indistinguível, para não revelar a existência de material fora do público
+        (RN002, CA008). É o mesmo `urn:scipath:erro:nao_encontrado` de qualquer endereço sem
+        recurso.
+
+        Transparência: a resposta é o que o autor declarou. Não há marca de revisão,
+        certificação, curadoria ou verificação científica (RN010, RN011, CA012).
+
+        Nenhum dado privado (RNF013): fora do schema ficam e-mail, hash de senha, token e
+        qualquer identificador de conta.
+
+        SEO (RNF024, RNF025): a rota `/materiais/{slug}` do frontend emite `title` =
+        `titulo`, `description` = `descricao` e `canonical` derivado do próprio `slug` — URL
+        estável, sem depender de estado do navegador. Dados estruturados só se forem
+        corretos (§12.3).
+
+        Acesso ao arquivo não está nesta versão: a Etapa 2 não serve arquivo, e publicar um
+        campo de download sem implementação seria fronteira contra ficção (DRS §21.1). Entra
+        no card que implementar RF014.
+      operationId: getMaterial
+      parameters:
+        - $ref: '#/components/parameters/SlugRecurso'
+      responses:
+        '200':
+          description: Material público encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialDetalhe'
+              examples:
+                material:
+                  summary: Material publicado
+                  value:
+                    slug: introducao-a-algoritmos-de-ordenacao
+                    titulo: Introdução a algoritmos de ordenação
+                    descricao: Nota de aula sobre ordenação por comparação, com análise de complexidade e exemplos em pseudocódigo.
+                    autor:
+                      slug: maria-silva
+                      nomePublico: Maria Silva
+                    categoria:
+                      slug: computacao-e-tecnologia
+                      nome: Computação e Tecnologia
+                    tipo:
+                      slug: nota-de-aula
+                      nome: Nota de aula
+                    licenca:
+                      slug: cc-by-4.0
+                      nome: CC BY 4.0
+                      identificador: CC-BY-4.0
+                      urlReferencia: https://creativecommons.org/licenses/by/4.0/
+                      descricaoCurta: Você pode reutilizar e adaptar o material, inclusive comercialmente, dando crédito ao autor.
+                    estado: PUBLICADO
+                    publicadoEm: '2026-10-14T15:10:00Z'
+                    atualizadoEm: '2026-10-14T15:10:00Z'
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '404':
+          $ref: '#/components/responses/ErroNaoEncontrado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /autores/{slug}:
+    get:
+      tags: [descoberta]
+      summary: Perfil público do autor e seus materiais
+      description: |
+        Devolve a identidade pública do autor (RF006) e a página dos materiais publicados
+        dele (`materiais`, no envelope padrão). `page` e `size` paginam **os materiais do
+        autor**; a identidade vem sempre completa.
+
+        Visibilidade: perfil de conta não ATIVA responde **404**, indistinguível de slug
+        inexistente (RN002, CA008). Autor sem material publicado responde **200 com lista
+        vazia** — ausência de material não é perfil inexistente (E2.5).
+
+        Nada privado (RNF013): e-mail de login, hash de senha, token e id de conta não
+        existem neste schema. `afiliacaoDeclarada` é declaração do próprio autor, nunca
+        vínculo verificado (RN011, §13.1).
+
+        SEO (RNF024, RNF025): a rota `/u/{slug}` do frontend emite `title` = `nomePublico`,
+        `description` a partir de `biografia` e `canonical` derivado do próprio `slug`.
+      operationId: getAutor
+      parameters:
+        - $ref: '#/components/parameters/SlugRecurso'
+        - $ref: '#/components/parameters/NumeroPagina'
+        - $ref: '#/components/parameters/TamanhoPagina'
+      responses:
+        '200':
+          description: Perfil público do autor com a página dos materiais dele.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutorPublico'
+              examples:
+                comMateriais:
+                  summary: Autor com material publicado
+                  value:
+                    slug: maria-silva
+                    nomePublico: Maria Silva
+                    biografia: Professora de programação; escreve material introdutório de algoritmos.
+                    afiliacaoDeclarada: Declaro vínculo com a Universidade de Exemplo — autodeclaração, sem verificação da plataforma.
+                    areasInteresse:
+                      - algoritmos
+                      - estruturas de dados
+                    linksExternos:
+                      - https://github.com/maria-silva
+                    materiais:
+                      items:
+                        - slug: introducao-a-algoritmos-de-ordenacao
+                          titulo: Introdução a algoritmos de ordenação
+                          descricao: Nota de aula sobre ordenação por comparação, com análise de complexidade e exemplos em pseudocódigo.
+                          autor:
+                            slug: maria-silva
+                            nomePublico: Maria Silva
+                          categoria:
+                            slug: computacao-e-tecnologia
+                            nome: Computação e Tecnologia
+                          tipo:
+                            slug: nota-de-aula
+                            nome: Nota de aula
+                          licenca:
+                            slug: cc-by-4.0
+                            nome: CC BY 4.0
+                            descricaoCurta: Você pode reutilizar e adaptar o material, inclusive comercialmente, dando crédito ao autor.
+                          publicadoEm: '2026-10-14T15:10:00Z'
+                      page: 0
+                      size: 20
+                      total: 1
+                semMateriais:
+                  summary: Autor sem material publicado — 200 com lista vazia
+                  value:
+                    slug: joao-sem-publicacao
+                    nomePublico: João Sem Publicação
+                    areasInteresse: []
+                    linksExternos: []
+                    materiais:
+                      items: []
+                      page: 0
+                      size: 20
+                      total: 0
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '404':
+          $ref: '#/components/responses/ErroNaoEncontrado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
 components:
   parameters:
     FiltroAtivo:
@@ -280,6 +530,78 @@ components:
         default: 20
       example: 20
 
+    FiltroBusca:
+      name: q
+      in: query
+      required: false
+      description: |
+        Busca lexical sobre `titulo` e `descricao` do material (RF003, §12.1). Resistente a
+        acento e caixa: "matemática" e "matematica" casam o mesmo conjunto. Ausente ou vazia
+        não é erro — devolve a listagem padrão (RF003). Não há ordenação nem promessa de
+        relevância: o resultado sai na ordenação pedida por `ordem` (§12.2). Caracteres
+        especiais são tratados como texto, nunca como operador (§12.1).
+      schema:
+        type: string
+        maxLength: 200
+      example: algoritmos de ordenação
+
+    FiltroCategoria:
+      name: categoria
+      in: query
+      required: false
+      description: |
+        Filtra por `slug` da categoria do material (RF004). O valor é o `slug` estável
+        devolvido em `categoria.slug` (ADR-0006, RF007) — não o `nome`. Slug bem formado mas
+        inexistente devolve **200 vazio**, nunca 404; valor fora do formato de slug devolve
+        **400** no `ProblemDetail` padrão.
+      schema:
+        type: string
+        pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+      example: computacao-e-tecnologia
+
+    FiltroTipo:
+      name: tipo
+      in: query
+      required: false
+      description: |
+        Filtra por `slug` do tipo de material (RF004). Mesmo contrato do filtro de
+        categoria: `slug` estável, desconhecido → 200 vazio, mal formado → 400.
+      schema:
+        type: string
+        pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+      example: nota-de-aula
+
+    OrdemMateriais:
+      name: ordem
+      in: query
+      required: false
+      description: |
+        Critério de ordenação da listagem (§12.2). `recentes` (padrão) ordena por
+        `publicadoEm` decrescente com desempate **estável** por `id`; `titulo` ordena por
+        `titulo` crescente com o mesmo desempate por `id` — em ambos, a ordem total é
+        determinística, então paginar não duplica nem omite item (RN013). Não existe ordem
+        por "relevância" nem por contagem de popularidade (§12.2, §12.4). Valor fora do
+        enum → **400**.
+      schema:
+        type: string
+        enum: [recentes, titulo]
+        default: recentes
+      example: recentes
+
+    SlugRecurso:
+      name: slug
+      in: path
+      required: true
+      description: |
+        Identificador público do recurso — o `slug` estável do material ou do perfil
+        (RN009, RNF025). Valor fora do formato de slug → 400; slug bem formado que não
+        existe (ou não é público) → 404.
+      schema:
+        type: string
+        pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+        maxLength: 120
+      example: introducao-a-algoritmos-de-ordenacao
+
   responses:
     ErroValidacao:
       description: |
@@ -301,6 +623,26 @@ components:
                 errors:
                   - campo: ativo
                     mensagem: deve ser true ou false
+
+    ErroNaoEncontrado:
+      description: |
+        Recurso ausente ou não público. A resposta é a mesma para material inexistente,
+        material RETIRADO ou EXCLUIDO e perfil de conta não ATIVA — de propósito, para não
+        revelar a existência de conteúdo fora do público (RN002, CA008). Sem `errors[]`:
+        recurso ausente não é erro de campo.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            recursoForaDoPublico:
+              summary: Material inexistente ou não público
+              value:
+                type: urn:scipath:erro:nao_encontrado
+                title: Recurso não encontrado
+                status: 404
+                detail: O recurso solicitado não foi encontrado.
+                instance: /api/materiais/exemplo-material-fora-do-publico
 
     ErroMetodoNaoPermitido:
       description: |
@@ -458,9 +800,9 @@ components:
       description: |
         Envelope padrão de lista paginada (RF002, RNF021). Toda listagem responde
         exatamente estes quatro campos; o endpoint especializa `items` no schema do
-        recurso (`PaginaCategorias`, `PaginaTiposMaterial`, `PaginaLicencas`). `page`
-        começa em 0, `size` tem teto por requisição e a ordenação do endpoint é estável,
-        para que páginas não repitam nem pulem itens.
+        recurso (`PaginaCategorias`, `PaginaTiposMaterial`, `PaginaLicencas`,
+        `PaginaMateriais`). `page` começa em 0, `size` tem teto por requisição e a
+        ordenação do endpoint é estável, para que páginas não repitam nem pulem itens.
       required: [items, page, size, total]
       properties:
         items:
@@ -526,6 +868,247 @@ components:
               items:
                 $ref: '#/components/schemas/Licenca'
 
+    CategoriaRef:
+      type: object
+      description: |
+        Categoria de referência anexada a um material (dados do ADR-0006), reduzida ao que
+        a descoberta precisa exibir e navegar. O cliente usa `slug` para filtrar e para
+        linkar a página da categoria (RF007); `nome` é só rótulo de exibição.
+      required: [slug, nome]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: Chave estável da categoria; é o mesmo valor aceito pelo filtro `categoria`.
+          example: computacao-e-tecnologia
+        nome:
+          type: string
+          description: Rótulo de exibição da categoria.
+          example: Computação e Tecnologia
+
+    TipoMaterialRef:
+      type: object
+      description: |
+        Tipo de material anexado a um material (dados do ADR-0006), reduzido ao necessário
+        para exibir e filtrar. `slug` é a chave estável aceita pelo filtro `tipo`.
+      required: [slug, nome]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: Chave estável do tipo; é o mesmo valor aceito pelo filtro `tipo`.
+          example: nota-de-aula
+        nome:
+          type: string
+          description: Rótulo de exibição do tipo.
+          example: Nota de aula
+
+    LicencaRef:
+      type: object
+      description: |
+        Licença de reutilização do material, sempre explícita (RN006). `descricaoCurta` é
+        obrigatória porque é ela que impede a leitura errada de que "estar público" significa
+        domínio público (§13.2); a resposta nunca traz só o nome da licença.
+      required: [slug, nome, descricaoCurta]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9.]+)*$'
+          description: Chave estável da licença.
+          example: cc-by-4.0
+        nome:
+          type: string
+          description: Rótulo de exibição da licença.
+          example: CC BY 4.0
+        identificador:
+          type: string
+          description: |
+            Identificador público da licença (ex.: SPDX). Ausente quando a licença não tem
+            identificador público ("Todos os direitos reservados").
+          example: CC-BY-4.0
+        urlReferencia:
+          type: string
+          format: uri
+          description: |
+            URL do texto de referência da licença. Ausente quando não há texto público
+            ("Todos os direitos reservados").
+          example: https://creativecommons.org/licenses/by/4.0/
+        descricaoCurta:
+          type: string
+          description: Explicação em linguagem simples do que a licença permite e do que não permite (RN006).
+          example: Você pode reutilizar e adaptar o material, inclusive comercialmente, dando crédito ao autor.
+
+    AutorResumo:
+      type: object
+      description: |
+        Identidade pública do autor na listagem — o mínimo para exibir no card e linkar o
+        perfil (RF002, RF007). Nunca carrega e-mail, conta, hash ou token (RNF013).
+      required: [slug, nomePublico]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: Slug público do perfil; é o valor da rota `/autores/{slug}` (RNF025).
+          example: maria-silva
+        nomePublico:
+          type: string
+          description: Nome público exibido como autor do material.
+          example: Maria Silva
+
+    MaterialResumo:
+      type: object
+      description: |
+        Item de material na descoberta pública (RF002). Todo material devolvido está
+        PUBLICADO e pertence a conta ATIVA (RN002, §11.3): `estado` não é campo porque,
+        nesta superfície, ele é sempre PUBLICADO — material retirado ou excluído
+        simplesmente não aparece. Licença sempre presente (RN006). Sem marca de revisão,
+        certificação, curadoria ou verificação (RN010, RN011).
+      required: [slug, titulo, descricao, autor, categoria, tipo, licenca, publicadoEm]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: Identificador público e estável do material; é o valor da rota `/materiais/{slug}` (RNF025).
+          example: introducao-a-algoritmos-de-ordenacao
+        titulo:
+          type: string
+          description: Título do material (RN004). É o `title` de SEO na página do material.
+          example: Introdução a algoritmos de ordenação
+        descricao:
+          type: string
+          description: Descrição curta do material (RN004). É a base do `description` de SEO.
+          example: Nota de aula sobre ordenação por comparação, com análise de complexidade e exemplos em pseudocódigo.
+        autor:
+          $ref: '#/components/schemas/AutorResumo'
+        categoria:
+          $ref: '#/components/schemas/CategoriaRef'
+        tipo:
+          $ref: '#/components/schemas/TipoMaterialRef'
+        licenca:
+          $ref: '#/components/schemas/LicencaRef'
+        publicadoEm:
+          type: string
+          format: date-time
+          description: Instante da publicação; chave da ordenação padrão `recentes` (§12.2).
+          example: '2026-10-14T15:10:00Z'
+        atualizadoEm:
+          type: string
+          format: date-time
+          description: Última atualização do material. Presente quando difere da publicação.
+          example: '2026-10-15T09:00:00Z'
+
+    MaterialDetalhe:
+      type: object
+      description: |
+        Material público completo (RF005): autoria, categoria, tipo, licença explicada e
+        estado de publicação. Nenhum dado privado — não há e-mail, hash, token, chave de
+        storage nem identificador de conta (RNF013). Nenhuma marca de revisão,
+        certificação, curadoria ou verificação científica (RN010, RN011, CA012).
+
+        O acesso ao arquivo (nome, formato, download) não faz parte desta versão: a Etapa 2
+        não serve arquivo, e publicar um campo de download sem implementação seria fronteira
+        contra ficção (DRS §21.1). Entra no card que implementar RF014.
+      required: [slug, titulo, descricao, autor, categoria, tipo, licenca, estado, publicadoEm, atualizadoEm]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: Identificador público e estável do material; base da URL canônica (RNF025).
+          example: introducao-a-algoritmos-de-ordenacao
+        titulo:
+          type: string
+          description: Título do material (RN004). É o `title` de SEO da página.
+          example: Introdução a algoritmos de ordenação
+        descricao:
+          type: string
+          description: Descrição do material (RN004). É o `description` de SEO da página.
+          example: Nota de aula sobre ordenação por comparação, com análise de complexidade e exemplos em pseudocódigo.
+        autor:
+          $ref: '#/components/schemas/AutorResumo'
+        categoria:
+          $ref: '#/components/schemas/CategoriaRef'
+        tipo:
+          $ref: '#/components/schemas/TipoMaterialRef'
+        licenca:
+          $ref: '#/components/schemas/LicencaRef'
+        estado:
+          type: string
+          enum: [PUBLICADO]
+          description: |
+            Estado de publicação. Nesta superfície é sempre `PUBLICADO`: material RETIRADO
+            ou EXCLUIDO responde 404, indistinguível de inexistente (RN002, CA008).
+          example: PUBLICADO
+        publicadoEm:
+          type: string
+          format: date-time
+          description: Instante da publicação.
+          example: '2026-10-14T15:10:00Z'
+        atualizadoEm:
+          type: string
+          format: date-time
+          description: Instante da última atualização (RF005).
+          example: '2026-10-14T15:10:00Z'
+
+    AutorPublico:
+      type: object
+      description: |
+        Identidade pública do autor (RF006, §11.1.2) e a página dos materiais publicados
+        dele. `afiliacaoDeclarada` é DECLARAÇÃO do próprio autor (RN011, §13.1): o contrato
+        nunca a apresenta como vínculo verificado. Nenhum dado de conta — e-mail de login,
+        hash de senha, token e id de conta ficam fora do schema (RNF013).
+      required: [slug, nomePublico, areasInteresse, linksExternos, materiais]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: Slug público e único do perfil; base da URL canônica `/u/{slug}` (RNF025).
+          example: maria-silva
+        nomePublico:
+          type: string
+          description: Nome público do autor (RF006).
+          example: Maria Silva
+        biografia:
+          type: string
+          description: Biografia do autor. Opcional; ausente quando não informada (RN004).
+          example: Professora de programação; escreve material introdutório de algoritmos.
+        afiliacaoDeclarada:
+          type: string
+          description: |
+            Afiliação DECLARADA pelo autor — nunca vínculo verificado pela plataforma
+            (RN011, §13.1). Ausente quando não informada.
+          example: Declaro vínculo com a Universidade de Exemplo — autodeclaração, sem verificação da plataforma.
+        areasInteresse:
+          type: array
+          description: Áreas de interesse declaradas. Lista vazia quando o autor não informou.
+          items:
+            type: string
+          example: [algoritmos, estruturas de dados]
+        linksExternos:
+          type: array
+          description: |
+            Links externos declarados pelo autor (texto livre, sem verificação no MVP).
+            Lista vazia quando o autor não informou.
+          items:
+            type: string
+          example: [https://github.com/maria-silva]
+        materiais:
+          description: |
+            Página dos materiais publicados do autor, no envelope padrão. `page` e `size` da
+            requisição paginam esta lista; autor sem material publicado responde 200 com
+            `items: []` (E2.5).
+          $ref: '#/components/schemas/PaginaMateriais'
+
+    PaginaMateriais:
+      description: Envelope de paginação (ver `Pagina`) com materiais públicos em `items`.
+      allOf:
+        - $ref: '#/components/schemas/Pagina'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/MaterialResumo'
+
     ProblemDetail:
       type: object
       description: |
@@ -556,10 +1139,10 @@ components:
 
         Um endpoint só documenta os status que o seu caminho pode produzir: 405 aparece
         em todo endpoint publicado (o caminho existe, o método errado é recusado); 404
-        entra nos endpoints com recurso no caminho (Etapa 2); 401 e 403 entram quando a
-        operação exigir identidade (Etapa 3). A classe existe neste schema desde já
-        porque o formato foi implementado de uma vez (card E1.4) — o que muda depois é
-        qual endpoint pode devolvê-la, não o formato.
+        aparece nos endpoints com recurso no caminho (`/materiais/{slug}`,
+        `/autores/{slug}`); 401 e 403 entram quando a operação exigir identidade (Etapa 3).
+        A classe existe neste schema desde já porque o formato foi implementado de uma vez
+        (card E1.4) — o que muda depois é qual endpoint pode devolvê-la, não o formato.
       required: [type, title, status]
       properties:
         type:
