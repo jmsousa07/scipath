@@ -3,7 +3,17 @@
 # NUNCA imprime a senha. Idempotente: pode rodar de novo sem quebrar nada.
 set -euo pipefail
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# O .env mora na raiz do repositório PRINCIPAL, não na raiz de onde o script foi chamado.
+# Cada card roda num git worktree; gravar o .env ali (comportamento antigo) rotacionava a
+# senha da role e deixava o .env da raiz principal estale. Mesmo cálculo do Makefile:
+# git-common-dir aponta para <repo-principal>/.git em qualquer worktree.
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+GIT_COMMON_DIR="$(git -C "${SCRIPT_ROOT}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+if [[ -n "${GIT_COMMON_DIR}" ]]; then
+  REPO="$(cd "${GIT_COMMON_DIR}/.." && pwd)"
+else
+  REPO="${SCRIPT_ROOT}"
+fi
 DB_NAME="${DB_NAME:-scipath}"
 DB_USER="${DB_USER:-scipath}"
 DB_HOST="127.0.0.1"; DB_PORT="5432"
@@ -51,5 +61,13 @@ API_BASE_URL=http://localhost:8080/api
 EOF
 
 echo "== .env escrito em ${REPO}/.env (senha de 32+ chars, não exibida) =="
+# Uso antigo (antes desta correção) gravava o .env na raiz do worktree. Não apagamos nada
+# em silêncio: o Makefile procura o .env de onde o make roda ANTES do da raiz principal,
+# então esse arquivo vence — avisamos para quem quiser usar a raiz principal removê-lo.
+if [[ "${REPO}" != "${SCRIPT_ROOT}" && -f "${SCRIPT_ROOT}/.env" ]]; then
+  echo "== ATENÇÃO: existe ${SCRIPT_ROOT}/.env, de um uso antigo deste script no worktree."
+  echo "   O Makefile procura esse .env ANTES do ${REPO}/.env, então ele vence."
+  echo "   Para usar o .env da raiz principal, apague ${SCRIPT_ROOT}/.env."
+fi
 echo "== pronto. Teste de conexão: =="
 PGPASSWORD="${PW}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d "${DB_NAME}" -tAc "SELECT 'conexao ok: ' || current_database();"

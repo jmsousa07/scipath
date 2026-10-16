@@ -5,9 +5,22 @@ PostgreSQL 16 é nativo em `127.0.0.1:5432`.
 
 | Script | Para que serve |
 |---|---|
-| `db-setup.sh` | cria a role e o banco de **desenvolvimento** (`scipath`) e escreve o `.env` com uma senha gerada (nunca impressa). |
+| `db-setup.sh` | cria a role e o banco de **desenvolvimento** (`scipath`) e escreve o `.env` na raiz do repositório **principal** com uma senha gerada (nunca impressa). Ver abaixo. |
 | `db-test-setup.sh` | prepara o banco de **teste** (`scipath_test`) para a suíte de backend, **sem senha versionada**. Ver abaixo. |
 | `seed-dev.sql` | insere o **dado de exemplo** (autores e materiais fictícios) no banco de **desenvolvimento**, para as verificações da Etapa 2 (E2.2–E2.5, E2.11). **Não é conteúdo do produto** — ver abaixo. |
+
+## Onde o `.env` é gravado (card E2.6-f2)
+
+`db-setup.sh` escreve o `.env` na raiz do **repositório principal** — o mesmo cálculo do
+`Makefile` (`git rev-parse --path-format=absolute --git-common-dir` + `/..`), não a raiz de
+onde ele foi chamado. Como cada card roda num git worktree, gravar ali (comportamento antigo)
+rotacionava a senha da role e deixava o `.env` da raiz principal estale: um worktree passa a
+usar credenciais diferentes sem aviso, e a falha só aparece no card seguinte. Fora de um
+repositório git, o script cai para a própria raiz.
+
+O `Makefile` procura o `.env` de onde o `make` roda **antes** do da raiz principal
+(`ENV_FILE`). Se existir um `.env` de worktree deixado pelo uso antigo, o script **avisa**,
+sem apagar nada em silêncio — para usar o `.env` da raiz principal, remova o do worktree.
 
 ## Seed de desenvolvimento (card E2.6)
 
