@@ -1,0 +1,32 @@
+# Datasource da SUÍTE DE TESTES (card E1.5).
+#
+# Este arquivo é a fonte ÚNICA do banco de teste. O alvo `make test` NÃO carrega o `.env`
+# de propósito: a evidência precisa ser reproduzível de um shell limpo (`env -i ... make
+# test`) e não depender de estado invisível do ambiente de quem rodou (§17.2, §17.5,
+# ADR-0004 ajustes 4 e 5).
+#
+# Banco: `scipath_test` — nunca o banco de desenvolvimento `scipath`. O critério de aceite
+# do card exige que o teste de integração rode contra o banco de teste.
+#
+# Autenticação SEM segredo no repositório (RNF012): a role `scipath_test` não tem senha e
+# entra por `trust` no pg_hba, restrito ao banco `scipath_test`, à role `scipath_test` e ao
+# loopback (127.0.0.1/::1). Por isso `password` é vazio: não há nada a esconder — não existe
+# senha. A provisão é feita por `infra/db-test-setup.sh` (ver também infra/README.md).
+#
+# Se este arquivo não existisse, o perfil `test` herdaria `spring.datasource.url` vazio de
+# application.yml e o contexto Spring não subiria ("Failed to determine a suitable driver
+# class") — era exatamente o defeito que o card E1.5 fecha.
+spring:
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5432/scipath_test
+    username: scipath_test
+    password: ""
+    hikari:
+      # A máquina tem 954 MB (AGENTS.md). O perfil base usa timeouts curtos (2 s) para o
+      # /health responder rápido com o banco fora; sob pressão de memória isso produz
+      # "Connection is not available" falso e reprova teste que não é de schema. A suíte
+      # espera mais. `initialization-fail-timeout` positivo faz o pool FALHAR na subida se
+      # o banco não existir — é o que garante que o teste de integração não passe vazio.
+      initialization-fail-timeout: 60000
+      connection-timeout: 60000
+      validation-timeout: 5000
