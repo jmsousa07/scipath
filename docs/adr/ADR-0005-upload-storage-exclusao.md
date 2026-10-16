@@ -1,8 +1,8 @@
 # ADR-0005 — Upload: limites, armazenamento, exclusão e retenção
 
 - Data: 2026-10-16
-- Status: **aceita quanto ao limite (30 MB)**; **recomendação pendente de ratificação** quanto à
-  política de exclusão e retenção (alínea (b) abaixo)
+- Status: **aceita** — limite de 30 MB e política de exclusão/retenção (opção (b)) confirmados
+  pelo dono em 2026-10-16
 - Decisores: João Mateus (dono) · orquestração
 - Resolve: DRS §20.3 itens 6 (política de exclusão) e 7 (limite de upload)
 - Relaciona: DRS §5.4, §11.1.4, §14.4, RN008, RN012, CA006, CA008, §13.2
@@ -66,7 +66,7 @@ Duas operações distintas, que o DRS trata separadamente (RF017, CA008):
 | (b) **Lógica com retenção curta + purga** | material vira `EXCLUIDO` (invisível, fora da busca, sem acesso público); metadados retidos para auditoria; **arquivo físico purgado após 7 dias** por rotina observável | reversível na janela; permite investigar denúncia; sem lixo permanente | exige rotina de limpeza e um estado a mais no modelo |
 | (c) Lógica permanente | nunca apaga o arquivo | máximo conservadorismo | armazenamento cresce; mantém conteúdo contestado indefinidamente — o oposto do que o RN012 pede |
 
-**Recomendação registrada: (b).** Concretamente:
+**Decisão do dono: (b) — ratificada em 2026-10-16.** Concretamente:
 
 - `material.estado_publicacao` ganha `EXCLUIDO` (além de `PUBLICADO` e `RETIRADO`);
 - exclusão é lógica na hora; o arquivo é purgado **7 dias** depois;
@@ -76,8 +76,9 @@ Duas operações distintas, que o DRS trata separadamente (RF017, CA008):
   seguras e observáveis") e é testado — inclusive o caso de falha no meio;
 - nenhuma cópia temporária sobrevive à operação (RN012).
 
-Este item fica **aguardando a confirmação do dono**. Se ele preferir (a) ou (c), o ADR é
-corrigido antes da Etapa 4.
+Item **ratificado** pelo dono em 2026-10-16: exclusão lógica imediata, purga do arquivo após
+7 dias, metadados retidos por 90 dias, coletor de limpeza diário e observável. As opções (a) e
+(c) ficam registradas como alternativas descartadas.
 
 ## Consequências
 
