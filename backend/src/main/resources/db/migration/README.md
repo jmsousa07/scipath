@@ -36,6 +36,19 @@ Notas de operação (custaram uma execução silenciosa vazia):
 - O banco de teste é `scipath_test` (`SPRING_DATASOURCE_URL_TEST`). Migrar os **dois** bancos
   é requisito do card E1.2.
 
+## Banco de teste e a suíte (`make test`)
+
+A suíte de backend roda contra `scipath_test`, e o datasource dela **não** vem do `.env`:
+vem de `backend/src/test/resources/application-test.yml` (perfil `test`, ativado pelo
+surefire). O alvo `make test` não carrega o `.env` — se carregasse, `SPRING_DATASOURCE_URL`
+venceria o YAML e a suíte rodaria contra o banco de desenvolvimento `scipath`.
+
+A autenticação do banco de teste não usa senha nenhuma: role `scipath_test` sem senha, com
+`trust` no `pg_hba` restrito ao banco, à role e ao loopback. Quem prepara isso é
+`infra/db-test-setup.sh` (detalhes em `infra/README.md`, card E1.5). Consequência prática:
+`make test` funciona num shell limpo, sem `.env` e sem variável exportada, e as migrações
+são aplicadas pelo próprio teste quando o banco está vazio.
+
 ## Reversão (rollback)
 
 O DoD chama "reversível" o que tem **procedimento existente e exercitado**, não promessa. A

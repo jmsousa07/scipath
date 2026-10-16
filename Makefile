@@ -50,9 +50,17 @@ api\:dev:        ## API em :8080
 web\:dev:        ## Next em :3000 (f0.3)
 	@test -f frontend/package.json && (cd frontend && npm run dev) || echo "frontend/ ainda não existe (card f0.3)"
 
-test:            ## testes do backend
+test:            ## testes do backend (reproduzível de shell limpo; datasource de scipath_test)
 	@test -f backend/pom.xml || { echo "backend/ ainda não existe (card F0.1)"; exit 1; }
-	@$(LOAD_ENV) cd backend && ./mvnw test
+	@# NÃO carrega o .env de propósito (card E1.5): a suíte lê o datasource de scipath_test
+	@# em backend/src/test/resources/application-test.yml — role de teste sem senha, com
+	@# trust local (infra/db-test-setup.sh). Variável SPRING_DATASOURCE_* herdada do
+	@# ambiente venceria o YAML e faria o teste rodar contra o banco de desenvolvimento
+	@# `scipath`; por isso são limpas aqui. MAVEN_OPTS limitado à memória da máquina
+	@# (954 MB, AGENTS.md); o heap do fork dos testes está no surefire (pom.xml).
+	@unset SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD SPRING_DATASOURCE_URL_TEST; \
+	export MAVEN_OPTS="$${MAVEN_OPTS:--Xmx384m}"; \
+	cd backend && ./mvnw -o test
 
 lint:            ## lint + typecheck (f0.3)
 	@test -f frontend/package.json && (cd frontend && npm run lint && npm run typecheck) || echo "frontend/ ainda não existe (card f0.3)"
