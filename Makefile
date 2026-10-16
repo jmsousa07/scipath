@@ -18,7 +18,7 @@ ENV_FILE       := $(if $(wildcard .env),.env,$(wildcard $(MAIN_ROOT)/.env))
 # Carrega o .env exportando cada variável (SPRING_DATASOURCE_*) sem imprimir segredo.
 LOAD_ENV := set -a; if [ -f "$(ENV_FILE)" ]; then . "$(ENV_FILE)"; fi; set +a;
 
-.PHONY: help doctor up db\:migrate db\:migrate\:test db\:reset api\:dev web\:dev test lint e2e contract\:check
+.PHONY: help doctor up db\:migrate db\:migrate\:test db\:seed\:dev db\:reset api\:dev web\:dev test lint e2e contract\:check
 
 help:            ## lista os alvos
 	@grep -E '^[a-zA-Z_:\\]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=" *## "}{gsub(/\\/,"",$$1); sub(/:[ 	]*$$/,"",$$1); printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -60,6 +60,30 @@ db\:migrate:     ## aplica as migrações Flyway no banco de dev (.env: SPRING_D
 db\:migrate\:test: ## aplica as migrações Flyway no banco de teste (.env: SPRING_DATASOURCE_URL_TEST)
 	$(call flyway_migrate,SPRING_DATASOURCE_URL_TEST)
 
+# Seed de DESENVOLVIMENTO (card E2.6). Dado de exemplo não é conteúdo do produto: existe
+# para dar o que listar, filtrar, buscar e paginar, e a marca é o prefixo `exemplo-` no
+# slug/e-mail (infra/seed-dev.sql, infra/README.md).
+# As duas guardas abaixo (host e banco) recusam antes de abrir conexão; a terceira guarda,
+# dentro do próprio .sql, recusa de novo — quem chamar `psql -f` na mão não escapa.
+# Sem "|| echo": falha do seed tem de sair com exit != 0.
+db\:seed\:dev:   ## insere o seed de DESENVOLVIMENTO (recusa banco de teste e host remoto)
+	@command -v psql >/dev/null || { echo "psql ausente (PostgreSQL 16 nativo, ADR-0007)"; exit 1; }
+	@$(LOAD_ENV) \
+	  url="$${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL ausente no .env — rode infra/db-setup.sh}"; \
+	  rest="$${url#jdbc:postgresql://}"; rest="$${rest%%\?*}"; \
+	  db="$${rest##*/}"; hp="$${rest%%/*}"; host="$${hp%%:*}"; port="$${hp##*:}"; \
+	  if [ "$$port" = "$$hp" ]; then port=5432; fi; \
+	  case "$$host" in 127.0.0.1|localhost|::1) ;; \
+	    *) echo "seed-dev RECUSADO: $$host não é loopback — dado de exemplo é só de banco local (ADR-0007)"; exit 1;; \
+	  esac; \
+	  case "$$db" in *_test) \
+	    echo "seed-dev RECUSADO: $$db é o banco de TESTE — a suíte precisa de estado limpo (card E2.6, critério 2)"; exit 1;; \
+	  esac; \
+	  echo "== seed-dev: banco $$db @ $$host:$$port (desenvolvimento local, não é produção) =="; \
+	  PGPASSWORD="$$SPRING_DATASOURCE_PASSWORD" psql \
+	    -h "$$host" -p "$$port" -U "$$SPRING_DATASOURCE_USERNAME" -d "$$db" \
+	    -v ON_ERROR_STOP=1 -f infra/seed-dev.sql
+
 db\:reset:       ## recria o banco (destrutivo, só local — precisa confirmar)
 	@bash infra/db-setup.sh --reset
 
@@ -71,9 +95,17 @@ api\:dev:        ## API em :8080
 web\:dev:        ## Next em :3000 (f0.3)
 	@test -f frontend/package.json && (cd frontend && npm run dev) || echo "frontend/ ainda não existe (card f0.3)"
 
-test:            ## testes do backend
+test:            ## testes do backend (reproduzível de shell limpo; datasource de scipath_test)
 	@test -f backend/pom.xml || { echo "backend/ ainda não existe (card F0.1)"; exit 1; }
-	@$(LOAD_ENV) cd backend && ./mvnw test
+	@# NÃO carrega o .env de propósito (card E1.5): a suíte lê o datasource de scipath_test
+	@# em backend/src/test/resources/application-test.yml — role de teste sem senha, com
+	@# trust local (infra/db-test-setup.sh). Variável SPRING_DATASOURCE_* herdada do
+	@# ambiente venceria o YAML e faria o teste rodar contra o banco de desenvolvimento
+	@# `scipath`; por isso são limpas aqui. MAVEN_OPTS limitado à memória da máquina
+	@# (954 MB, AGENTS.md); o heap do fork dos testes está no surefire (pom.xml).
+	@unset SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD SPRING_DATASOURCE_URL_TEST; \
+	export MAVEN_OPTS="$${MAVEN_OPTS:--Xmx384m}"; \
+	cd backend && ./mvnw -o test
 
 lint:            ## lint + typecheck (f0.3)
 	@test -f frontend/package.json && (cd frontend && npm run lint && npm run typecheck) || echo "frontend/ ainda não existe (card f0.3)"
