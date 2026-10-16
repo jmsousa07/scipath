@@ -6,8 +6,8 @@
 > as decisões de implementação, cada uma registrada em ADR.
 >
 > **Status da stack (ADR-0001):** monorepo + Java 21/Spring Boot 3 + PostgreSQL + Next.js —
-> **proposta registrada, aguardando ratificação do dono** (§20.3 item 1). Nenhuma funcionalidade
-> de produto deve ser implementada antes dessa ratificação (Etapa 0 do roadmap).
+> **ratificada** em 2026-10-16 (ver ADR-0004: o dono autorizou avaliar a reutilização do
+> esqueleto Java/Spring entregue, sem pedido de troca de stack).
 >
 > **Autenticação (ADR-0003 — decidida):** e-mail + senha, com verificação de e-mail
 > **obrigatória para publicar**; navegar e editar perfil liberados sem verificação.
