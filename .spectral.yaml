@@ -1,0 +1,3 @@
+# Ruleset do contrato OpenAPI do SciPath (ver AGENTS.md: o contrato é a fronteira).
+# Validação básica: erros de estrutura/estilo do OpenAPI 3 que quebrariam o front.
+extends: ['spectral:oas']
