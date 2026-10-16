@@ -8,6 +8,10 @@
 > **Status da stack (ADR-0001):** monorepo + Java 21/Spring Boot 3 + PostgreSQL + Next.js —
 > **proposta registrada, aguardando ratificação do dono** (§20.3 item 1). Nenhuma funcionalidade
 > de produto deve ser implementada antes dessa ratificação (Etapa 0 do roadmap).
+>
+> **Autenticação (ADR-0003 — decidida):** e-mail + senha, com verificação de e-mail
+> **obrigatória para publicar**; navegar e editar perfil liberados sem verificação.
+> Ver `docs/adr/ADR-0003-autenticacao-email-senha.md`.
 
 ## 1. Forma
 
@@ -33,8 +37,11 @@ persistência (§14.3). Prefixo único (`/api`), decidido aqui e não reinventad
 O DRS é um modelo **conceitual**; a modelagem física preserva conceitos e invariantes.
 
 ```
-account          id, email (único, normalizado), senha_hash | provedor_ref, estado,
+account          id, email (único, normalizado), senha_hash (bcrypt 12), estado
+                 (PENDENTE_VERIFICACAO | ATIVO | SUSPENSO), email_verificado_em,
                  criado_em, atualizado_em
+verification_token  id, account_id, token_hash (SHA-256), tipo (CONFIRMACAO_EMAIL |
+                 RECUPERACAO_SENHA), expira_em, consumido_em   # uso único, nunca em log
 profile          id, account_id (1:1), nome_publico, slug (único), biografia,
                  afiliacao_declarada (opcional), areas_interesse[], links_externos[],
                  criado_em, atualizado_em
@@ -139,8 +146,8 @@ configuração/ambiente e **nunca** entram no repositório (RNF012).
 | Decisão | Bloqueia | Onde será registrada |
 |---|---|---|
 | Ratificação da stack | tudo | ADR-0001 (já proposto) |
-| Mecanismo de autenticação e recuperação | §2 (account), §5 (login/cadastro) | ADR-0003 (Etapa 0) |
-| Verificação de e-mail antes de publicar? | §5, fluxo de publicação | ADR-0003 |
+| ~~Mecanismo de autenticação e recuperação~~ **decidido:** e-mail + senha, bcrypt 12, token de recuperação de uso único | §2 (account), §5 (login/cadastro) | **ADR-0003 — registrado** |
+| ~~Verificação de e-mail antes de publicar?~~ **decidido:** obrigatória para publicar; navegar e editar perfil liberados | §5, fluxo de publicação | **ADR-0003 — registrado** |
 | Taxonomia inicial: categorias, tipos, licenças | §2 (seeds), §5 | ADR-0004 (Etapa 0) |
 | Política de exclusão e retenção (lógica ou física) | §2 (estados), §4 (limpeza) | ADR-0005 (Etapa 0) |
 | Limite de upload (confirmar 50 MB) e tipos | §4 | ADR-0005 |
