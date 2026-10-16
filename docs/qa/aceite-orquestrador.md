@@ -53,3 +53,30 @@ reais · desempenho. Nada disso foi declarado pronto.
 As listas do **ADR-0006** (categorias, tipos e licenças) e os itens operacionais do **ADR-0007**
 (backup com teste de restauração, hospedagem, canal de denúncia). Seguem como **proposta**:
 o orquestrador não as declara aprovadas (§21.5).
+
+## Fechamento da Etapa 1 (2026-10-16, 21h)
+
+Depois do aceite inicial, os cards restantes rodaram e o próprio pipeline devolveu **quatro defeitos
+reais** — nenhum pedido por mim, todos encontrados por quem executava ou verificava:
+
+| Card | Defeito encontrado | Correção |
+|---|---|---|
+| E1.12 | `scipath_test` não era neutro entre as duas formas de migrar: pelo plugin do Maven as tabelas ficam com dono `scipath`, e a suíte (role `scipath_test`) recebe `permission denied` → `make test` em BUILD FAILURE | `012a2a6` |
+| E2.6-f1 | `make lint` / `make e2e` mascaravam falha do frontend (exit 0 com o linter quebrado) | `b83d786` |
+| E2.6-f2 | `web:dev` mascarava falha e o `db-setup.sh` gravava o `.env` no diretório errado | `3e82277`, `230fb68` |
+| E1.2b | a senha do banco ia no `argv` do Maven, visível em `ps` | `46e7cdd` + evidência `8bf84e7` |
+
+**Gate de QA — `E1.8`.** Evidência `docs/qa/e1-base-2026-10-16.log`: **11 ATENDE · 0 NÃO ATENDE ·
+11 critérios avaliados**, com harness reproduzível (`infra/qa-harness.sh`) e template de evidência.
+O relatório lista explicitamente o que **não** foi verificado: conferência visual humana, leitor de
+tela real, contraste por ferramenta, efeito do `prefers-reduced-motion` por emulação e percurso
+real por teclado (fica para a Etapa 2, com telas de verdade). A medição de 375 px e 1440 px sem
+rolagem horizontal sustenta o veredito daquele critério; o screenshot é registro, não a prova.
+
+**Integração.** As branches dos workers estavam encadeadas entre si e `main` tinha ficado
+desatualizado. Integrei em ordem: E1.5, E1.8, E1.12, E1.2b, a cadeia do E2.6 (f1/f2) e o E2.6 —
+**seis merges, sem conflito**.
+
+**Veredito do orquestrador:** Etapa 1 (Base do produto) **fechada**, com as ressalvas acima
+registradas em vez de silenciadas. Etapa 2 (Descoberta pública) liberada; o E2.6 já entregou o seed
+de desenvolvimento e o restante da cadeia está destravado no quadro.
