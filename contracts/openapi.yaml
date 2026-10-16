@@ -1,154 +1,550 @@
 openapi: 3.1.0
+
 info:
   title: SciPath API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Fronteira entre backend e frontend do SciPath. Este arquivo é a fonte de verdade:
-    mudança de API começa aqui, no mesmo card da implementação (ver AGENTS.md).
-    v0.1.0 — esqueleto da fatia 0: saúde e materiais (listar/criar).
+    mudança de API começa aqui, no mesmo card da implementação (AGENTS.md, DRS §14.3).
+
+    v0.2.0 — base do produto: estado operacional (RF022) e leitura da taxonomia de
+    referência (RF018). Os endpoints de material herdados do esqueleto F0.1 foram
+    removidos: não tinham requisito implementado, e uma fronteira publicada sem
+    implementação faz o frontend codificar contra ficção (DRS §21.1). Serão reescritos
+    na Etapa 2, quando tiverem requisito e modelo de dados no card que os especifica.
+
+    Convenções vinculantes para todo endpoint:
+    - **Erro único.** Toda resposta 4xx/5xx usa `application/problem+json` com o schema
+      `ProblemDetail` (RFC 7807). `errors[]` só aparece em erro de campo. Não existe
+      segundo formato de erro no contrato.
+    - **Lista paginada única.** Toda listagem usa o envelope `Pagina` — `items`, `page`,
+      `size`, `total` (RF002, RNF021) — com teto de `size` e ordenação estável
+      documentada no endpoint, para que a navegação não duplique nem perca itens.
+    - **Taxonomia.** Categorias, tipos de material e licenças são listas controladas de
+      referência (RF018, RN005, RN006): `slug` é a chave estável e `nome` é só rótulo de
+      exibição, que pode mudar sem quebrar dados (ADR-0006). São ordenadas por `nome` e
+      filtráveis por estado ativo. Como listas de referência são curtas (13 categorias,
+      6 tipos, 7 licenças no MVP), o cliente pode omitir `page` e `size` e sempre recebe
+      `total` no envelope.
+
+    Versionamento: mudança incompatível de caminho ou de payload sobe a versão menor
+    deste documento e é registrada no card que a introduz. Migração de dados e
+    alteração de taxonomia são migração Flyway nova, nunca edição de contrato publicada.
+
+  contact:
+    name: João Mateus de Sousa
+    url: https://github.com/jmsousa07
+    email: jmsousa07@users.noreply.github.com
+
 servers:
   - url: http://localhost:8080/api
     description: ambiente local
 
 tags:
   - name: sistema
-  - name: materiais
+    description: Estado operacional da API.
+  - name: taxonomia
+    description: Leitura da taxonomia de referência — categorias, tipos de material e licenças (RF018).
 
 paths:
   /health:
     get:
       tags: [sistema]
       summary: Estado da API
+      description: |
+        Informa se a API está no ar e se o banco responde (RF022 — estados operacionais
+        claros). Serve à operação e ao monitoramento; nenhum fluxo do visitante depende
+        deste endpoint. A resposta é sempre 200 quando a API está no ar: se o banco não
+        responde, o corpo traz `status: DEGRADED` e `database: DOWN`, e o detalhe técnico
+        fica só no log do servidor (RNF012). API fora do ar não é resposta HTTP — é falha
+        de conexão, que o monitor percebe pelo status 200 ausente. Um endpoint que
+        sinalizasse degradação por 503 exigiria mudar a implementação; se o
+        monitoramento passar a depender disso, isso é mudança de contrato primeiro
+        (AGENTS.md regra 1), em card próprio.
       operationId: getHealth
       responses:
         '200':
-          description: API no ar
+          description: API no ar; `status` e `database` informam o alcance do banco.
           content:
             application/json:
               schema:
-                type: object
-                required: [status, version, database]
-                properties:
-                  status: { type: string, enum: [UP, DEGRADED] }
-                  version: { type: string, example: 0.1.0 }
-                  database: { type: string, enum: [UP, DOWN] }
+                $ref: '#/components/schemas/EstadoApi'
+              examples:
+                operante:
+                  summary: API operante, banco no ar
+                  value:
+                    status: UP
+                    version: 0.2.0
+                    database: UP
+                degradado:
+                  summary: API no ar, banco fora
+                  value:
+                    status: DEGRADED
+                    version: 0.2.0
+                    database: DOWN
 
-  /materiais:
+  /categorias:
     get:
-      tags: [materiais]
-      summary: Lista materiais publicados
-      operationId: listMateriais
+      tags: [taxonomia]
+      summary: Lista as categorias científicas
+      description: |
+        Devolve as categorias de referência para popular filtros de busca e o formulário
+        de publicação (RF018, RN005). Filtro por estado ativo: sem o parâmetro, devolve
+        apenas categorias ativas; com `ativo=false`, devolve também as desativadas.
+        Ordenação estável por `nome` (ordem definida pelo servidor), para que a navegação
+        entre páginas não repita nem perca itens. `slug` é a chave estável; o cliente
+        guarda e envia o `slug`, nunca o `nome`.
+      operationId: listCategorias
       parameters:
-        - name: page
-          in: query
-          schema: { type: integer, minimum: 0, default: 0 }
-        - name: size
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: tipo
-          in: query
-          description: Filtra por tipo de material
-          schema: { $ref: '#/components/schemas/TipoMaterial' }
+        - $ref: '#/components/parameters/FiltroAtivo'
+        - $ref: '#/components/parameters/NumeroPagina'
+        - $ref: '#/components/parameters/TamanhoPagina'
       responses:
         '200':
-          description: Página de materiais, sempre ordenada por criadoEm desc
+          description: Página de categorias, ordenada por nome.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/PaginaMateriais' }
-    post:
-      tags: [materiais]
-      summary: Publica um material
-      operationId: criarMaterial
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/NovoMaterial' }
-      responses:
-        '201':
-          description: Material criado
-          headers:
-            Location:
-              schema: { type: string }
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Material' }
+              schema:
+                $ref: '#/components/schemas/PaginaCategorias'
+              examples:
+                primeiraPagina:
+                  summary: Categorias ativas, primeira página
+                  value:
+                    items:
+                      - id: 3f2c1a90-5b7e-4c21-9a11-8e0d2f6b7c44
+                        slug: computacao-e-tecnologia
+                        nome: Computação e Tecnologia
+                        descricao: Software, dados, redes, inteligência artificial e demais áreas da computação.
+                        ativo: true
+                      - id: 8b1d4e77-0c93-4a52-b6d0-1f7e5a9c2d18
+                        slug: matematica-e-estatistica
+                        nome: Matemática e Estatística
+                        descricao: Álgebra, cálculo, geometria, probabilidade e estatística.
+                        ativo: true
+                    page: 0
+                    size: 20
+                    total: 13
         '400':
           $ref: '#/components/responses/ErroValidacao'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /tipos-material:
+    get:
+      tags: [taxonomia]
+      summary: Lista os tipos de material
+      description: |
+        Devolve os tipos de material de referência usados no filtro e no formulário de
+        publicação (RF018). Filtro por estado ativo: sem o parâmetro, devolve apenas
+        tipos ativos; com `ativo=false`, devolve também os desativados. Ordenação estável
+        por `nome`. `slug` é a chave estável (ADR-0006).
+      operationId: listTiposMaterial
+      parameters:
+        - $ref: '#/components/parameters/FiltroAtivo'
+        - $ref: '#/components/parameters/NumeroPagina'
+        - $ref: '#/components/parameters/TamanhoPagina'
+      responses:
+        '200':
+          description: Página de tipos de material, ordenada por nome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaTiposMaterial'
+              examples:
+                primeiraPagina:
+                  summary: Tipos de material ativos
+                  value:
+                    items:
+                      - id: 1c9e5a30-7d24-4f61-8b02-2a6f1d3e9c05
+                        slug: nota-de-aula
+                        nome: Nota de aula
+                        ativo: true
+                      - id: 5d0b2f18-9a63-4c77-8e14-6b3c7f204a91
+                        slug: slides
+                        nome: Slides
+                        ativo: true
+                    page: 0
+                    size: 20
+                    total: 6
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /licencas:
+    get:
+      tags: [taxonomia]
+      summary: Lista as licenças de reutilização
+      description: |
+        Devolve as licenças de referência disponíveis para o autor escolher na publicação
+        (RF018, RN006). Filtro por estado ativo: sem o parâmetro, devolve apenas licenças
+        ativas; com `ativo=false`, devolve também as desativadas. Ordenação estável por
+        `nome`. Cada item traz `descricaoCurta`, em linguagem simples, do que a licença
+        permite — a licença nunca é decorativa nem sugere que estar público significa
+        domínio público (RN006, §13.2). `identificador` e `urlReferencia` podem vir
+        ausentes quando a licença não tem identificador nem URL públicos (caso de "Todos
+        os direitos reservados").
+      operationId: listLicencas
+      parameters:
+        - $ref: '#/components/parameters/FiltroAtivo'
+        - $ref: '#/components/parameters/NumeroPagina'
+        - $ref: '#/components/parameters/TamanhoPagina'
+      responses:
+        '200':
+          description: Página de licenças, ordenada por nome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaLicencas'
+              examples:
+                primeiraPagina:
+                  summary: Licenças ativas
+                  value:
+                    items:
+                      - id: 9a7d3c16-4e80-4b95-a173-0f5c8e2b6d47
+                        slug: cc-by-4.0
+                        nome: CC BY 4.0
+                        identificador: CC-BY-4.0
+                        urlReferencia: https://creativecommons.org/licenses/by/4.0/
+                        descricaoCurta: Você pode reutilizar e adaptar o material, inclusive comercialmente, dando crédito ao autor.
+                        ativo: true
+                      - id: 2e5b8f04-6c17-4d38-9f26-7a1b4c9e0d53
+                        slug: todos-os-direitos-reservados
+                        nome: Todos os direitos reservados
+                        descricaoCurta: O material continua protegido. Ler e baixar é permitido; reutilizar não é.
+                        ativo: true
+                    page: 0
+                    size: 20
+                    total: 7
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
 
 components:
+  parameters:
+    FiltroAtivo:
+      name: ativo
+      in: query
+      required: false
+      description: |
+        Filtra por estado ativo do item de referência. Omitido, devolve apenas itens
+        ativos; `false` inclui também os desativados (desativar taxonomia é migração
+        Flyway — ADR-0006).
+      schema:
+        type: boolean
+        default: true
+      example: true
+
+    NumeroPagina:
+      name: page
+      in: query
+      required: false
+      description: Número da página, começando em 0.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      example: 0
+
+    TamanhoPagina:
+      name: size
+      in: query
+      required: false
+      description: Itens por página. Teto de 100 por requisição (RNF021).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      example: 20
+
   responses:
     ErroValidacao:
-      description: Payload inválido (RFC 7807 com lista de erros)
+      description: |
+        Entrada inválida (parâmetro de consulta ou corpo). Resposta no formato único de
+        erro, com `errors[]` apontando o campo culpado.
       content:
         application/problem+json:
-          schema: { $ref: '#/components/schemas/Problema' }
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            parametroInvalido:
+              summary: Parâmetro de consulta inválido
+              value:
+                type: urn:scipath:erro:validacao
+                title: Requisição inválida
+                status: 400
+                detail: O parâmetro 'ativo' deve ser true ou false.
+                instance: /api/categorias
+                errors:
+                  - campo: ativo
+                    mensagem: deve ser true ou false
+
+    ErroInesperado:
+      description: |
+        Falha interna. A resposta não carrega stack trace, SQL nem caminho de arquivo
+        (RNF012); o detalhe técnico fica apenas no log do servidor.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            falhaInterna:
+              summary: Erro interno
+              value:
+                type: urn:scipath:erro:interno
+                title: Erro interno
+                status: 500
+                detail: Não foi possível concluir a operação. Tente novamente.
+                instance: /api/categorias
 
   schemas:
+    EstadoApi:
+      type: object
+      description: Estado operacional da API (RF022).
+      required: [status, version, database]
+      properties:
+        status:
+          type: string
+          enum: [UP, DEGRADED]
+          description: UP quando API e banco respondem; DEGRADED quando a API responde e o banco não.
+          example: UP
+        version:
+          type: string
+          description: Versão do contrato em execução.
+          example: 0.2.0
+        database:
+          type: string
+          enum: [UP, DOWN]
+          description: Alcance do banco de dados.
+          example: UP
+
+    Categoria:
+      type: object
+      description: Categoria científica de referência (ADR-0006).
+      required: [id, slug, nome, descricao, ativo]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador interno; o cliente não deriva significado dele.
+          example: 3f2c1a90-5b7e-4c21-9a11-8e0d2f6b7c44
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: Chave estável da categoria; é o valor que o cliente guarda e envia.
+          example: computacao-e-tecnologia
+        nome:
+          type: string
+          description: Rótulo de exibição; pode mudar sem quebrar dados.
+          example: Computação e Tecnologia
+        descricao:
+          type: string
+          description: Descrição curta, para descoberta e SEO (DRS §12).
+          example: Software, dados, redes, inteligência artificial e demais áreas da computação.
+        ativo:
+          type: boolean
+          description: Item de referência ativo; inativos só aparecem com `ativo=false`.
+          example: true
+
     TipoMaterial:
-      type: string
-      enum: [NOTA_DE_AULA, SLIDE, ARTIGO, EXPLICACAO, AULA_GRAVADA]
-
-    Material:
       type: object
-      required: [id, titulo, tipo, resumo, autor, criadoEm]
+      description: Tipo de material de referência (ADR-0006).
+      required: [id, slug, nome, ativo]
       properties:
-        id: { type: string, format: uuid }
-        titulo: { type: string, minLength: 3, maxLength: 200 }
-        tipo: { $ref: '#/components/schemas/TipoMaterial' }
-        resumo: { type: string, maxLength: 600 }
-        tags:
+        id:
+          type: string
+          format: uuid
+          description: Identificador interno; o cliente não deriva significado dele.
+          example: 1c9e5a30-7d24-4f61-8b02-2a6f1d3e9c05
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: Chave estável do tipo; é o valor que o cliente guarda e envia.
+          example: nota-de-aula
+        nome:
+          type: string
+          description: Rótulo de exibição; pode mudar sem quebrar dados.
+          example: Nota de aula
+        ativo:
+          type: boolean
+          description: Item de referência ativo; inativos só aparecem com `ativo=false`.
+          example: true
+
+    Licenca:
+      type: object
+      description: Licença de reutilização de referência (ADR-0006, RN006).
+      required: [id, slug, nome, descricaoCurta, ativo]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador interno; o cliente não deriva significado dele.
+          example: 9a7d3c16-4e80-4b95-a173-0f5c8e2b6d47
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9.]+)*$'
+          description: Chave estável da licença; é o valor que o cliente guarda e envia.
+          example: cc-by-4.0
+        nome:
+          type: string
+          description: Rótulo de exibição da licença.
+          example: CC BY 4.0
+        identificador:
+          type: string
+          description: |
+            Identificador público da licença (ex.: SPDX). Ausente quando a licença não
+            tem identificador público ("Todos os direitos reservados").
+          example: CC-BY-4.0
+        urlReferencia:
+          type: string
+          format: uri
+          description: |
+            URL do texto de referência da licença. Ausente quando não existe texto
+            público ("Todos os direitos reservados").
+          example: https://creativecommons.org/licenses/by/4.0/
+        descricaoCurta:
+          type: string
+          description: Explicação em linguagem simples do que a licença permite (RN006).
+          example: Você pode reutilizar e adaptar o material, inclusive comercialmente, dando crédito ao autor.
+        ativo:
+          type: boolean
+          description: Item de referência ativo; inativos só aparecem com `ativo=false`.
+          example: true
+
+    Pagina:
+      type: object
+      description: |
+        Envelope padrão de lista paginada (RF002, RNF021). Toda listagem responde
+        exatamente estes quatro campos; o endpoint especializa `items` no schema do
+        recurso (`PaginaCategorias`, `PaginaTiposMaterial`, `PaginaLicencas`). `page`
+        começa em 0, `size` tem teto por requisição e a ordenação do endpoint é estável,
+        para que páginas não repitam nem pulem itens.
+      required: [items, page, size, total]
+      properties:
+        items:
           type: array
-          maxItems: 12
-          items: { type: string, minLength: 2, maxLength: 40 }
-        autor: { $ref: '#/components/schemas/AutorResumo' }
-        criadoEm: { type: string, format: date-time }
-        atualizadoEm: { type: string, format: date-time }
+          description: Itens da página corrente.
+          items: {}
+        page:
+          type: integer
+          minimum: 0
+          description: Número da página corrente, começando em 0.
+          example: 0
+        size:
+          type: integer
+          minimum: 1
+          description: Itens solicitados por página.
+          example: 20
+        total:
+          type: integer
+          minimum: 0
+          description: Total de itens que atendem à consulta, independente da página.
+          example: 13
+      example:
+        items:
+          - id: 3f2c1a90-5b7e-4c21-9a11-8e0d2f6b7c44
+            slug: computacao-e-tecnologia
+            nome: Computação e Tecnologia
+            descricao: Software, dados, redes, inteligência artificial e demais áreas da computação.
+            ativo: true
+        page: 0
+        size: 20
+        total: 13
 
-    NovoMaterial:
-      type: object
-      required: [titulo, tipo, resumo]
-      properties:
-        titulo: { type: string, minLength: 3, maxLength: 200 }
-        tipo: { $ref: '#/components/schemas/TipoMaterial' }
-        resumo: { type: string, minLength: 10, maxLength: 600 }
-        tags:
-          type: array
-          maxItems: 12
-          items: { type: string, minLength: 2, maxLength: 40 }
+    PaginaCategorias:
+      description: Envelope de paginação (ver `Pagina`) com categorias em `items`.
+      allOf:
+        - $ref: '#/components/schemas/Pagina'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Categoria'
 
-    AutorResumo:
-      type: object
-      required: [id, nome]
-      properties:
-        id: { type: string, format: uuid }
-        nome: { type: string }
+    PaginaTiposMaterial:
+      description: Envelope de paginação (ver `Pagina`) com tipos de material em `items`.
+      allOf:
+        - $ref: '#/components/schemas/Pagina'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/TipoMaterial'
 
-    PaginaMateriais:
-      type: object
-      required: [conteudo, page, size, total]
-      properties:
-        conteudo:
-          type: array
-          items: { $ref: '#/components/schemas/Material' }
-        page: { type: integer, minimum: 0 }
-        size: { type: integer, minimum: 1 }
-        total: { type: integer, minimum: 0 }
+    PaginaLicencas:
+      description: Envelope de paginação (ver `Pagina`) com licenças em `items`.
+      allOf:
+        - $ref: '#/components/schemas/Pagina'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Licenca'
 
-    Problema:
+    ProblemDetail:
       type: object
+      description: |
+        Formato único de erro do contrato (RFC 7807, `application/problem+json`),
+        usado em toda resposta 4xx/5xx. `type` é um URN estável que identifica a classe
+        do erro (`urn:scipath:erro:<slug>`), o cliente decide pelo `type`, nunca pelo
+        texto; `title` é o rótulo curto e estável; `detail` explica o caso concreto e é
+        seguro para exibir (RNF012 — sem stack trace, SQL ou caminho de arquivo);
+        `errors[]` só aparece em erro de campo, nunca em erro sistêmico.
       required: [type, title, status]
       properties:
-        type: { type: string }
-        title: { type: string }
-        status: { type: integer }
-        detail: { type: string }
-        instance: { type: string }
+        type:
+          type: string
+          format: uri
+          description: Identificador estável da classe do erro.
+          example: urn:scipath:erro:validacao
+        title:
+          type: string
+          description: Rótulo curto e estável da classe do erro.
+          example: Requisição inválida
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          description: Código HTTP, repetido no corpo.
+          example: 400
+        detail:
+          type: string
+          description: Explicação do caso concreto, segura para exibir ao usuário.
+          example: O parâmetro 'ativo' deve ser true ou false.
+        instance:
+          type: string
+          description: Caminho da requisição que originou o erro.
+          example: /api/categorias
         errors:
           type: array
+          description: Erros de campo; ausente quando o erro não é de validação.
           items:
-            type: object
-            required: [campo, mensagem]
-            properties:
-              campo: { type: string }
-              mensagem: { type: string }
+            $ref: '#/components/schemas/ErroDeCampo'
+      example:
+        type: urn:scipath:erro:validacao
+        title: Requisição inválida
+        status: 400
+        detail: O parâmetro 'ativo' deve ser true ou false.
+        instance: /api/categorias
+        errors:
+          - campo: ativo
+            mensagem: deve ser true ou false
+
+    ErroDeCampo:
+      type: object
+      description: Um campo recusado pela validação, identificado pelo caminho no payload.
+      required: [campo, mensagem]
+      properties:
+        campo:
+          type: string
+          description: Caminho do campo no payload ou nome do parâmetro de consulta.
+          example: ativo
+        mensagem:
+          type: string
+          description: Motivo da recusa, acionável e sem detalhe interno.
+          example: deve ser true ou false
