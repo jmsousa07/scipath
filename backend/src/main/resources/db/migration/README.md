@@ -6,7 +6,8 @@ descritivo; o número é a ordem.
 
 - `V1__modelo_mvp.sql` — modelo de dados do MVP (card E1.2): conta, identidade, taxonomia
   de referência, arquivo e material.
-- `V2__seed_taxonomia.sql` — seed da taxonomia (card E1.3). Ainda não existe.
+- `V2__seed_taxonomia.sql` — seed da taxonomia (card E1.3): 6 tipos de material,
+  13 categorias e 7 licenças, com `slug` como chave estável e `ativo = true`.
 
 ## Como aplicar
 
@@ -41,6 +42,25 @@ O DoD chama "reversível" o que tem **procedimento existente e exercitado**, nã
 `V1` não usa `DROP`/`ALTER`: é uma criação de tabelas limpa, então a reversão é o drop das
 tabelas na ordem inversa das dependências (filhas antes das mães). Isto **destrói dados** —
 vale para banco de desenvolvimento/teste, nunca para produção com dados reais.
+
+A `V2` só **insere** linhas de referência (`INSERT ... ON CONFLICT (slug) DO NOTHING`), sem
+DDL. Revertê-la é apagar as linhas semeadas e a versão no histórico — nada de schema:
+
+```sql
+DELETE FROM material WHERE category_id      IN (SELECT id FROM category      WHERE slug IN (...));
+DELETE FROM material WHERE material_type_id IN (SELECT id FROM material_type WHERE slug IN (...));
+DELETE FROM material WHERE license_id       IN (SELECT id FROM license       WHERE slug IN (...));
+DELETE FROM category      WHERE slug IN ('computacao-e-tecnologia', 'matematica-e-estatistica', ...);
+DELETE FROM material_type WHERE slug IN ('nota-de-aula', 'slides', ...);
+DELETE FROM license       WHERE slug IN ('cc-by-4.0', ..., 'todos-os-direitos-reservados');
+DELETE FROM flyway_schema_history WHERE version = '2';
+```
+
+Os `DELETE FROM material` existem porque a FK é `ON DELETE NO ACTION`: em banco com
+material publicado apontando para uma categoria da seed, apagar a categoria falha — de
+propósito, porque apagar taxonomia em uso nunca é operação de reversão de migração, é
+decisão de produto. Em banco de teste vazio as linhas de `material` não existem e os
+deletes são no-ops. O `DELETE` no histórico é o que permite reaplicar a `V2` depois.
 
 Ordem inversa de `V1__modelo_mvp.sql`:
 
