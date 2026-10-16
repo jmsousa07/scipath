@@ -1,0 +1,98 @@
+/* ============================================================================
+   tokens.css — CONTRATO VISUAL DO SCIPATH (camada de tokens)
+   ----------------------------------------------------------------------------
+   ARQUIVO GERADO. Não edite à mão: rode `npm run tokens` (frontend/).
+   Fonte primária: assets/design_system_2.html
+   Gerador:       frontend/scripts/extract-tokens.mjs
+   Regra:         DESIGN_SYSTEM.md §0.1 — nenhum valor mágico em componente.
+                  Todo hex, raio, sombra, easing e tamanho de tipo vive AQUI.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   1. Tokens (bloco :root extraído de assets/design_system_2.html)
+   --------------------------------------------------------------------------- */
+:root {
+  /* --- paleta Glue (Google Research) — os mesmos hex dos tokens do template --- */
+  --glue-grey-0:#fff;      --glue-grey-10:#f8f9fc;   --glue-grey-20:#eff2f7;
+  --glue-grey-50:#e6eaf0;  --glue-grey-100:#e1e6ec;  --glue-grey-200:#cdd4dc;
+  --glue-grey-300:#b2bbc5; --glue-grey-400:#bdc1c6;  --glue-grey-500:#9aa0a6;
+  --glue-grey-600:#80868b; --glue-grey-700:#5f6368;  --glue-grey-800:#45474d;
+  --glue-grey-900:#2f3034; --glue-grey-1000:#212226; --glue-grey-1100:#18191d;
+  --glue-grey-1200:#121317;
+  --glue-blue-50:#bbe2ff;  --glue-blue-100:#9dd2ff;  --glue-blue-300:#4fa0ff;
+  --glue-blue-500:#3186ff; --glue-blue-600:#3279f9;  --glue-blue-700:#336ef3;
+  --glue-blue-800:#2b4fda; --glue-blue-900:#27329b;
+  --glue-green-100:#9be69a;--glue-green-300:#42c868; --glue-green-500:#00af57;
+  --glue-green-700:#009954;--glue-green-900:#00694e;
+  --glue-yellow-100:#fff350;
+  --glue-red-50:#ffdeec;   --glue-red-100:#ffacc2;   --glue-red-300:#ff5a59;
+  --glue-red-500:#fc413d;  --glue-red-700:#de2d29;   --glue-red-900:#990d0e;
+  --glue-purple-100:#ea80fc; --glue-purple-900:#681da8;
+  /* --- tokens SciPath (a camada nova é o contrato estável) --- */
+  --sc-blue:#3186ff;        /* primary   — nó de conhecimento */
+  --sc-red:#fc413d;         /* accent    — pré-requisito / alerta */
+  --sc-yellow:#fbbc04;      /* accent 2  — curadoria / destaque */
+  --sc-green:#00af57;       /* feedback  — concluído */
+  --sc-purple:#681da8;      /* decorative— trilhas */
+  --sc-ink:var(--glue-grey-1200);
+  --sc-ink-soft:var(--glue-grey-800);
+  --sc-ink-muted:var(--glue-grey-700);
+  --sc-line:#dfe3e8;
+  --sc-line-strong:#c4cad2;
+  --sc-surface:var(--glue-grey-0);
+  --sc-surface-2:var(--glue-grey-10);
+  --sc-surface-3:var(--glue-grey-20);
+  --sc-radius-s:8px; --sc-radius:14px; --sc-radius-l:24px; --sc-radius-pill:999px;
+  /* --- tipografia --- */
+  --font-primary:'Google Sans Flex','Google Sans','Google Sans Text',Roboto,Arial,Helvetica,sans-serif;
+  --font-display:'Google Sans Display','Google Sans Flex','Google Sans',Roboto,Arial,sans-serif;
+  --font-text:'Google Sans Text','Google Sans Flex',Roboto,Arial,sans-serif;
+  --font-mono:'Roboto Mono','Geist Mono','Google Sans Flex',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --font-symbol:'Google Symbols','Material Symbols Outlined','Google Sans Flex',Arial,sans-serif;
+  --font-fallback:Arial,Helvetica,sans-serif;
+  /* --- motion (o easing do research.google é a assinatura do sistema) --- */
+  --ease-google:cubic-bezier(.058,.919,.184,.999);
+  --ease-out-soft:cubic-bezier(.18,.9,.22,1);
+  --ease-io:cubic-bezier(.4,0,.2,1);
+  --dur-fast:.15s; --dur-base:.25s; --dur-slow:.8s;
+  /* --- sombras / glow --- */
+  --sc-shadow-s:0 1px 2px rgba(18,19,23,.06), 0 1px 3px rgba(18,19,23,.05);
+  --sc-shadow:0 8px 24px -12px rgba(18,19,23,.18), 0 2px 6px rgba(18,19,23,.05);
+  --sc-shadow-l:0 30px 70px -30px rgba(18,19,23,.28), 0 8px 20px -12px rgba(18,19,23,.12);
+  --sc-glow-blue:0 0 0 1px rgba(49,134,255,.28), 0 12px 40px -14px rgba(49,134,255,.55);
+  --sc-glow-red:0 0 0 1px rgba(252,65,61,.26), 0 12px 40px -14px rgba(252,65,61,.45);
+}
+
+/* ---------------------------------------------------------------------------
+   2. Escala tipográfica (regras extraídas verbatim do DS2)
+     .sc-h1       assets/design_system_2.html:1357
+     .sc-h2       assets/design_system_2.html:1358
+     .sc-h3       assets/design_system_2.html:1359
+     .sc-h4       assets/design_system_2.html:1360
+     .sc-h5       assets/design_system_2.html:1361
+     .sc-h6       assets/design_system_2.html:1362
+     .sc-body-lg  assets/design_system_2.html:1363
+     .sc-body     assets/design_system_2.html:1364
+     .sc-body-sm  assets/design_system_2.html:1365
+     .sc-caption  assets/design_system_2.html:1366
+     .sc-label    assets/design_system_2.html:1367
+     .sc-mono     assets/design_system_2.html:408
+   --------------------------------------------------------------------------- */
+  .sc-h1 { font-family:var(--font-display); font-weight:500; font-size:clamp(2.75rem,5.4vw,4rem); line-height:1.04; letter-spacing:-.035em; text-transform:none; }
+  .sc-h2 { font-family:var(--font-display); font-weight:500; font-size:clamp(2.25rem,4.4vw,3.25rem); line-height:1.06; letter-spacing:-.03em; }
+  .sc-h3 { font-family:var(--font-display); font-weight:500; font-size:2rem; line-height:1.12; letter-spacing:-.025em; }
+  .sc-h4 { font-family:var(--font-display); font-weight:500; font-size:1.625rem; line-height:1.16; letter-spacing:-.02em; }
+  .sc-h5 { font-family:var(--font-primary); font-weight:500; font-size:1.25rem; line-height:1.3; letter-spacing:-.01em; }
+  .sc-h6 { font-family:var(--font-primary); font-weight:500; font-size:1.0625rem; line-height:1.35; letter-spacing:0; }
+  .sc-body-lg { font-family:var(--font-text); font-weight:400; font-size:1.125rem; line-height:1.65; letter-spacing:0; }
+  .sc-body { font-family:var(--font-primary); font-weight:400; font-size:1rem; line-height:1.55; letter-spacing:0; }
+  .sc-body-sm { font-family:var(--font-text); font-weight:400; font-size:.875rem; line-height:1.55; letter-spacing:.005em; }
+  .sc-caption { font-family:var(--font-text); font-weight:400; font-size:.78125rem; line-height:1.45; letter-spacing:.01em; color:var(--sc-ink-muted); }
+  .sc-label { font-family:var(--font-primary); font-weight:500; font-size:.6875rem; line-height:1.2; letter-spacing:.16em; text-transform:uppercase; color:var(--sc-ink-muted); }
+  .sc-mono { font-family:var(--font-mono); font-size:.6875rem; color:var(--sc-ink-soft); }
+
+/* ---------------------------------------------------------------------------
+   3. Papéis ausentes no DS2 — pendência declarada em DESIGN_SYSTEM.md §3/§7.2
+   `.sc-h5`, `.sc-h6`, `.sc-label` e `.sc-mono` TÊM definição no DS2 (extraídas
+   acima) e por isso não são redefinidas aqui.
+   --------------------------------------------------------------------------- */

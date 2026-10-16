@@ -1,0 +1,182 @@
+/* ============================================================================
+   fonts.css — @font-face LOCAL (sem CDN de fontes)
+   ----------------------------------------------------------------------------
+   ARQUIVO GERADO. Não edite à mão: rode `npm run fonts` (frontend/).
+   Gerador: frontend/scripts/extract-fonts.mjs
+   Origem:  assets/templates/research.google/assets/css2_*.css (templates locais)
+   Escopo:  subconjunto LATINO (unicode-range com U+0000-00FF) de
+            Google Sans, Google Sans Display, Google Sans Flex, Google Sans Text, Roboto Mono.
+   Volume:  12 arquivos .woff2, 391 KB, 17 declarações @font-face.
+   Todas com `font-display: swap`; as pilhas de fallback vivem em tokens.css
+   (DESIGN_SYSTEM.md §1).
+   ============================================================================ */
+
+/* Google Sans Flex · normal · 1 1000 (css2_c19c7f997b4b.css) */
+@font-face {
+  font-family: 'Google Sans Flex';
+  font-style: normal;
+  font-weight: 400 1000;
+  font-display: swap;
+  src: url('/fonts/google-sans-flex-6bd49d29.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans · italic · 400 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/google-sans-bc2e4413.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans · italic · 500 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/google-sans-bc2e4413.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans · italic · 700 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/google-sans-bc2e4413.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans · normal · 400 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/google-sans-0c3a1693.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans · normal · 500 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/google-sans-0c3a1693.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans · normal · 700 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/google-sans-0c3a1693.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans Display · italic · 400 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans Display';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/google-sans-display-9606eee5.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans Display · normal · 400 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans Display';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/google-sans-display-f93f767e.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans Text · italic · 400 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans Text';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/google-sans-text-b7cdf7dd.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans Text · italic · 500 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans Text';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/google-sans-text-dda54196.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans Text · italic · 700 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans Text';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/google-sans-text-f042832c.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans Text · normal · 400 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans Text';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/google-sans-text-20fec318.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans Text · normal · 500 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans Text';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/google-sans-text-5ea3abf3.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Google Sans Text · normal · 700 (css2_e52b31e16beb.css) */
+@font-face {
+  font-family: 'Google Sans Text';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/google-sans-text-f0d0c728.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Roboto Mono · normal · 400 (css2_e77d8a5718ca.css) */
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/roboto-mono-af121f2f.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Roboto Mono · normal · 700 (css2_e77d8a5718ca.css) */
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/roboto-mono-af121f2f.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

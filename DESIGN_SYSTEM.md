@@ -156,3 +156,14 @@ Sem rolagem horizontal (`RNF002`). Grade de 12 colunas do template (`glue-grid__
 3. O DS2 foi construído antes do DRS: as páginas do produto (`PAGE_BLUEPRINTS.md`) podem exigir
    componentes que ainda não existem no sistema — cada um vira card de design system, não
    improviso na tela.
+4. **Tabela de dados:** o `.sc-table` do DS2 é a tabela de **especificação do próprio documento**
+   (`min-width:660px`, `white-space:nowrap`, `th` fixo no topo). A variante de PRODUTO (lista de
+   materiais, E1.7) vive em `frontend/src/styles/layout.css` com a mesma linguagem visual, sem
+   largura mínima fixa, porque as telas precisam caber em 375 px (RNF002). As três divergências e
+   o motivo estão comentados no próprio CSS.
+5. **Hooks do DS2 sem definição:** `.sc-chip` usa `var(--font-sans, var(--font-primary))` e o DS2
+   nunca define `--font-sans`. O alias está declarado em `frontend/src/app/globals.css`, apontando
+   para o MESMO fallback que o contrato escreveu — nenhuma fonte nova foi inventada.
+6. **Primitivos que o contrato não tem** (página/estado): paginação (`.sc-pagination`) e mensagem
+   de estado (`.sc-notice`) foram criados na camada de projeto (E1.7). Se o DS2 ganhar os seus, a
+   camada de componentes do DS2 passa a mandar e os de `layout.css` saem.

@@ -42,3 +42,25 @@ de demonstração).
 ## Rastreabilidade
 
 RNF003, RNF004, RNF006, RNF007, RF022, PAGE_BLUEPRINTS.md, DRS §15.3.
+
+## Registro de execução
+
+- **Demonstração escolhida (item 4 do escopo):** a **rota `/_estados`**, e não testes de componente.
+  Motivo: o que precisa ser verificado é o estado RENDERIZADO — erro associado ao controle, rótulo
+  associado ao campo, foco visível, mensagem acionável —, e isso se confere na tela, com teclado
+  (card de QA). Um runner de teste de componente seria dependência nova, que não é deste card.
+  A verificação automática é `npm run check:states`: confere, no HTML de produção da rota, o
+  marcador `data-state` de cada um dos 13 estados. A rota é `noindex`, não está em nenhuma navegação
+  e todos os seus rótulos dizem que é demonstração (§20.1).
+- **Camada do contrato visual ampliada pelo gerador:** cards, badges, chips e o indicador de
+  atividade entraram na lista do `extract-ds-layer.mjs` (101 regras, contra 76 do E1.6). Nenhum CSS
+  do DS2 foi transcrito à mão.
+- **Primitivos que o DS2 não tem, criados na camada de projeto** (`frontend/src/styles/layout.css`):
+  `.sc-table` (variante de produto — ver DESIGN_SYSTEM.md §7), `.sc-pagination` e `.sc-notice`
+  (mensagem de estado, compartilhada por `<PageState>` e `<FormState>`, para não existirem treze
+  blocos diferentes — RNF003).
+- **Componentes entregues** em `frontend/src/components/ui/`: `Button` (com `SubmitButton`,
+  o botão que não permite envio duplo), `TextField`/`TextAreaField`/`FileField`, `Card`, `Badge`,
+  `Chip`, `DataTable`, `Pagination`, `PageState`, `FormState` e `mensagens.ts` (catálogo único das
+  mensagens acionáveis de cada estado — RNF004).
+- **Evidência:** `docs/qa/e1-7-componentes-2026-10-16.log`.
