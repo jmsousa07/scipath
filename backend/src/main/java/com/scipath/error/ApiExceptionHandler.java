@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
@@ -46,8 +47,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * </ul>
  *
  * <p>Exceções do framework que não estão mapeadas abaixo caem no catch-all e viram
- * {@code 500}; por isso as que têm status próprio previsível (400, 401, 403, 404, 405,
- * 415 e {@link ErrorResponseException} em geral) estão mapeadas explicitamente.
+ * {@code 500}; por isso as que têm status próprio previsível (400, 401, 403, 404, 405, 409,
+ * 415, 422 e {@link ErrorResponseException} em geral) estão mapeadas explicitamente.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -61,11 +62,25 @@ public class ApiExceptionHandler {
     public static final String TIPO_TIPO_NAO_SUPORTADO = "urn:scipath:erro:tipo_nao_suportado";
     public static final String TIPO_INTERNO = "urn:scipath:erro:interno";
 
+    /**
+     * Classes de erro que a fronteira de identidade (contrato v0.4) publica. O vocabulário é
+     * fechado: um {@code type} novo entra no contrato antes de existir aqui (AGENTS.md regra 1).
+     */
+    public static final String TIPO_CONFLITO_UNICIDADE = "urn:scipath:erro:conflito_de_unicidade";
+    public static final String TIPO_VALIDACAO_CAMPO = "urn:scipath:erro:validacao_campo";
+
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
-    /** Mensagem do {@code detail} para 400 de corpo/objeto — igual à do contrato. */
+    /** Mensagem do {@code detail} para 400 de consulta/caminho — igual à do contrato. */
     private static final String DETALHE_VALIDACAO = "A requisição tem campos inválidos. "
             + "Corrija os campos apontados em errors e envie novamente.";
+
+    /** Mensagem do {@code detail} para 422 — a do contrato, quando o corpo foi lido e um campo não passou. */
+    private static final String DETALHE_VALIDACAO_CAMPO = "Um ou mais campos do corpo não foram aceitos.";
+
+    /** Mensagem do {@code detail} do 409 quando o conflito vem do banco, não de uma checagem prévia. */
+    private static final String DETALHE_CONFLITO = "Já existe registro com este valor.";
+
 
     /** Mensagem do {@code detail} para 500 — a do contrato, sem detalhe interno. */
     private static final String DETALHE_INTERNO = "Não foi possível concluir a operação. "
@@ -73,7 +88,19 @@ public class ApiExceptionHandler {
 
     // ------------------------------------------------------------------ 400
 
-    /** Corpo de requisição recusado por Bean Validation ({@code @Valid} em DTO). */
+    /**
+     * Corpo de requisição recusado por Bean Validation ({@code @Valid} em DTO) — <b>422</b>
+     * {@code validacao_campo}.
+     *
+     * <p>A classe de erro é a do contrato v0.4: "o corpo foi lido e um campo tem valor
+     * inválido" é 422, e o 400 {@code validacao} fica para o pedido que o servidor não
+     * conseguiu processar como veio — consulta/caminho inválido, corpo ilegível
+     * ({@code contracts/openapi.yaml}, convenções vinculantes). Quem trata formulário decide
+     * pelo 422; é o que o frontend do cadastro (E3.6) precisa para apontar o campo.
+     *
+     * <p>{@code MethodArgumentNotValidException} estende {@code BindException}, então as duas
+     * chegam aqui: nenhuma rota do contrato recebe campo de corpo por outra via.
+     */
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class})
     public ResponseEntity<ProblemDetail> corpoInvalido(BindException ex, HttpServletRequest requisicao) {
         List<ErroDeCampo> erros = new ArrayList<>();
@@ -83,8 +110,8 @@ public class ApiExceptionHandler {
         for (ObjectError erro : ex.getBindingResult().getGlobalErrors()) {
             erros.add(new ErroDeCampo(erro.getObjectName(), mensagemUtil(erro.getDefaultMessage())));
         }
-        return problema(HttpStatus.BAD_REQUEST, TIPO_VALIDACAO, "Requisição inválida",
-                DETALHE_VALIDACAO, requisicao, erros);
+        return problema(HttpStatus.UNPROCESSABLE_ENTITY, TIPO_VALIDACAO_CAMPO, "Campo inválido",
+                DETALHE_VALIDACAO_CAMPO, requisicao, erros);
     }
 
     /** Parâmetro de consulta/caminho recusado pelo tipo esperado (ex.: {@code ?ativo=xyz}). */
@@ -206,6 +233,43 @@ public class ApiExceptionHandler {
                 requisicao, null);
     }
 
+    // ------------------------------------------------------------- 409/415
+
+    /**
+     * Conflito de unicidade declarado pelo serviço — <b>409</b> {@code conflito_de_unicidade},
+     * com {@code errors[]} apontando o campo culpado (e-mail já cadastrado no cadastro;
+     * {@code slug} de perfil já em uso na edição de perfil).
+     *
+     * <p>O {@code detail} vem da exceção porque cada caso tem o seu texto no contrato, e
+     * nenhum deles repete dado enviado pelo cliente (RNF013).
+     */
+    @ExceptionHandler(ConflitoDeUnicidadeException.class)
+    public ResponseEntity<ProblemDetail> conflitoDeUnicidade(
+            ConflitoDeUnicidadeException ex, HttpServletRequest requisicao) {
+        List<ErroDeCampo> erros = List.of(new ErroDeCampo(ex.campo(), mensagemUtil(ex.motivoDoCampo())));
+        return problema(HttpStatus.CONFLICT, TIPO_CONFLITO_UNICIDADE, "Conflito de unicidade",
+                mensagemUtil(ex.getMessage(), DETALHE_CONFLITO), requisicao, erros);
+    }
+
+    /**
+     * Recusa da própria {@code UNIQUE} do banco — <b>409</b> na mesma classe de erro.
+     *
+     * <p>É a rede de segurança de uma corrida: dois cadastros com o mesmo e-mail passam pela
+     * checagem prévia e só o banco vê o segundo. Sem este mapeamento o cliente receberia
+     * <b>500</b> para um pedido que tem resposta — e a mensagem do {@code detail} não
+     * repete o SQL nem o nome da constraint (RNF012). Sem {@code errors[]}: aqui o servidor
+     * não sabe <i>qual</i> campo colidiu, e apontar o campo errado no formulário é pior que
+     * não apontar nenhum.
+     */
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<ProblemDetail> conflitoDeUnicidadeDoBanco(
+            DuplicateKeyException ex, HttpServletRequest requisicao) {
+        log.warn("conflito de unicidade recusado pelo banco em {} {}",
+                requisicao.getMethod(), requisicao.getRequestURI());
+        return problema(HttpStatus.CONFLICT, TIPO_CONFLITO_UNICIDADE, "Conflito de unicidade",
+                DETALHE_CONFLITO, requisicao, null);
+    }
+
     /** {@code Content-Type} não aceito — mesma razão do 405 para não usar {@code errors[]}. */
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ProblemDetail> tipoNaoSuportado(
@@ -232,7 +296,9 @@ public class ApiExceptionHandler {
     /** URN da classe de erro conforme o status, para não rotular 404 como erro de validação. */
     private static String tipoDaClasse(HttpStatus status) {
         return switch (status) {
-            case BAD_REQUEST, UNPROCESSABLE_ENTITY -> TIPO_VALIDACAO;
+            case BAD_REQUEST -> TIPO_VALIDACAO;
+            case UNPROCESSABLE_ENTITY -> TIPO_VALIDACAO_CAMPO;
+            case CONFLICT -> TIPO_CONFLITO_UNICIDADE;
             case UNAUTHORIZED -> TIPO_NAO_AUTENTICADO;
             case FORBIDDEN -> TIPO_ACESSO_NEGADO;
             case NOT_FOUND -> TIPO_NAO_ENCONTRADO;

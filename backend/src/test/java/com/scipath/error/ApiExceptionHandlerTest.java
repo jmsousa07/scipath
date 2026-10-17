@@ -27,8 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Tratamento único de erro, testado no nível do MVC (MockMvc standalone: sem contexto
  * Spring, sem banco — é teste de contrato, não de integração). O controller aqui dentro
- * é só fixture: existe porque a Etapa 1 ainda não tem endpoint de escrita, e o formato de
- * erro precisa ser verificado antes de existir quem o use.
+ * é só fixture: ele existe desde a Etapa 1 (quando ainda não havia endpoint de escrita) e
+ * continua sendo o único jeito de exercitar classes de erro sem depender de um fluxo
+ * real — o 422 de campo de corpo e o 400 de parâmetro são do vocabulário do contrato, não
+ * de uma tela específica. O cadastro (E3.2) tem os seus próprios testes de integração,
+ * contra o banco.
  *
  * <p>O 500 é o caso mais importante: a exceção de fixture carrega SQL e caminho de
  * arquivo na mensagem, e o teste exige que nada disso apareça na resposta (RNF012).
@@ -87,16 +90,16 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("corpo inválido responde 400 com errors[] apontando cada campo")
-    void corpoInvalidoResponde400ComErrors() throws Exception {
+    @DisplayName("corpo inválido responde 422 com errors[] apontando cada campo")
+    void corpoInvalidoResponde422ComErrors() throws Exception {
         MvcResult resultado = mvc().perform(post("/fixture/material")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"titulo\":\"  \",\"paginas\":0}"))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isUnprocessableEntity())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.type").value(ApiExceptionHandler.TIPO_VALIDACAO))
-                .andExpect(jsonPath("$.title").value("Requisição inválida"))
-                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.type").value(ApiExceptionHandler.TIPO_VALIDACAO_CAMPO))
+                .andExpect(jsonPath("$.title").value("Campo inválido"))
+                .andExpect(jsonPath("$.status").value(422))
                 .andExpect(jsonPath("$.instance").value("/fixture/material"))
                 .andExpect(jsonPath("$.errors.length()").value(2))
                 .andExpect(jsonPath("$.errors[?(@.campo == 'titulo')].mensagem")
@@ -105,7 +108,7 @@ class ApiExceptionHandlerTest {
                         .value("deve ser 1 ou mais"))
                 .andReturn();
 
-        System.out.println("[E1.4] 400 corpo inválido -> " + resultado.getResponse().getContentAsString());
+        System.out.println("[E3.2] 422 corpo inválido -> " + resultado.getResponse().getContentAsString());
     }
 
     @Test
