@@ -1,5 +1,6 @@
 package com.scipath.conta;
 
+import com.scipath.autor.PerfilPublico;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -67,6 +68,25 @@ public class PerfilRepositorio {
                         listaDeTexto(rs.getArray("areas_interesse")),
                         listaDeTexto(rs.getArray("links_externos"))))
                 .optional();
+    }
+
+    /**
+     * Perfil da conta já na forma <b>pública</b> do contrato ({@code PerfilPublico}) — o que
+     * as respostas de identidade publicam (estado da sessão, login, cadastro).
+     *
+     * <p>Existe para que os serviços de identidade não precisem do record interno
+     * {@link Perfil} (que é do pacote {@code conta}): a projeção pública fica onde o perfil é
+     * lido, e quem consome recebe exatamente o schema que pode sair na resposta — sem
+     * {@code id}, sem {@code account_id} (RNF013).
+     */
+    public Optional<PerfilPublico> buscarPublicoPorConta(UUID contaId) {
+        return buscarPorConta(contaId).map(perfil -> new PerfilPublico(
+                perfil.slug(),
+                perfil.nomePublico(),
+                perfil.biografia(),
+                perfil.afiliacaoDeclarada(),
+                perfil.areasInteresse(),
+                perfil.linksExternos()));
     }
 
     /**
