@@ -2,24 +2,28 @@
  * Rotas públicas do produto usadas pela descoberta.
  *
  * Por que este módulo existe: `next.config.ts` liga `typedRoutes`, então um `href` só
- * compila se a rota existir no projeto — o que é bom, e é justamente o que trava esta
- * tela hoje. A listagem precisa apontar para rotas que ainda NÃO existem nesta branch:
+ * compila se a rota existir no projeto. As funções daqui montam endereços de rotas que
+ * podem não existir nesta branch ainda — o card E2.9 entregou `/materiais/[slug]`, e
+ * `/u/[slug]` continua pendente do card E2.10:
  *
- *   - `/materiais/[slug]` → card E2.9;
+ *   - `/materiais/[slug]` → EXISTE desde o card E2.9 (`app/materiais/[slug]/page.tsx`);
+ *     o cast segue aqui por uniformidade com a função vizinha, e sai na limpeza que
+ *     olhar as duas juntas (card próprio — o `routeMaterial` do card E2.8 é o mesmo
+ *     ponto de chamada, não um segundo caminho);
  *   - `/u/[slug]`         → card E2.10.
  *
- * A saída é o mesmo mecanismo já usado no E1.7 (`PageState`/`mensagens.ts` apontando
- * para `/entrar` e `/explorar` antes de existirem): o cast para `Route`, com o motivo
- * escrito aqui e a pendência registrada no card. A alternativa — não linkar — deixaria
- * o visitante sem caminho do resultado até o material, que é o propósito da listagem
- * (RF002, CA001).
+ * O cast é o mesmo mecanismo já usado no E1.7 (`PageState`/`mensagens.ts` apontando para
+ * `/entrar` e `/explorar` antes de existirem), com o motivo escrito aqui e a pendência
+ * registrada no card. A alternativa — não linkar — deixaria o visitante sem caminho do
+ * resultado até o material, que é o propósito da listagem (RF002, CA001) e do próprio
+ * detalhe (RF007).
  *
  * Quando as rotas existirem, o cast continua válido e pode ser removido numa limpeza
  * (card próprio): o compilador passa a verificar o literal sozinho.
  */
 import type { Route } from 'next';
 
-/** `/materiais/[slug]` — detalhe público do material (dono da rota: card E2.9). */
+/** `/materiais/[slug]` — detalhe público do material (rota entregue no card E2.9). */
 export function rotaMaterial(slug: string): Route {
   return `/materiais/${slug}` as Route;
 }

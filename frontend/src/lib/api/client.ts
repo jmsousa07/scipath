@@ -14,6 +14,7 @@
  */
 import type {
   ItemTaxonomia,
+  MaterialDetalhe,
   MaterialResumo,
   OrdemMateriais,
   Pagina,
@@ -144,6 +145,23 @@ function comParametros(pares: Record<string, string | number | undefined>): stri
  */
 export function listarMateriais(consulta: ConsultaMateriais): Promise<Resultado<Pagina<MaterialResumo>>> {
   return requisitar<Pagina<MaterialResumo>>(`/materiais${comParametros(consulta)}`, {
+    cache: 'no-store',
+  });
+}
+
+/**
+ * `GET /api/materiais/{slug}` — detalhe público do material (RF005).
+ *
+ * `cache: 'no-store'` aqui não é preferência de desempenho, é requisito: material
+ * retirado não pode continuar sendo servido como se estivesse ativo (§12.3, CA008).
+ * A leitura do detalhe é por recurso, então o custo de não ter cache é uma requisição
+ * por visita — o mesmo desenho da listagem.
+ *
+ * O `slug` vai codificado no caminho: ele vem da URL da página, e um valor com
+ * caractere especial não pode virar consulta a outro endereço.
+ */
+export function obterMaterial(slug: string): Promise<Resultado<MaterialDetalhe>> {
+  return requisitar<MaterialDetalhe>(`/materiais/${encodeURIComponent(slug)}`, {
     cache: 'no-store',
   });
 }
