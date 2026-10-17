@@ -222,3 +222,42 @@ export type Credenciais = {
   email: string;
   senha: string;
 };
+
+/* ---------------------------------------------------------------------------
+   Edição do próprio perfil — recorte da tag `identidade` do contrato v0.4.0
+   (RF011) que a tela de edição lê e escreve. Mesma fronteira contra ficção do
+   topo deste arquivo: entra o campo que a tela usa, e nada além.
+   --------------------------------------------------------------------------- */
+
+/**
+ * `PerfilPublico` — identidade pública da conta, devolvida por `PUT /perfil/atual`.
+ *
+ * É o MESMO schema que a sessão entrega (`PerfilDaSessao`): o contrato descreve os campos
+ * públicos em um só lugar (`PerfilPublico`), e a sessão, a resposta da edição e o perfil
+ * público do autor (`AutorPublico`) compõem dele. Por isso o alias — dois nomes para o
+ * mesmo recorte seria duas chances de divergirem.
+ */
+export type PerfilPublico = PerfilDaSessao;
+
+/**
+ * `EdicaoPerfil` — corpo de `PUT /perfil/atual` (RF011).
+ *
+ * Sem campo de identificador de conta ou de perfil: a propriedade vem da sessão
+ * (ADR-0003 (j), CA007) — é o que impede editar o perfil de outra conta manipulando a
+ * requisição. `slug` é validado no formato e na unicidade (RN009): fora do padrão → 422;
+ * já em uso por outra conta → 409, com o campo culpado em `errors[]`.
+ *
+ * `afiliacaoDeclarada` é DECLARAÇÃO de quem escreve, nunca vínculo verificado: o contrato
+ * não tem — e esta tela não inventa — selo, medalha ou marca de instituição (RN011, CA012).
+ *
+ * Opcionais: a edição SUBSTITUI o conjunto, então a tela envia os quatro em toda
+ * requisição; `''` e `[]` valem como "não informado" e é assim que o campo volta vazio.
+ */
+export type EdicaoPerfil = {
+  nomePublico: string;
+  slug: string;
+  biografia?: string;
+  afiliacaoDeclarada?: string;
+  areasInteresse?: string[];
+  linksExternos?: string[];
+};

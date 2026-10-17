@@ -36,8 +36,18 @@
  */
 import type { ProblemDetail } from '../api/tipos';
 
-/** Operações de sessão do card E3.6 — decidem o sentido do mesmo status. */
-export type OperacaoDeSessao = 'abrir-sessao' | 'criar-conta' | 'encerrar-sessao' | 'reenviar-verificacao';
+/**
+ * Operações de identidade que passam por aqui — decidem o sentido do mesmo status.
+ * `editar-perfil` entrou com o card E3.7: `PUT /perfil/atual` é a segunda escrita que
+ * exige identidade (a primeira é o cadastro), e o 401 dela significa "a sessão acabou",
+ * não "credencial errada".
+ */
+export type OperacaoDeSessao =
+  | 'abrir-sessao'
+  | 'criar-conta'
+  | 'editar-perfil'
+  | 'encerrar-sessao'
+  | 'reenviar-verificacao';
 
 /**
  * Falha na granularidade que o cliente distingue, espelhando `lib/api/client.ts` (a
@@ -94,8 +104,20 @@ function camposDoProblem(problem: ProblemDetail | null): { campos: Record<string
   return { campos, fora };
 }
 
-/** Campos que existem como controle nos formulários de acesso (E3.6). */
-const CAMPO_CONHECIDO = new Set(['email', 'senha', 'nomePublico']);
+/** Campos que existem como controle nos formulários de identidade (E3.6 e E3.7). */
+const CAMPO_CONHECIDO = new Set([
+  'email',
+  'senha',
+  'nomePublico',
+  // E3.7 — os campos do formulário de edição do perfil (schema `EdicaoPerfil`). Sem eles,
+  // um 422/409 vindo do servidor cairia no resumo em vez do campo que a pessoa precisa
+  // corrigir: o contrato aponta o campo (`errors[]`) e a tela tem de saber onde pousá-lo.
+  'slug',
+  'biografia',
+  'afiliacaoDeclarada',
+  'areasInteresse',
+  'linksExternos',
+]);
 
 function primeiroCampo(campos: Record<string, string>): string | undefined {
   return Object.keys(campos)[0];
@@ -107,18 +129,37 @@ function comForaDoFormulario(mensagem: string, fora: string[]): string {
   return `${mensagem} O servidor também apontou: ${fora.join('; ')}.`;
 }
 
-/** 409 do cadastro: o e-mail já tem conta — o caso mais frequente e o mais útil de acertar. */
-function conflito(mensagemDoServidor: string | null, campos: Record<string, string>, fora: string[]): Desfecho {
+/**
+ * 409 do contrato — "um dado já pertence a outra conta/perfil".
+ *
+ * A mensagem muda com a OPERAÇÃO porque o mesmo status significa coisas diferentes para
+ * quem está lendo: no cadastro, a conta não nasceu; na edição do perfil (E3.7), a conta
+ * existe e o que não foi salvo foi a alteração. O contrato manda o campo culpado em
+ * `errors[]` (o backend do E3.5 o envia: `campo: slug`); quando ele não vem, o campo padrão
+ * é o da operação — nunca um campo que a tela não tem.
+ */
+function conflito(
+  mensagemDoServidor: string | null,
+  campos: Record<string, string>,
+  fora: string[],
+  operacao: OperacaoDeSessao,
+): Desfecho {
+  const daEdicao = operacao === 'editar-perfil';
+  const campoPadrao = daEdicao ? 'slug' : 'email';
   const mensagemCampo =
     mensagemDoServidor ||
-    'Este e-mail já tem conta no SciPath. Entre com ele ou cadastre outro endereço de e-mail.';
-  const alvo = primeiroCampo(campos) ?? 'email';
+    (daEdicao
+      ? 'Este identificador público já pertence a outro perfil. Escolha outro — o endereço /u/{slug} precisa ser único.'
+      : 'Este e-mail já tem conta no SciPath. Entre com ele ou cadastre outro endereço de e-mail.');
+  const alvo = primeiroCampo(campos) ?? campoPadrao;
   return {
     estado: 'invalid-field',
     classe: 'conflito_de_unicidade',
     titulo: 'Este dado já está em uso',
     mensagem: comForaDoFormulario(
-      'A conta não foi criada porque um dos dados enviados já pertence a outra conta. Corrija o campo indicado e envie de novo — nada do que você digitou foi apagado.',
+      daEdicao
+        ? 'A alteração não foi salva porque um dos dados enviados já pertence a outro perfil. Corrija o campo indicado e envie de novo — nada do que você digitou foi apagado.'
+        : 'A conta não foi criada porque um dos dados enviados já pertence a outra conta. Corrija o campo indicado e envie de novo — nada do que você digitou foi apagado.',
       fora,
     ),
     campos: { ...campos, [alvo]: campos[alvo] ?? mensagemCampo },
@@ -229,7 +270,7 @@ export function mapearFalhaDeEnvio(falha: FalhaDeEnvio, operacao: OperacaoDeSess
       };
 
     case 409:
-      return conflito(detalheDoServidor, campos, fora);
+      return conflito(detalheDoServidor, campos, fora, operacao);
 
     case 415:
       return {

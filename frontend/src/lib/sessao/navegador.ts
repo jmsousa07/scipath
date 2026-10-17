@@ -24,6 +24,8 @@
 import type {
   CadastroConta,
   Credenciais,
+  EdicaoPerfil,
+  PerfilPublico,
   ProblemDetail,
   ReenvioVerificacao,
   SessaoAtual,
@@ -104,7 +106,7 @@ function retryAfter(resposta: Response): number | undefined {
 async function executar<T>(
   operacao: OperacaoDeSessao,
   caminho: string,
-  metodo: 'GET' | 'POST' | 'DELETE',
+  metodo: 'GET' | 'POST' | 'PUT' | 'DELETE',
   corpo?: unknown,
 ): Promise<ResultadoDeEnvio<T>> {
   const cabecalhos: Record<string, string> = { accept: 'application/json' };
@@ -184,6 +186,45 @@ export function reenviarVerificacaoEmail(): Promise<ResultadoDeEnvio<ReenvioVeri
     '/verificacao-email/reenvios',
     'POST',
   );
+}
+
+/**
+ * `PUT /api/perfil/atual` — salva os campos públicos do PRÓPRIO perfil (RF011, card E3.7).
+ *
+ * Três coisas que este envio não faz, e são o desenho do contrato:
+ *   - **não manda identificador de quem edita**: a propriedade vem da sessão (ADR-0003 (j),
+ *     CA007) — o corpo tem só os campos públicos, então não existe requisição que altere o
+ *     perfil de outra conta;
+ *   - **não decide sobre status**: 401 (sessão encerrada), 403 (CSRF/conta suspensa), 409
+ *     (slug de outro perfil), 422 (campo inválido) e 5xx chegam traduzidos por
+ *     `mapearFalhaDeEnvio` — a tela só exibe o estado;
+ *   - **não guarda resposta**: `cache: 'no-store'` em `executar`, porque a resposta é o
+ *     perfil JÁ alterado, e servir de cache mostraria o valor antigo como se fosse o novo.
+ */
+export function editarPerfil(dados: EdicaoPerfil): Promise<ResultadoDeEnvio<PerfilPublico>> {
+  return executar<PerfilPublico>('editar-perfil', '/perfil/atual', 'PUT', dados);
+}
+
+/**
+ * Desfecho de sucesso da EDIÇÃO DO PERFIL (RF011).
+ *
+ * O texto depende do estado da conta de propósito: `PUT /perfil/atual` grava a alteração em
+ * qualquer conta autenticada — inclusive `PENDENTE_VERIFICACAO` (editar o perfil não exige
+ * e-mail confirmado, ADR-0003 (b)) —, mas o perfil PÚBLICO (`/u/{slug}`) só responde para
+ * conta `ATIVO`. Prometer "veja em /u/seu-slug" para quem ainda não confirmou o e-mail seria
+ * mandar a pessoa para um 404.
+ */
+export function desfechoDePerfilSalvo(perfil: PerfilPublico, jaVerificada: boolean): Desfecho {
+  return {
+    estado: 'success',
+    classe: 'perfil-salvo',
+    titulo: 'Perfil salvo',
+    mensagem: jaVerificada
+      ? `O seu perfil público foi atualizado: o endereço /u/${perfil.slug} já mostra o que está acima. A alteração vale para o perfil que qualquer visitante abre.`
+      : `A alteração foi salva e vale para o seu perfil. O endereço /u/${perfil.slug} passa a responder a visitantes quando a confirmação do e-mail for concluída — enquanto a conta está pendente, o perfil aparece só aqui.`,
+    campos: {},
+    foraDosCampos: [],
+  };
 }
 
 /**
