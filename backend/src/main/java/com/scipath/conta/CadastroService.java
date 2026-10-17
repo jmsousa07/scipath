@@ -57,13 +57,15 @@ public class CadastroService {
     }
 
     /**
-     * Cria a conta e o perfil inicial e devolve o estado que o contrato publica no 201.
+     * Cria a conta e o perfil inicial e devolve o estado que o contrato publica no 201, junto
+     * do {@code id} da conta criada (de que a abertura da sessão precisa — o cadastro já sai
+     * autenticado, contrato v0.4).
      *
      * @param requisicao corpo do cadastro já validado e com o e-mail normalizado
      * @throws ConflitoDeUnicidadeException e-mail já cadastrado (409)
      */
     @Transactional
-    public SessaoAtualResposta cadastrar(CadastroContaRequisicao requisicao) {
+    public ResultadoDeCadastro cadastrar(CadastroContaRequisicao requisicao) {
         String email = requisicao.email();
 
         if (contas.buscarPorEmail(email).isPresent()) {
@@ -83,9 +85,10 @@ public class CadastroService {
         Perfil perfil = perfis.buscarPorConta(contaId).orElseThrow(() -> new IllegalStateException(
                 "perfil recém-gravado não foi encontrado — a transação do cadastro não se completou"));
 
-        return new SessaoAtualResposta(true, conta.estado(),
+        return new ResultadoDeCadastro(new SessaoAtualResposta(true, conta.estado(),
                 new PerfilPublico(perfil.slug(), perfil.nomePublico(), perfil.biografia(),
-                        perfil.afiliacaoDeclarada(), perfil.areasInteresse(), perfil.linksExternos()));
+                        perfil.afiliacaoDeclarada(), perfil.areasInteresse(), perfil.linksExternos())),
+                contaId);
     }
 
     /**

@@ -8,11 +8,11 @@ import com.scipath.autor.PerfilPublico;
  * forma que {@code GET /sessoes/atual} publica. O cadastro responde <b>201</b> com este
  * corpo, como o contrato manda.
  *
- * <p><b>Fronteira entre E3.2 e E3.3.</b> Este card grava a conta e o perfil e devolve o
- * corpo do contrato; a <b>sessão</b> em si — tabela, cookie {@code SCIPATH_SESSAO}, o
- * {@code Set-Cookie} do 201 e a exigência de {@code X-CSRF-Token} na escrita — é o E3.3,
- * porque o modelo aplicado (V1) não tem tabela de sessão e migração nova é de outro card
- * (AGENTS.md regra 1). Até lá o 201 sai sem {@code Set-Cookie}: o corpo já é o do contrato.
+ * <p><b>Fronteira entre E3.2 e E3.3.</b> O E3.2 gravou a conta e o perfil e passou a devolver
+ * este corpo; o E3.3 (sessão) fez o {@code Set-Cookie} das duas cookies no mesmo 201, porque o
+ * contrato diz que o cadastro já sai autenticado. O record continua sem campo de conta: o
+ * identificador que a abertura da sessão usa viaja em
+ * {@link com.scipath.conta.ResultadoDeCadastro}, que não é serializado.
  *
  * <p><b>Nada de conta.</b> E-mail de login, hash de senha, token e identificador interno de
  * conta não existem neste record — nem aqui, nem no contrato (RNF013), nem para o dono. O
