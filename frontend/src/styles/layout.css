@@ -396,3 +396,147 @@
   font-size: 0.875rem;
 }
 
+/* ===========================================================================
+   DESCOBERTA PÚBLICA (card E2.8)
+   ---------------------------------------------------------------------------
+   O que a tela `/explorar` precisa e o DS2 não define: barra de filtros, marca de
+   filtro ativo, linha de metadados do card de material e a listagem de resultados.
+   Nada aqui "corrige" o DS2 — tudo usa token de `tokens.css`, sem hex, e a
+   verificação é `npm run check:style` + `npm run check:layout`.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   11. Barra de filtros — `.sc-explorar__filtros`
+   `auto-fit` com `minmax(14rem,1fr)`: em 375 px sobra uma coluna por linha; em
+   1440 px os quatro controles cabem lado a lado. Sem breakpoint para manter e sem
+   largura fixa em px (o que estouraria a viewport estreita — RNF002).
+   --------------------------------------------------------------------------- */
+.sc-explorar__filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem 1.25rem;
+  align-items: start;
+  padding: 1.25rem;
+  border: 1px solid var(--sc-line);
+  border-radius: var(--sc-radius);
+  background: var(--sc-surface-2);
+  margin-bottom: 1.25rem;
+}
+
+.sc-explorar__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* O `select` do filtro: `.sc-field input` e `.sc-field textarea` são resetados pelo
+   DS2 (borda 0, fundo transparente), mas o `select` não é coberto por aquele seletor
+   e manteria a aparência nativa DENTRO da caixa do contrato. Aqui ele recebe o mesmo
+   reset. `appearance` fica como está (a seta nativa é a pista visual de que o controle
+   abre) e `outline` também — o foco visível é o `:focus-visible` de base.css. */
+.sc-field select {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  padding: 0.35rem 0;
+  font-family: var(--font-primary);
+  font-size: 0.9375rem;
+  color: var(--sc-ink);
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+   12. Filtros aplicados — `.sc-filtros-ativos` / `.sc-filtro-ativo`
+   O filtro ativo é removível UM A UM, e remover é navegar: link com cara de chip,
+   logo funciona sem JavaScript e entra na ordem de tabulação. Nada depende só de
+   cor — o texto diz qual filtro é e o "×" é decorativo (RNF007).
+   --------------------------------------------------------------------------- */
+.sc-filtros-ativos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.sc-filtro-ativo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  /* 2.75rem é o alvo de toque/teclado que o projeto já aplica a botão e link
+     (RNF008, §1 deste arquivo): chip que se clica é alvo, não enfeite. */
+  min-height: 2.75rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--sc-line-strong);
+  border-radius: var(--sc-radius-pill);
+  background: var(--sc-surface);
+  color: var(--sc-ink-soft);
+  font-family: var(--font-primary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: border-color 0.25s, color 0.25s;
+}
+
+.sc-filtro-ativo:hover {
+  border-color: var(--sc-blue);
+  color: var(--sc-ink);
+}
+
+.sc-filtro-ativo__x {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   13. Linha de metadados do card — `.sc-card__meta`
+   O card do DS2 define `eyebrow`/`title`/`copy`; licença, autoria, categoria e data
+   são uma linha a mais, do produto. `margin-top:auto` empurra a linha para o pé do
+   card, para cards de alturas diferentes alinharem na mesma linha da grade.
+   --------------------------------------------------------------------------- */
+.sc-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+   14. Listagem — `.sc-listagem`
+   `ul` sem marcador de lista (a estrutura continua no HTML: a leitura de tela
+   anuncia o número de itens), uma coluna na tela estreita e duas a partir de 60rem,
+   o mesmo ponto de quebra do resto do projeto. O `li` é flex para o card esticar até
+   a altura da linha; o grid usa `minmax(0,…)` porque `1fr` cru tem min-content
+   automático e estoura com título longo (regra 2 do check:layout).
+   --------------------------------------------------------------------------- */
+.sc-listagem {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.sc-listagem > li {
+  display: flex;
+}
+
+.sc-listagem > li > .sc-card {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sc-listagem .sc-card__meta {
+  margin-top: auto;
+}
+
+@media (min-width: 60rem) {
+  .sc-listagem {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
