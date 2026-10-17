@@ -38,3 +38,27 @@ scipath:
   sessao:
     duracao-inatividade: 12h
     duracao-absoluta: 7d
+
+  # Canal de e-mail (ADR-0003 (f)). Não há servidor SMTP nesta máquina e não há Docker para um
+  # mail-catcher: em desenvolvimento, o `EmailSender` grava a mensagem num OUTBOX local e
+  # `make email:outbox` mostra o último item — é o que torna verificação e recuperação
+  # verificáveis sem e-mail de verdade. O diretório fica FORA do repositório (nada de mensagem
+  # de desenvolvimento no `git status`); SCIPATH_OUTBOX_DIR aponta para outro lugar.
+  email:
+    outbox:
+      diretorio: ${SCIPATH_OUTBOX_DIR:${user.home}/.scipath/outbox}
+    link:
+      # Página do FRONTEND que recebe o token. O token vai no FRAGMENTO (`#token=`), e não na
+      # query string, porque fragmento não é enviado ao servidor: não entra em log de acesso
+      # nem em `Referer` (RNF009) — a página lê `location.hash` e manda o token no CORPO da
+      # confirmação, como o contrato exige. As rotas são das telas (E3.6/E3.7); com o endereço
+      # em configuração, ajustá-las não exige mexer no backend.
+      confirmacao-email: ${SCIPATH_LINK_CONFIRMACAO:http://localhost:3000/verificar-email#token={token}}
+      recuperacao-senha: ${SCIPATH_LINK_RECUPERACAO:http://localhost:3000/recuperar-senha#token={token}}
+
+  # Token de uso único (ADR-0003 (c) e (d)). As validades e o cooldown são aplicados no
+  # servidor a partir das colunas `criado_em` e `expira_em` da `verification_token`.
+  token:
+    validade-confirmacao-email: 24h
+    validade-recuperacao-senha: 30m
+    cooldown-reenvio: 60s

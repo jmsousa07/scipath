@@ -144,6 +144,26 @@ public class SessaoRepositorio {
                 .update();
     }
 
+    /**
+     * Revoga <b>todas</b> as sessões de uma conta — o que a troca de senha por recuperação de
+     * acesso exige (E3.4, RNF012).
+     *
+     * <p>Por sessão individual isto seria impossível: quem trocou a senha pode ter sessão aberta
+     * em um navegador que o servidor não conhece (a cookie guarda só o valor opaco, e o mapa
+     * cookie→sessão é a tabela). <b>Apagar por conta é o que garante</b> que nenhuma cookie
+     * obtida antes da troca continue valendo — e é a razão concreta de a sessão viver em tabela
+     * (V4, contrato v0.4).
+     *
+     * <p>O índice {@code sessao_conta_idx} do V4 existe para esta consulta.
+     *
+     * @return linhas apagadas (0 = a conta não tinha sessão aberta; o logout dela já aconteceu)
+     */
+    public int revogarPorConta(UUID contaId) {
+        return jdbc.sql("DELETE FROM sessao WHERE account_id = :contaId")
+                .param("contaId", contaId)
+                .update();
+    }
+
     /** {@code text[]} do PostgreSQL como lista Java; {@code NULL} é lista vazia (RN004). */
     private static List<String> listaDeTexto(Array array) {
         if (array == null) {

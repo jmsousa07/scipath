@@ -48,8 +48,10 @@ import org.springframework.web.servlet.HandlerInterceptor;
  * <p><b>Exceção declarada pelo contrato:</b> as duas confirmações por token
  * ({@code /verificacao-email/confirmacoes} e {@code /recuperacao-senha/confirmacoes}) não
  * exigem o cabeçalho em nenhum caso — o segredo vai no corpo e não há cookie de sessão em
- * jogo (ADR-0003 (c) e (d)). A lista está aqui, com os caminhos do contrato, para o card
- * E3.4 não precisar editar este arquivo.
+ * jogo (ADR-0003 (c) e (d)). A lista está aqui, com os caminhos do contrato, porque a dispensa
+ * é regra do <b>interceptor</b> e não de cada controller: o E3.4 a consultou e acrescentou a
+ * solicitação de recuperação, que o contrato v0.4 também não põe entre as escritas com CSRF
+ * (ver {@link #ESCRITAS_SEM_CSRF}).
  */
 public class InterceptorDeIdentidade implements HandlerInterceptor {
 
@@ -71,12 +73,27 @@ public class InterceptorDeIdentidade implements HandlerInterceptor {
     private static final Set<String> METODOS_DE_ESCRITA = Set.of("POST", "PUT", "PATCH", "DELETE");
 
     /**
-     * Escritas que o contrato dispensa de CSRF: as duas confirmações por token no corpo
-     * (ADR-0003 (c) e (d)). O caminho é comparado por igualdade exata.
+     * Escritas que o contrato dispensa de CSRF (ADR-0003 (c) e (d)). O caminho é comparado por
+     * igualdade exata.
+     *
+     * <ul>
+     *   <li>As <b>duas confirmações por token</b> — o segredo vai no corpo e não há cookie de
+     *       sessão em jogo: quem clica no link pode estar em outro navegador, sem cookie nenhuma,
+     *       e exigir o cabeçalho ali seria exigir um token de uma sessão que não existe.</li>
+     *   <li>A <b>solicitação de recuperação</b> (E3.4). O contrato v0.4 não a lista entre as
+     *       escritas que exigem {@code X-CSRF-Token} (o parâmetro do contrato enumera cadastro,
+     *       login, logout, editar perfil e reenvio de verificação) e não publica 403 para esta
+     *       rota — um 403 que o frontend não trata transformaria a página de recuperação em beco
+     *       sem saída em navegador sem a cookie {@code XSRF-TOKEN}, e o pior caso que o CSRF
+     *       evitaria aqui é enviar um link de recuperação a quem não pediu, não uma escrita em
+     *       nome de outra pessoa. Exigir o que o contrato não exige seria inventar uma recusa que
+     *       o cliente não sabe ler (AGENTS.md regra 1: o contrato vem primeiro).</li>
+     * </ul>
      */
     private static final Set<String> ESCRITAS_SEM_CSRF = Set.of(
             "/api/verificacao-email/confirmacoes",
-            "/api/recuperacao-senha/confirmacoes");
+            "/api/recuperacao-senha/confirmacoes",
+            "/api/recuperacao-senha/solicitacoes");
 
     private final SessaoService sessoes;
     private final CookiesDeSessao cookies;
