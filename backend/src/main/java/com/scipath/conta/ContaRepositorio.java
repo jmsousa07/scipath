@@ -1,5 +1,6 @@
 package com.scipath.conta;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -64,14 +65,15 @@ public class ContaRepositorio {
     public Optional<Conta> buscarPorEmail(String email) {
         return jdbc.sql("SELECT " + CAMPOS + " FROM account WHERE email = :email")
                 .param("email", email)
-                .query((rs, linha) -> new Conta(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("email"),
-                        rs.getString("senha_hash"),
-                        EstadoConta.valueOf(rs.getString("estado")),
-                        rs.getObject("email_verificado_em", java.time.OffsetDateTime.class) == null
-                                ? null
-                                : rs.getObject("email_verificado_em", java.time.OffsetDateTime.class).toInstant()))
+                .query((rs, linha) -> {
+                    OffsetDateTime verificadoEm = rs.getObject("email_verificado_em", OffsetDateTime.class);
+                    return new Conta(
+                            rs.getObject("id", UUID.class),
+                            rs.getString("email"),
+                            rs.getString("senha_hash"),
+                            EstadoConta.valueOf(rs.getString("estado")),
+                            verificadoEm == null ? null : verificadoEm.toInstant());
+                })
                 .optional();
     }
 }
