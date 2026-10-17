@@ -167,3 +167,58 @@ export type ProblemDetail = {
   instance?: string;
   errors?: ErroDeCampo[];
 };
+
+/* ---------------------------------------------------------------------------
+   Identidade e sessão — recorte da tag `identidade` do contrato v0.4.0 (RF008,
+   RF009) que as telas de cadastro, login e logout leem. Pela mesma fronteira
+   contra ficção do topo deste arquivo, só entra o campo que a tela usa; e-mail
+   de login, hash, token e id de conta não existem no schema e não são copiados
+   para cá (RNF013).
+   --------------------------------------------------------------------------- */
+
+/**
+ * Estado da conta (§8.2.1, ADR-0003 (b)). `SUSPENSO` NÃO vem em `SessaoAtual`: conta
+ * suspensa não mantém sessão — o login a recusa com 403. Ele aparece aqui só porque o
+ * 403 do login precisa ser explicado na tela.
+ */
+export type EstadoConta = 'PENDENTE_VERIFICACAO' | 'ATIVO';
+
+/** Perfil público como o contrato o devolve na sessão (mesmo `PerfilPublico` de `/u/[slug]`). */
+export type PerfilDaSessao = {
+  slug: string;
+  nomePublico: string;
+  biografia?: string;
+  afiliacaoDeclarada?: string;
+  areasInteresse: string[];
+  linksExternos: string[];
+};
+
+/**
+ * `GET /api/sessoes/atual` — estado da sessão corrente (RF009). Sem sessão a resposta é
+ * 200 com `autenticado: false` (não é erro, é o estado normal do visitante).
+ */
+export type SessaoAtual = {
+  autenticado: boolean;
+  estadoConta?: EstadoConta;
+  perfil?: PerfilDaSessao;
+};
+
+/** `ReenvioVerificacao` — aceite do reenvio, com os dois instantes do cooldown (ADR-0003 (c)). */
+export type ReenvioVerificacao = {
+  reenviadoEm: string;
+  /** Instante a partir do qual um novo reenvio é aceito (60 s). Alimenta a contagem da tela. */
+  podeReenviarEm: string;
+};
+
+/** `CadastroConta` — dados mínimos do cadastro (RF008). O slug inicial nasce no servidor. */
+export type CadastroConta = {
+  email: string;
+  senha: string;
+  nomePublico: string;
+};
+
+/** `Credenciais` — login (RF009). */
+export type Credenciais = {
+  email: string;
+  senha: string;
+};

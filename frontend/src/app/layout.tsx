@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SiteHeader } from '@/components/SiteHeader';
+import { AvisoDeVerificacao } from '@/components/sessao/AvisoDeVerificacao';
 import './globals.css';
 
 /**
@@ -29,6 +30,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </a>
         <SiteHeader />
         <main className="sc-main" id="conteudo">
+          {/*
+            Aviso persistente de verificação de e-mail pendente (ADR-0003 (h)): fica no
+            layout porque a pendência acompanha a pessoa em todas as páginas e o caminho
+            de reenvio não pode depender de ela encontrar a tela certa. Ele não renderiza
+            nada quando não há sessão ou quando a conta já está verificada.
+          */}
+          <AvisoDeVerificacao />
           {children}
         </main>
         <SiteFooter />
