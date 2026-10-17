@@ -18,9 +18,15 @@ import java.util.Locale;
  * dobrada com {@link Locale#ROOT} para o resultado não depender do locale da máquina
  * (o mesmo cuidado que a busca por texto toma, ADR-0008).
  *
- * <p>Nome sem nenhum caractere aproveitável ("!!!", "Ω") não pode virar slug vazio — o
- * formato exige ao menos um caractere. Nesse caso a base é {@link #SLUG_DE_RESERVA} e a
- * unicidade é resolvida pelo serviço, com o mesmo mecanismo dos nomes repetidos.
+ * <p>Nome sem nenhum caractere aproveitável ("!!!", "Ω") não pode virar slug vazio — o formato
+ * exige ao menos um caractere. Nesse caso a base é {@link #SLUG_DE_RESERVA} e a unicidade é
+ * resolvida pelo serviço, com o mesmo mecanismo dos nomes repetidos.
+ *
+ * <p><b>Slug reservado.</b> A base derivada que cai numa palavra reservada da aplicação
+ * (ex.: nome "Api" → {@code api}, o prefixo da própria API) recebe o mesmo tratamento de uma
+ * colisão: a primeira variante numérica ({@code api-2}). O cadastro, então, nunca cria um slug
+ * que a edição de perfil (E3.5) recusaria — a lista está em {@link SlugsReservados} e é a
+ * mesma nos dois pontos de entrada.
  */
 final class GeradorDeSlug {
 
@@ -48,7 +54,15 @@ final class GeradorDeSlug {
                 .replaceAll("^-+", "")
                 .replaceAll("-+$", "");
 
-        return slug.isEmpty() ? SLUG_DE_RESERVA : limitar(slug);
+        if (slug.isEmpty()) {
+            return SLUG_DE_RESERVA;
+        }
+        String limitado = limitar(slug);
+        // Nome que gera um slug reservado (ex.: "Api" -> api) recebe o mesmo tratamento de uma
+        // colisão: a primeira variante numérica livre. Sem isso o cadastro poderia criar um
+        // slug que a edição de perfil (E3.5) recusa, e o dono ficaria sem poder salvar o
+        // próprio perfil com o identificador que já tem.
+        return SlugsReservados.contem(limitado) ? comSufixo(limitado, 2) : limitado;
     }
 
     /**
