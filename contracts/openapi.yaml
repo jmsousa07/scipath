@@ -2,10 +2,63 @@ openapi: 3.1.0
 
 info:
   title: SciPath API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Fronteira entre backend e frontend do SciPath. Este arquivo é a fonte de verdade:
     mudança de API começa aqui, no mesmo card da implementação (AGENTS.md, DRS §14.3).
+
+    v0.4.0 — identidade, sessão e perfil (card E3.1). Abre a Etapa 3 do DRS (§18): criar conta,
+    autenticar, encerrar sessão, editar o próprio perfil e confirmar o e-mail. A maior parte da
+    superfície nova exige sessão; apenas o cadastro (`POST /contas`) e o pedido de recuperação
+    (`POST /recuperacao-senha/solicitacoes`) respondem sem sessão, e o pedido de recuperação
+    responde **igual** exista ou não a conta (RNF013 — nada de enumeração de contas). O
+    vocabulário de erro ganha três classes — `conflito_de_unicidade` (409), `validacao_campo`
+    (422) e `reenvio_em_cooldown` (429) — e a validação passa a distinguir o pedido que o
+    servidor não conseguiu processar (`validacao`, 400) do corpo lido com campo de valor
+    inválido (`validacao_campo`, 422).
+
+    **v0.3.0 permanece íntegra.** Nenhuma rota, campo ou resposta que os consumidores da Etapa 2
+    usam mudou de forma ou de significado: as três superfícies de descoberta respondem o mesmo
+    payload de antes. O que esta versão faz com a v0.3 é acrescentar — rotas, classes de erro,
+    schemas — e reorganizar por dentro um schema que já existia (`AutorPublico` passa a compor
+    `PerfilPublico`), sem alterar a instância JSON que o cliente recebe.
+
+    Decisões de identidade que valem para todo o contrato (ADR-0003, DRS §20.3 itens 2 e 3):
+
+    - **Onde a sessão vive.** A sessão é persistida **em tabela no PostgreSQL**, não na memória do
+      servidor. É o que torna a revogação real e sobrevivente ao reinício do processo (ADR-0003
+      (e) pede sessão revogável), o que permite à recuperação de acesso invalidar todas as
+      sessões de uma conta de uma vez, e o que dispensa sessão presa a uma instância. O custo
+      aceito é uma consulta por requisição autenticada. A tabela nasce de migração aditiva da
+      Etapa 3 — migração nova, nunca edição do modelo já aplicado (AGENTS.md regra 1).
+    - **Cookie de sessão.** `SCIPATH_SESSAO`, opaca, `HttpOnly`, `Secure`, `SameSite=Lax`,
+      `Path=/`. O frontend chama a API pela **mesma origem** (proxy `/api` do Next em
+      desenvolvimento), então o cookie viaja sozinho e nunca depende de JavaScript — nada de
+      segredo de sessão acessível ao JavaScript, nada de sessão em `localStorage` (ADR-0003 (e)).
+    - **Expiração.** Inatividade de **12 h** e limite absoluto de **7 dias**, os dois declarados
+      aqui e aplicados no servidor: passado qualquer um dos prazos, a requisição seguinte com
+      aquele cookie responde **401** (ADR-0003 (e)).
+    - **CSRF.** Toda escrita (POST, PUT, DELETE) exige o cabeçalho `X-CSRF-Token`; ausente ou
+      sem correspondência com a sessão, a resposta é **403** `acesso_negado`. O token é emitido
+      pelo servidor na cookie `XSRF-TOKEN`, legível pelo frontend da mesma origem — ao contrário
+      da cookie de sessão, porque é o frontend que devolve o valor no cabeçalho — e a primeira
+      leitura do app (`GET /sessoes/atual`) já a traz. Numa escrita que exige identidade e chega
+      **sem sessão**, a resposta é **401**: a autenticação precede a checagem de CSRF, então o 403
+      de CSRF aparece quando há sessão. As duas confirmações por token (verificação de e-mail e
+      recuperação de senha) não exigem o cabeçalho em nenhum caso: o segredo vai no corpo e não há
+      cookie de sessão em jogo.
+    - **Token de verificação e de recuperação vai no corpo, nunca no caminho da URL.** Caminho e
+      consulta entram no log de acesso do servidor, e token em log é exatamente o que RNF009
+      proíbe. O link do e-mail aponta para uma página do frontend, que envia o token no corpo da
+      confirmação.
+    - **Publicar exige conta `ATIVO`** (verificação de e-mail concluída — ADR-0003 (b)). Navegar,
+      pesquisar e **editar o próprio perfil não exigem**: quem está em `PENDENTE_VERIFICACAO`
+      entra, navega e edita o perfil. O endpoint de publicação é da Etapa 4; a regra entra aqui
+      porque é o estado da conta que a define.
+    - **Nada privado na resposta.** E-mail de login, hash de senha, token e identificador interno
+      de conta não existem em nenhum schema deste contrato — nem no perfil público, nem no perfil
+      próprio, nem no estado da sessão (RNF013). O estado da sessão devolve o perfil público e o
+      estado da conta, e mais nada.
 
     v0.3.0 — descoberta pública (card E2.1). Publica a fronteira do visitante sem conta:
     listar materiais públicos (`GET /api/materiais`), ver o detalhe de um material
@@ -33,12 +86,21 @@ info:
     Convenções vinculantes para todo endpoint:
     - **Erro único.** Toda resposta 4xx/5xx usa `application/problem+json` com o schema
       `ProblemDetail` (RFC 7807). `errors[]` só aparece em erro de campo. Não existe
-      segundo formato de erro no contrato. O `type` é um vocabulário **fechado** de sete
+      segundo formato de erro no contrato. O `type` é um vocabulário **fechado** de dez
       classes — `validacao` (400), `nao_autenticado` (401), `acesso_negado` (403),
-      `nao_encontrado` (404), `metodo_nao_permitido` (405), `tipo_nao_suportado` (415) e
+      `nao_encontrado` (404), `metodo_nao_permitido` (405), `conflito_de_unicidade` (409),
+      `tipo_nao_suportado` (415), `validacao_campo` (422), `reenvio_em_cooldown` (429) e
       `interno` (500) — enumerado no schema `ProblemDetail`, que também diz em que
       situação cada uma aparece e se ela carrega `errors[]`. Cliente que precisa de um
       `type` novo muda o contrato primeiro, nunca o código sozinho.
+    - **Onde o valor errado está decide o código.** Valor recusado em **consulta ou caminho**
+      (parâmetro de URL), ou pedido que o servidor não conseguiu ler, é **400**
+      `urn:scipath:erro:validacao`; corpo lido com **campo** de valor inválido é **422**
+      `urn:scipath:erro:validacao_campo`. Quem trata formulário decide pelo 422; quem monta
+      consulta decide pelo 400.
+    - **Identidade é sessão, não token no cliente.** Operação que exige identidade usa a cookie
+      de sessão (`SessaoCookie`) e a declara com `security`; escrita exige também o cabeçalho
+      `X-CSRF-Token`. Não existe `Authorization` nem JWT neste contrato (ADR-0003 (e)).
     - **Lista paginada única.** Toda listagem usa o envelope `Pagina` — `items`, `page`,
       `size`, `total` (RF002, RNF021) — com teto de `size` e ordenação estável
       documentada no endpoint, para que a navegação não duplique nem perca itens.
@@ -71,6 +133,10 @@ tags:
     description: |-
       Descoberta pública, sem sessão: listar materiais, ver o detalhe de um material e o
       perfil público de um autor (RF002–RF007). Só material PUBLICADO de conta ATIVA.
+  - name: identidade
+    description: |-
+      Cadastro, sessão e perfil próprio (RF008–RF011). Depois do cadastro o usuário já sai
+      autenticado; a verificação de e-mail só é exigida para publicar (ADR-0003 (b)).
 
 paths:
   /health:
@@ -492,7 +558,509 @@ paths:
         '500':
           $ref: '#/components/responses/ErroInesperado'
 
+  /contas:
+    post:
+      tags: [identidade]
+      summary: Cria a conta e abre a sessão
+      description: |
+        Cadastro (RF008, RN009, CA004). O e-mail é validado e normalizado (minúsculas, sem
+        espaços) antes de virar chave única; a senha vira hash bcrypt custo 12 e nunca é
+        persistida em texto puro nem registrada em log (RNF009). A conta nasce
+        `PENDENTE_VERIFICACAO` e o perfil inicial recebe um `slug` derivado do nome, garantido
+        único (RN009).
+
+        Sucesso devolve **201** e **já abre a sessão**: o usuário sai autenticado, sem precisar
+        entrar logo em seguida (DRS §7.2). O corpo é o mesmo estado de sessão de
+        `GET /sessoes/atual`, e a resposta traz o `Set-Cookie` da sessão.
+
+        Este é o **único** ponto do contrato em que a resposta revela que existe conta com
+        determinado e-mail: cadastrar com e-mail já usado responde **409**, porque o formulário
+        precisa dizer isso para ser útil. Login e recuperação nunca fazem essa distinção (RNF013).
+
+        Sem o `X-CSRF-Token` a requisição é recusada com **403** — a escrita é protegida mesmo
+        antes de existir sessão.
+
+        A senha aceita de 8 a 72 caracteres: o teto existe porque o bcrypt considera no máximo 72
+        bytes do segredo, e aceitar mais seria descartar o excedente em silêncio (ADR-0003 (a)).
+      operationId: criarConta
+      parameters:
+        - $ref: '#/components/parameters/TokenCsrf'
+      requestBody:
+        required: true
+        description: Dados mínimos do cadastro. O `slug` inicial é derivado do nome público, não enviado pelo cliente.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CadastroConta'
+            examples:
+              cadastro:
+                summary: Cadastro válido
+                value:
+                  email: maria.silva@exemplo.br
+                  senha: nota-de-aula-2026
+                  nomePublico: Maria Silva
+      responses:
+        '201':
+          description: Conta criada em `PENDENTE_VERIFICACAO`, com a sessão já aberta.
+          headers:
+            Set-Cookie:
+              description: |
+                Cookie de sessão do ADR-0003 (e), com os atributos declarados no topo deste
+                documento. O valor é opaco e não é documentado aqui.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessaoAtual'
+              examples:
+                contaCriada:
+                  summary: Conta recém-criada e autenticada, com verificação pendente
+                  value:
+                    autenticado: true
+                    estadoConta: PENDENTE_VERIFICACAO
+                    perfil:
+                      slug: maria-silva
+                      nomePublico: Maria Silva
+                      areasInteresse: []
+                      linksExternos: []
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '403':
+          $ref: '#/components/responses/ErroAcessoNegado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '409':
+          $ref: '#/components/responses/ErroConflitoUnicidade'
+        '415':
+          $ref: '#/components/responses/ErroTipoNaoSuportado'
+        '422':
+          $ref: '#/components/responses/ErroValidacaoCampo'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /sessoes:
+    post:
+      tags: [identidade]
+      summary: Autentica e abre a sessão
+      description: |
+        Login (RF009, CA004). A senha é conferida contra o hash bcrypt 12 da conta.
+
+        **Credenciais inválidas → 401**, com corpo **idêntico** para e-mail inexistente e senha
+        errada: o login não serve para descobrir quem tem conta (RNF013). O `detail` não diz qual
+        campo falhou.
+
+        Conta `SUSPENSO` com credenciais **corretas** → **403**: quem provou ser o dono tem o
+        direito de saber por que não entra (RNF004). Com credenciais erradas, a resposta continua
+        sendo o mesmo 401 — a suspensão não se transforma em oráculo de existência.
+
+        Sucesso devolve **200** com o estado da sessão, abre a sessão na cookie do ADR-0003 (e) e
+        reemite a sessão anterior, se havia.
+      operationId: abrirSessao
+      parameters:
+        - $ref: '#/components/parameters/TokenCsrf'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credenciais'
+            examples:
+              login:
+                summary: Credenciais de login
+                value:
+                  email: maria.silva@exemplo.br
+                  senha: nota-de-aula-2026
+      responses:
+        '200':
+          description: Credenciais válidas; sessão aberta.
+          headers:
+            Set-Cookie:
+              description: |
+                Cookie de sessão do ADR-0003 (e). O valor é opaco e não é documentado aqui.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessaoAtual'
+              examples:
+                autenticada:
+                  summary: Conta ATIVO autenticada
+                  value:
+                    autenticado: true
+                    estadoConta: ATIVO
+                    perfil:
+                      slug: maria-silva
+                      nomePublico: Maria Silva
+                      biografia: Professora de programação; escreve material introdutório de algoritmos.
+                      areasInteresse:
+                        - algoritmos
+                      linksExternos:
+                        - https://github.com/maria-silva
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '401':
+          $ref: '#/components/responses/ErroNaoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErroAcessoNegado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '415':
+          $ref: '#/components/responses/ErroTipoNaoSuportado'
+        '422':
+          $ref: '#/components/responses/ErroValidacaoCampo'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /sessoes/atual:
+    get:
+      tags: [identidade]
+      summary: Estado da sessão corrente
+      description: |
+        Diz se há sessão e, havendo, quem é (RF009). É a chamada que o frontend faz ao carregar
+        para decidir o que mostrar no cabeçalho.
+
+        **Sem sessão a resposta é 200 com `autenticado: false`**, não 401: não estar autenticado
+        não é erro, é o estado normal do visitante — e o frontend precisa desse estado sem tratar
+        uma falha (RNF004).
+
+        Havendo sessão, devolve o perfil público e o estado da conta. Nunca devolve e-mail de
+        login, hash, token nem identificador interno de conta (RNF013) — nem para o dono: a área
+        do usuário é construída sem esses dados (§15.2).
+
+        Publicar exige `estadoConta: ATIVO`; navegar, pesquisar e editar o próprio perfil não
+        exigem (ADR-0003 (b)).
+      operationId: getSessaoAtual
+      responses:
+        '200':
+          description: Estado da sessão — autenticado ou não.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessaoAtual'
+              examples:
+                anonima:
+                  summary: Visitante sem sessão
+                  value:
+                    autenticado: false
+                autenticada:
+                  summary: Usuário autenticado com verificação de e-mail pendente
+                  value:
+                    autenticado: true
+                    estadoConta: PENDENTE_VERIFICACAO
+                    perfil:
+                      slug: joao-souza
+                      nomePublico: João Souza
+                      areasInteresse: []
+                      linksExternos: []
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+    delete:
+      tags: [identidade]
+      summary: Encerra a sessão corrente (logout)
+      description: |
+        Logout (RF009, CA004). A sessão é invalidada **no servidor**: o cookie reapresentado
+        depois do logout não autentica mais nada, mesmo que o cliente guarde o valor.
+
+        É **idempotente**: sem sessão válida também responde **204**. Sair não deve depender de a
+        sessão ainda estar viva — um 401 aqui viraria estado de erro em tela por um logout que, na
+        prática, já aconteceu (RNF004, §15.3).
+
+        A cookie de sessão é expirada na resposta. A escrita exige o `X-CSRF-Token`.
+      operationId: encerrarSessao
+      parameters:
+        - $ref: '#/components/parameters/TokenCsrf'
+      responses:
+        '204':
+          description: Sessão encerrada; a resposta não tem corpo.
+        '403':
+          $ref: '#/components/responses/ErroAcessoNegado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /perfil/atual:
+    put:
+      tags: [identidade]
+      summary: Edita o perfil público da própria conta
+      description: |
+        Edição dos campos públicos do próprio perfil (RF011). Substitui o conjunto de campos: o
+        que não vier é tratado como não informado, e campo opcional enviado **vazio** é aceito e
+        vale como não informado — o requisito pede que opcionais possam ficar vazios, não que
+        precisem sair da requisição.
+
+        **A propriedade vem da sessão, nunca do corpo** (ADR-0003 (j), CA007): não existe campo de
+        identificador de conta ou de perfil no request, e portanto não há como editar o perfil de
+        outra conta manipulando a requisição. Sem sessão → **401**; sem `X-CSRF-Token` → **403**.
+
+        `slug` é validado no formato e na unicidade: fora do padrão → **422**; já em uso por outra
+        conta → **409** (RN009). O perfil continua sendo lido em `GET /autores/{slug}` — não há
+        rota nova para o perfil público, e a alteração aparece lá (aquela rota só responde para
+        conta `ATIVO`, ADR-0003 (b)).
+
+        `afiliacaoDeclarada` é declaração do próprio autor e **nunca** vínculo verificado (RN011,
+        §13.1): não existe neste contrato campo de selo, marca ou instituição verificada.
+
+        A resposta é o perfil público atualizado. E-mail de login, hash e token não existem no
+        schema — nem aqui, nem na leitura pública (RNF013).
+      operationId: editarPerfilAtual
+      security:
+        - SessaoCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCsrf'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EdicaoPerfil'
+            examples:
+              edicaoCompleta:
+                summary: Edição com todos os campos
+                value:
+                  nomePublico: Maria Silva
+                  slug: maria-silva
+                  biografia: Professora de programação; escreve material introdutório de algoritmos.
+                  afiliacaoDeclarada: Declaro vínculo com a Universidade de Exemplo — autodeclaração, sem verificação da plataforma.
+                  areasInteresse:
+                    - algoritmos
+                    - estruturas de dados
+                  linksExternos:
+                    - https://github.com/maria-silva
+              opcionaisVazios:
+                summary: Só os campos obrigatórios; os opcionais ficam vazios
+                value:
+                  nomePublico: João Souza
+                  slug: joao-souza
+                  biografia: ''
+                  areasInteresse: []
+                  linksExternos: []
+      responses:
+        '200':
+          description: Perfil público atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerfilPublico'
+              examples:
+                perfilAtualizado:
+                  summary: Perfil após a edição
+                  value:
+                    slug: maria-silva
+                    nomePublico: Maria Silva
+                    biografia: Professora de programação; escreve material introdutório de algoritmos.
+                    afiliacaoDeclarada: Declaro vínculo com a Universidade de Exemplo — autodeclaração, sem verificação da plataforma.
+                    areasInteresse:
+                      - algoritmos
+                    linksExternos:
+                      - https://github.com/maria-silva
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '401':
+          $ref: '#/components/responses/ErroNaoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErroAcessoNegado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '409':
+          $ref: '#/components/responses/ErroConflitoUnicidade'
+        '415':
+          $ref: '#/components/responses/ErroTipoNaoSuportado'
+        '422':
+          $ref: '#/components/responses/ErroValidacaoCampo'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /verificacao-email/reenvios:
+    post:
+      tags: [identidade]
+      summary: Reenvia o e-mail de confirmação
+      description: |
+        Reenvia para o e-mail da **própria conta** o link de confirmação (ADR-0003 (c), (f), (g)).
+        Não há e-mail no corpo: o destinatário vem da sessão, o que impede o endpoint de virar
+        consulta de existência de conta (RNF013).
+
+        Cooldown de **60 s** por conta: dentro dele a resposta é **429** com `Retry-After` em
+        segundos — o frontend tem como contar o tempo até poder reenviar, em vez de descobrir o
+        limite por tentativa e erro.
+
+        Se o envio falhar, nada é marcado como enviado, a conta continua `PENDENTE_VERIFICACAO` e
+        a resposta é **500** do contrato; o erro é registrado **sem token** (RNF017, ADR-0003 (g)).
+        A tela oferece o reenvio de novo — a falha não vira muro silencioso (ADR-0003 (h)).
+      operationId: reenviarVerificacaoEmail
+      security:
+        - SessaoCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCsrf'
+      responses:
+        '202':
+          description: Reenvio aceito; o link sai pelo canal de e-mail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReenvioVerificacao'
+              examples:
+                reenviado:
+                  summary: Reenvio aceito, próximo reenvio daqui a 60 s
+                  value:
+                    reenviadoEm: '2026-10-17T12:00:00Z'
+                    podeReenviarEm: '2026-10-17T12:01:00Z'
+        '401':
+          $ref: '#/components/responses/ErroNaoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErroAcessoNegado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '429':
+          $ref: '#/components/responses/ErroReenvioEmCooldown'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /verificacao-email/confirmacoes:
+    post:
+      tags: [identidade]
+      summary: Confirma o e-mail e ativa a conta
+      description: |
+        Consome o token enviado por e-mail, registra a verificação e leva a conta a `ATIVO`
+        (ADR-0003 (c)) — é o estado que a publicação exige (ADR-0003 (b)).
+
+        O token vai no **corpo**, nunca no caminho: token em URL entra no log de acesso, e RNF009
+        proíbe registrar token. O link do e-mail aponta para uma página do frontend, que faz esta
+        chamada.
+
+        Uso único: o token vale até ser consumido ou até expirar (24 h). Token inválido, expirado
+        ou já consumido devolve o **mesmo 422**, com mensagem que não distingue os três casos nem
+        revela nada sobre o token ou sobre a conta (RNF013).
+
+        Não exige sessão: a confirmação acontece pelo link do e-mail, possivelmente em outro
+        navegador e sem cookie de sessão.
+      operationId: confirmarEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmacaoToken'
+            examples:
+              confirmacao:
+                summary: Token recebido no link do e-mail
+                value:
+                  token: <token-omitido>
+      responses:
+        '204':
+          description: E-mail confirmado e conta em `ATIVO`; a resposta não tem corpo.
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '415':
+          $ref: '#/components/responses/ErroTipoNaoSuportado'
+        '422':
+          $ref: '#/components/responses/ErroValidacaoCampo'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /recuperacao-senha/solicitacoes:
+    post:
+      tags: [identidade]
+      summary: Pede o link de recuperação de acesso
+      description: |
+        Inicia a recuperação de senha (RF010, ADR-0003 (d)). Responde **202 sempre** — com e-mail
+        cadastrado ou não, o status, o corpo e o tempo de resposta são os mesmos: é isso que
+        impede o fluxo de virar consulta de existência de conta (RNF013). Quando a conta existe, o
+        link sai pelo canal de e-mail; quando não existe, nada é enviado e a resposta não muda.
+
+        Não há **429** aqui de propósito: um código de cooldown só para contas existentes seria
+        exatamente a distinção que esta resposta evita. Dentro da janela de reenvio o novo pedido
+        simplesmente não gera e-mail, e continua respondendo 202.
+
+        O token gerado é de uso único, guardado hasheado (SHA-256) e vale 30 min (ADR-0003 (d)).
+      operationId: solicitarRecuperacaoSenha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecuperacaoSolicitacao'
+            examples:
+              pedido:
+                summary: Pedido de recuperação
+                value:
+                  email: maria.silva@exemplo.br
+      responses:
+        '202':
+          description: |
+            Pedido recebido. A resposta não tem corpo e não informa se existe conta com o e-mail
+            informado (RNF013).
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '415':
+          $ref: '#/components/responses/ErroTipoNaoSuportado'
+        '422':
+          $ref: '#/components/responses/ErroValidacaoCampo'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /recuperacao-senha/confirmacoes:
+    post:
+      tags: [identidade]
+      summary: Redefine a senha com o token de recuperação
+      description: |
+        Conclui a recuperação (RF010, ADR-0003 (d)): consome o token de uso único, troca a senha
+        (bcrypt 12) e **invalida todas as sessões abertas da conta** — quem trocou a senha por
+        recuperação não pode seguir logado por um cookie antigo (RNF012).
+
+        O token vai no corpo, nunca no caminho (RNF009). Token inválido, expirado ou já consumido
+        → **422**, sem distinguir os casos nem revelar dado da conta. Senha nova fora do intervalo
+        → **422** no campo `novaSenha`.
+
+        Não exige sessão (o segredo é o token) nem `X-CSRF-Token`.
+      operationId: confirmarRecuperacaoSenha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecuperacaoConfirmacao'
+            examples:
+              redefinicao:
+                summary: Token do e-mail e senha nova
+                value:
+                  token: <token-omitido>
+                  novaSenha: nova-senha-2026
+      responses:
+        '204':
+          description: Senha redefinida e sessões anteriores invalidadas; a resposta não tem corpo.
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '415':
+          $ref: '#/components/responses/ErroTipoNaoSuportado'
+        '422':
+          $ref: '#/components/responses/ErroValidacaoCampo'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
 components:
+  securitySchemes:
+    SessaoCookie:
+      type: apiKey
+      in: cookie
+      name: SCIPATH_SESSAO
+      description: |
+        Sessão do usuário: opaca, mantida no servidor **em tabela no PostgreSQL** e revogável. A
+        cookie é `HttpOnly` (o JavaScript do frontend não a lê), `Secure` e `SameSite=Lax`, com
+        `Path=/`. Expira por inatividade em **12 h** e de forma absoluta em **7 dias**; passado o
+        prazo, a requisição seguinte com o mesmo cookie responde **401**. O frontend não guarda
+        nada dela — chama a API na mesma origem e deixa o cookie viajar (ADR-0003 (e)).
+
   parameters:
     FiltroAtivo:
       name: ativo
@@ -604,11 +1172,30 @@ components:
         maxLength: 120
       example: introducao-a-algoritmos-de-ordenacao
 
+    TokenCsrf:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: |
+        Token CSRF da sessão corrente, exigido em toda escrita — cadastro, login, logout, editar
+        perfil e reenvio de verificação. O servidor o emite na cookie `XSRF-TOKEN`, legível pelo
+        frontend da mesma origem (ao contrário da cookie de sessão), e o cliente devolve o valor
+        neste cabeçalho; a primeira leitura do app já traz a cookie. Ausente ou sem
+        correspondência com a sessão → **403** `acesso_negado`. Numa escrita que exige identidade
+        e chega **sem sessão**, a resposta é **401**: a autenticação precede a checagem de CSRF.
+        As confirmações por token (verificação de e-mail, recuperação de senha) não exigem o
+        cabeçalho: o segredo vai no corpo e não há cookie de sessão em jogo.
+      schema:
+        type: string
+      example: 8bd0f2c1a94e4d7f8b6c5a3e2f1d0c9b
+
   responses:
     ErroValidacao:
       description: |
-        Entrada inválida (parâmetro de consulta ou corpo). Resposta no formato único de
-        erro, com `errors[]` apontando o campo culpado.
+        O servidor não conseguiu processar o pedido como veio: valor recusado em parâmetro de
+        consulta ou de caminho, ou corpo ausente/ilegível. Campo de **corpo** com valor inválido
+        não é este erro — é **422** `validacao_campo`. Quando dá para apontar o parâmetro culpado,
+        a resposta traz `errors[]`; corpo ilegível não tem campo e vem sem a lista.
       content:
         application/problem+json:
           schema:
@@ -682,6 +1269,192 @@ components:
                 status: 500
                 detail: Não foi possível concluir a operação. Tente novamente.
                 instance: /api/categorias
+
+    ErroNaoAutenticado:
+      description: |
+        A operação exige identidade e não há sessão válida — ausente, expirada por inatividade
+        (12 h) ou pelo limite absoluto (7 dias), ou revogada no logout. O mesmo 401 vale para
+        e-mail inexistente e senha errada no login: a resposta não diz qual campo falhou nem se a
+        conta existe (RNF013). Sem `errors[]` — não há campo a apontar.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            semSessao:
+              summary: Requisição a rota privada sem sessão
+              value:
+                type: urn:scipath:erro:nao_autenticado
+                title: Não autenticado
+                status: 401
+                detail: É necessário entrar na conta para esta operação.
+                instance: /api/perfil/atual
+            credenciaisInvalidas:
+              summary: Login com credenciais inválidas (corpo idêntico para e-mail inexistente)
+              value:
+                type: urn:scipath:erro:nao_autenticado
+                title: Não autenticado
+                status: 401
+                detail: E-mail ou senha inválidos.
+                instance: /api/sessoes
+
+    ErroAcessoNegado:
+      description: |
+        Há identidade, mas a operação não é permitida — ou falta o `X-CSRF-Token` na escrita. No
+        login, conta `SUSPENSO` com credenciais corretas também responde este 403: quem provou ser
+        o dono tem o direito de saber por que não entra. Sem `errors[]`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            csrfAusente:
+              summary: Escrita sem o token CSRF
+              value:
+                type: urn:scipath:erro:acesso_negado
+                title: Acesso negado
+                status: 403
+                detail: Falta o cabeçalho 'X-CSRF-Token' ou ele não corresponde à sessão corrente.
+                instance: /api/perfil/atual
+            contaSuspensa:
+              summary: Login em conta suspensa, com credenciais corretas
+              value:
+                type: urn:scipath:erro:acesso_negado
+                title: Acesso negado
+                status: 403
+                detail: Esta conta está suspensa e não pode entrar.
+                instance: /api/sessoes
+
+    ErroConflitoUnicidade:
+      description: |
+        O valor enviado já pertence a outro registro — e-mail já cadastrado (RF008, RN009) ou
+        `slug` de perfil já em uso (RN009). Traz `errors[]` com o campo em conflito, porque um
+        formulário precisa apontar o campo culpado. É o **único** caso em que o contrato admite
+        revelar que existe conta com determinado e-mail: no cadastro, dizê-lo é o que torna o
+        formulário útil. Login e recuperação nunca fazem essa distinção (RNF013).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            emailEmUso:
+              summary: Cadastro com e-mail já cadastrado
+              value:
+                type: urn:scipath:erro:conflito_de_unicidade
+                title: Conflito de unicidade
+                status: 409
+                detail: Já existe conta com este e-mail.
+                instance: /api/contas
+                errors:
+                  - campo: email
+                    mensagem: já está em uso
+            slugEmUso:
+              summary: Edição de perfil com slug já em uso
+              value:
+                type: urn:scipath:erro:conflito_de_unicidade
+                title: Conflito de unicidade
+                status: 409
+                detail: Este identificador público já está em uso.
+                instance: /api/perfil/atual
+                errors:
+                  - campo: slug
+                    mensagem: já está em uso
+
+    ErroTipoNaoSuportado:
+      description: |
+        O `Content-Type` da requisição não é aceito. As escritas deste contrato recebem
+        `application/json`. Sem `errors[]` — `Content-Type` não é campo.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            tipoErrado:
+              summary: Escrita com Content-Type não suportado
+              value:
+                type: urn:scipath:erro:tipo_nao_suportado
+                title: Tipo de mídia não suportado
+                status: 415
+                detail: Este endpoint recebe 'application/json'.
+                instance: /api/contas
+
+    ErroValidacaoCampo:
+      description: |
+        O corpo foi lido e um campo tem valor inválido — e-mail fora do formato, senha fora do
+        intervalo, `slug` fora do padrão, token de confirmação inválido, expirado ou já
+        consumido. Traz `errors[]` com o campo culpado. É o código do formulário: o 400 fica para
+        o pedido que o servidor não conseguiu processar como veio (consulta/caminho inválido,
+        corpo ilegível).
+
+        No token de confirmação, a mensagem é a mesma para inválido, expirado e já consumido, e
+        não revela nada sobre o token nem sobre a conta (RNF013).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            emailInvalido:
+              summary: Cadastro com e-mail fora do formato
+              value:
+                type: urn:scipath:erro:validacao_campo
+                title: Campo inválido
+                status: 422
+                detail: Um ou mais campos do corpo não foram aceitos.
+                instance: /api/contas
+                errors:
+                  - campo: email
+                    mensagem: deve ser um endereço de e-mail válido
+            senhaForaDoIntervalo:
+              summary: Cadastro com senha fora do intervalo
+              value:
+                type: urn:scipath:erro:validacao_campo
+                title: Campo inválido
+                status: 422
+                detail: Um ou mais campos do corpo não foram aceitos.
+                instance: /api/contas
+                errors:
+                  - campo: senha
+                    mensagem: deve ter entre 8 e 72 caracteres
+            tokenDeConfirmacaoInvalido:
+              summary: Token inválido, expirado ou já consumido (corpo idêntico nos três casos)
+              value:
+                type: urn:scipath:erro:validacao_campo
+                title: Campo inválido
+                status: 422
+                detail: Um ou mais campos do corpo não foram aceitos.
+                instance: /api/verificacao-email/confirmacoes
+                errors:
+                  - campo: token
+                    mensagem: token inválido ou expirado
+
+    ErroReenvioEmCooldown:
+      description: |
+        Reenvio de verificação pedido antes de passar o cooldown de 60 s (ADR-0003 (c)). Não é
+        erro de campo: o pedido está correto, só chegou cedo — por isso não traz `errors[]`. O
+        cabeçalho `Retry-After` informa em quantos segundos o reenvio volta a ser aceito.
+
+        É o **único** 429 deste contrato. A solicitação de recuperação não o usa: um cooldown que
+        só aparecesse para contas existentes revelaria a existência da conta (RNF013).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            reenvioCedo:
+              summary: Reenvio dentro do cooldown
+              value:
+                type: urn:scipath:erro:reenvio_em_cooldown
+                title: Reenvio em cooldown
+                status: 429
+                detail: Aguarde antes de pedir um novo e-mail de verificação.
+                instance: /api/verificacao-email/reenvios
+      headers:
+        Retry-After:
+          description: Segundos até o próximo reenvio ser aceito.
+          schema:
+            type: integer
+            minimum: 1
+          example: 42
 
   schemas:
     EstadoApi:
@@ -1051,14 +1824,18 @@ components:
           description: Instante da última atualização (RF005).
           example: '2026-10-14T15:10:00Z'
 
-    AutorPublico:
+    PerfilPublico:
       type: object
       description: |
-        Identidade pública do autor (RF006, §11.1.2) e a página dos materiais publicados
-        dele. `afiliacaoDeclarada` é DECLARAÇÃO do próprio autor (RN011, §13.1): o contrato
-        nunca a apresenta como vínculo verificado. Nenhum dado de conta — e-mail de login,
-        hash de senha, token e id de conta ficam fora do schema (RNF013).
-      required: [slug, nomePublico, areasInteresse, linksExternos, materiais]
+        Identidade pública de uma conta (RF006, DRS §11.1.2), sem os materiais. É o schema do
+        perfil do próprio usuário, devolvido por `PUT /perfil/atual`, e a parte de identidade do
+        perfil público do autor (`AutorPublico`) — um só lugar descreve os campos públicos, e é
+        ele que o teste de ausência de campo privado cobre.
+
+        Nenhum dado de conta existe aqui: e-mail de login, hash de senha, token e identificador
+        de conta ficam fora do schema (RNF013). `afiliacaoDeclarada` é DECLARAÇÃO do próprio
+        autor, nunca vínculo verificado pela plataforma (RN011, §13.1).
+      required: [slug, nomePublico, areasInteresse, linksExternos]
       properties:
         slug:
           type: string
@@ -1093,12 +1870,231 @@ components:
           items:
             type: string
           example: [https://github.com/maria-silva]
-        materiais:
+
+    AutorPublico:
+      description: |
+        Identidade pública do autor (RF006, §11.1.2) e a página dos materiais publicados
+        dele. A parte de identidade é composta de `PerfilPublico` — o mesmo schema do perfil
+        próprio —, de forma que os campos públicos estão descritos em um só lugar e o pedido
+        público e o privado não divergem.
+
+        Nenhum dado de conta — e-mail de login, hash de senha, token e id de conta ficam fora do
+        schema (RNF013). `afiliacaoDeclarada` é declaração do próprio autor, nunca vínculo
+        verificado (RN011, §13.1).
+      allOf:
+        - $ref: '#/components/schemas/PerfilPublico'
+        - type: object
+          required: [materiais]
+          properties:
+            materiais:
+              description: |
+                Página dos materiais publicados do autor, no envelope padrão. `page` e `size` da
+                requisição paginam esta lista; autor sem material publicado responde 200 com
+                `items: []` (E2.5).
+              $ref: '#/components/schemas/PaginaMateriais'
+
+    CadastroConta:
+      type: object
+      description: |
+        Dados mínimos do cadastro (RF008, §7.2). O `slug` inicial do perfil é derivado do nome
+        público pelo servidor, não recebido do cliente; o e-mail é normalizado (minúsculas, sem
+        espaços) antes de virar chave única (RN009).
+      required: [email, senha, nomePublico]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: E-mail de login, validado e normalizado; é o identificador único de identidade (RN009).
+          example: maria.silva@exemplo.br
+        senha:
+          type: string
+          minLength: 8
+          maxLength: 72
           description: |
-            Página dos materiais publicados do autor, no envelope padrão. `page` e `size` da
-            requisição paginam esta lista; autor sem material publicado responde 200 com
-            `items: []` (E2.5).
-          $ref: '#/components/schemas/PaginaMateriais'
+            Senha em texto puro, existente só nesta requisição: o servidor guarda apenas o hash
+            bcrypt 12 (ADR-0003 (a)). O teto de 72 caracteres acompanha o limite de 72 bytes do
+            bcrypt — aceitar mais seria descartar o excedente em silêncio. Nunca é registrada em
+            log nem devolvida em resposta (RNF009).
+          example: nota-de-aula-2026
+        nomePublico:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Nome público exibido como autor (RF006); base do `slug` inicial do perfil.
+          example: Maria Silva
+
+    Credenciais:
+      type: object
+      description: |
+        Credenciais de login (RF009). A senha entra em texto puro só nesta requisição — o servidor
+        a compara com o hash bcrypt 12 da conta. Rejeição devolve 401 com o mesmo corpo para
+        e-mail inexistente e senha errada (RNF013).
+      required: [email, senha]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: E-mail de login (normalizado pelo servidor).
+          example: maria.silva@exemplo.br
+        senha:
+          type: string
+          description: Senha em texto puro. Nunca registrada em log nem devolvida (RNF009).
+          example: nota-de-aula-2026
+
+    EdicaoPerfil:
+      type: object
+      description: |
+        Campos públicos do próprio perfil (RF011). Não existe campo de identificador de conta ou
+        de perfil: a propriedade vem da sessão (ADR-0003 (j), CA007). Campos opcionais podem ser
+        enviados vazios ou ausentes — os dois valem como "não informado".
+      required: [nomePublico, slug]
+      properties:
+        nomePublico:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Nome público exibido como autor (RF006).
+          example: Maria Silva
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          minLength: 3
+          maxLength: 120
+          description: |
+            Identificador público único do perfil (RN009). É a chave da URL `/u/{slug}` e o valor
+            aceito em `/autores/{slug}`. Fora do padrão → 422; já em uso por outra conta → 409.
+          example: maria-silva
+        biografia:
+          type: string
+          maxLength: 600
+          description: Biografia curta. Opcional; vazia vale como não informada.
+          example: Professora de programação; escreve material introdutório de algoritmos.
+        afiliacaoDeclarada:
+          type: string
+          maxLength: 300
+          description: |
+            Afiliação DECLARADA pelo autor — nunca vínculo verificado pela plataforma (RN011,
+            §13.1). Opcional; vazia vale como não informada.
+          example: Declaro vínculo com a Universidade de Exemplo — autodeclaração, sem verificação da plataforma.
+        areasInteresse:
+          type: array
+          maxItems: 20
+          description: Áreas de interesse declaradas. Opcional; lista vazia vale como não informada.
+          items:
+            type: string
+            maxLength: 60
+          example: [algoritmos, estruturas de dados]
+        linksExternos:
+          type: array
+          maxItems: 20
+          description: |
+            Links externos declarados — site pessoal ou perfil acadêmico (RF011). Opcional; lista
+            vazia vale como não informada. Texto livre, sem verificação no MVP.
+          items:
+            type: string
+            maxLength: 300
+          example: [https://github.com/maria-silva]
+
+    SessaoAtual:
+      type: object
+      description: |
+        Estado da sessão corrente (RF009): se há sessão e, havendo, quem é. Devolve o perfil
+        público e o estado da conta — nunca e-mail de login, hash, token ou identificador de
+        conta, nem para o dono (RNF013).
+
+        Publicar exige `estadoConta: ATIVO` (verificação de e-mail concluída); navegar, pesquisar
+        e editar o próprio perfil não exigem (ADR-0003 (b)).
+      required: [autenticado]
+      properties:
+        autenticado:
+          type: boolean
+          description: |
+            `true` quando a requisição trouxe sessão válida. `false` é o estado normal do
+            visitante — a resposta de `GET /sessoes/atual` é 200 nos dois casos, nunca 401.
+          example: true
+        estadoConta:
+          type: string
+          enum: [PENDENTE_VERIFICACAO, ATIVO]
+          description: |
+            Estado da conta autenticada. Presente apenas com `autenticado: true`. `SUSPENSO` não
+            aparece aqui: conta suspensa não mantém sessão (o login a recusa com 403), e publicar
+            só é possível em `ATIVO` (ADR-0003 (b)).
+          example: PENDENTE_VERIFICACAO
+        perfil:
+          description: Presente apenas quando `autenticado` é verdadeiro.
+          $ref: '#/components/schemas/PerfilPublico'
+
+    ReenvioVerificacao:
+      type: object
+      description: |
+        Aceite do reenvio de verificação de e-mail (ADR-0003 (c)). Traz os dois instantes para o
+        frontend mostrar a contagem até o próximo reenvio, em vez de o usuário descobrir o
+        cooldown por tentativa e erro.
+      required: [reenviadoEm, podeReenviarEm]
+      properties:
+        reenviadoEm:
+          type: string
+          format: date-time
+          description: Instante em que o reenvio foi aceito.
+          example: '2026-10-17T12:00:00Z'
+        podeReenviarEm:
+          type: string
+          format: date-time
+          description: Instante a partir do qual um novo reenvio é aceito (cooldown de 60 s).
+          example: '2026-10-17T12:01:00Z'
+
+    ConfirmacaoToken:
+      type: object
+      description: |
+        Token de uso único recebido por e-mail (ADR-0003 (c)). Vai no corpo, nunca no caminho da
+        URL: token em URL entra no log de acesso, e RNF009 proíbe registrar token.
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: |
+            Token opaco de 32 bytes URL-safe. O servidor guarda apenas o hash (SHA-256) — o valor
+            em claro existe só no link enviado. Inválido, expirado ou já consumido recebem a mesma
+            resposta (422).
+          example: 3vJ8kQ2mR7sT1wX5yZ9aB4cD6eF0gH2i
+
+    RecuperacaoSolicitacao:
+      type: object
+      description: |
+        Pedido de recuperação de acesso (RF010). A resposta é a mesma exista ou não a conta
+        (RNF013), então o corpo não carrega nada que as distinga.
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: E-mail da conta a recuperar.
+          example: maria.silva@exemplo.br
+
+    RecuperacaoConfirmacao:
+      type: object
+      description: |
+        Conclusão da recuperação (RF010, ADR-0003 (d)): token de uso único (validade de 30 min) e
+        a senha nova. Token inválido, expirado ou já consumido e senha fora do intervalo devolvem
+        422, sem distinguir os casos.
+      required: [token, novaSenha]
+      properties:
+        token:
+          type: string
+          description: Token de recuperação recebido por e-mail; vai no corpo, nunca no caminho (RNF009).
+          example: 9dC1eB5aF3gH7iJ0kL2mN4oP6qR8sT1u
+        novaSenha:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: |
+            Nova senha em texto puro; o servidor guarda só o hash bcrypt 12. Mesmo intervalo do
+            cadastro (8 a 72 caracteres — o teto vem do bcrypt). Trocar a senha invalida todas as
+            sessões abertas da conta.
+          example: nova-senha-2026
 
     PaginaMateriais:
       description: Envelope de paginação (ver `Pagina`) com materiais públicos em `items`.
@@ -1121,30 +2117,38 @@ components:
         seguro para exibir (RNF012 — sem stack trace, SQL ou caminho de arquivo);
         `errors[]` só aparece em erro de campo, nunca em erro sistêmico.
 
-        Vocabulário fechado: a API emite exatamente estas sete classes, cada uma com o
+        Vocabulário fechado: a API emite exatamente estas dez classes, cada uma com o
         status HTTP correspondente. O `status` no corpo repete o status da resposta; o
         cliente decide por `type`.
 
         | `type` | status | situação | `errors[]` |
         |---|---|---|---|
-        | `urn:scipath:erro:validacao` | 400 | entrada recusada: parâmetro de consulta ou corpo inválido | sim, um item por campo culpado |
-        | `urn:scipath:erro:nao_autenticado` | 401 | a operação exige identidade e não há sessão válida (passa a ocorrer na Etapa 3) | não |
-        | `urn:scipath:erro:acesso_negado` | 403 | há identidade, mas ela não tem permissão para a operação (passa a ocorrer na Etapa 3) | não |
+        | `urn:scipath:erro:validacao` | 400 | o pedido não pôde ser processado como veio: valor recusado em consulta/caminho, ou corpo ilegível | sim, quando aponta o parâmetro |
+        | `urn:scipath:erro:nao_autenticado` | 401 | a operação exige identidade e não há sessão válida (ausente, expirada ou revogada) | não |
+        | `urn:scipath:erro:acesso_negado` | 403 | há identidade e ela não tem permissão; inclui escrita sem `X-CSRF-Token` e login em conta suspensa | não |
         | `urn:scipath:erro:nao_encontrado` | 404 | o recurso pedido não existe, ou o endereço não corresponde a nenhum recurso ou endpoint | não |
         | `urn:scipath:erro:metodo_nao_permitido` | 405 | o endereço existe, mas não responde a este método | não |
+        | `urn:scipath:erro:conflito_de_unicidade` | 409 | o valor já pertence a outro registro: e-mail já cadastrado ou `slug` já em uso | sim, o campo em conflito |
         | `urn:scipath:erro:tipo_nao_suportado` | 415 | o `Content-Type` enviado não é aceito | não |
+        | `urn:scipath:erro:validacao_campo` | 422 | o corpo foi lido e um campo tem valor inválido (formato, intervalo, token inválido/expirado) | sim, um item por campo culpado |
+        | `urn:scipath:erro:reenvio_em_cooldown` | 429 | reenvio de verificação pedido antes do fim do cooldown de 60 s | não |
         | `urn:scipath:erro:interno` | 500 | falha inesperada; detalhe técnico fica só no log do servidor | não |
 
-        `errors[]` é exclusivo do erro de campo (400): 405, 415 e 500 não carregam a
-        lista porque método, `Content-Type` e falha interna não são campos — nesses
-        casos a orientação está no `detail`.
+        `errors[]` acompanha o erro que aponta um campo: `validacao` (400), quando o valor
+        recusado é um parâmetro de consulta ou de caminho; `conflito_de_unicidade` (409), com o
+        campo que colidiu; e `validacao_campo` (422), com um item por campo do corpo culpado. Erro
+        que não é de campo não carrega a lista — 401, 403, 404, 405, 415, 429 e 500 explicam a
+        situação no `detail`.
 
-        Um endpoint só documenta os status que o seu caminho pode produzir: 405 aparece
-        em todo endpoint publicado (o caminho existe, o método errado é recusado); 404
-        aparece nos endpoints com recurso no caminho (`/materiais/{slug}`,
-        `/autores/{slug}`); 401 e 403 entram quando a operação exigir identidade (Etapa 3).
-        A classe existe neste schema desde já porque o formato foi implementado de uma vez
-        (card E1.4) — o que muda depois é qual endpoint pode devolvê-la, não o formato.
+        Um endpoint só documenta os status que o seu caminho pode produzir: 405 aparece em todo
+        endpoint publicado (o caminho existe, o método errado é recusado); 404 aparece nos
+        endpoints com recurso no caminho (`/materiais/{slug}`, `/autores/{slug}`); 415 nas
+        escritas que recebem corpo JSON; 401 nas operações que exigem identidade; 403 nas
+        escritas que exigem `X-CSRF-Token` e no login de conta suspensa; 409 nos dois pontos de
+        unicidade (cadastro e `slug` de perfil); 422 nos endpoints que leem corpo; 429 só no
+        reenvio de verificação. A classe existe neste schema mesmo antes de o endpoint existir
+        porque o formato foi implementado de uma vez (card E1.4) — o que muda depois é qual
+        endpoint pode devolvê-la, não o formato.
       required: [type, title, status]
       properties:
         type:
@@ -1156,10 +2160,13 @@ components:
             - urn:scipath:erro:acesso_negado
             - urn:scipath:erro:nao_encontrado
             - urn:scipath:erro:metodo_nao_permitido
+            - urn:scipath:erro:conflito_de_unicidade
             - urn:scipath:erro:tipo_nao_suportado
+            - urn:scipath:erro:validacao_campo
+            - urn:scipath:erro:reenvio_em_cooldown
             - urn:scipath:erro:interno
           description: |
-            Classe do erro, uma das sete do vocabulário. `type` novo é mudança de
+            Classe do erro, uma das dez do vocabulário. `type` novo é mudança de
             contrato antes de ser mudança de código (AGENTS.md regra 1).
           example: urn:scipath:erro:validacao
         title:
