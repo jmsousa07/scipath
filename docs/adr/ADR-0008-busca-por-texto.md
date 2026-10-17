@@ -1,8 +1,13 @@
 # ADR-0008 — Busca por texto: escopo, dobra de acento e índice
 
 - Data: 2026-10-16
-- Status: **aceita** (decisão técnica; o comportamento de borda está fixado em teste)
-- Decisores: implementação (perfil `backend`) · revisão do orquestrador
+- Status: **aceita** — ratificada pelo dono (João Mateus) em 2026-10-17, sobre a medição
+  registrada aqui; o comportamento de borda está fixado em teste
+- Decisores: implementação (perfil `backend`) · revisão do orquestrador · ratificação do dono
+- Ordem da decisão: o ADR e a implementação saíram na **mesma execução** do card E2.3 (desvio do
+  fluxo "decidir antes de implementar"). A ratificação veio depois, com o card já commitado, e
+  ficou registrada no comentário do card em 2026-10-17 — o desvio está aqui declarado de
+  propósito, para não parecer decisão aprovada antes de existir.
 - Resolve: §20.2 ("o MVP prioriza busca lexical simples") e §12.1 (escopo e previsibilidade da busca)
 - Relaciona: RF003, RN013, RNF020, DRS §12.1, §12.2, §20.2, §21.5; contrato v0.3
   (`components/parameters/FiltroBusca`); ADR-0002 (o que está fora do MVP); ADR-0006 (taxonomia
