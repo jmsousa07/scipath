@@ -41,6 +41,17 @@
       <artifactId>spring-boot-starter-validation</artifactId>
     </dependency>
 
+    <!-- Hash de senha: bcrypt custo 12 (ADR-0003 (a), card E3.2). Vem de
+         `spring-security-crypto` e NÃO de `spring-boot-starter-security`: o ADR fixa só o
+         algoritmo de hash, e o starter traria a cadeia de filtros de autenticação inteira —
+         sessão e CSRF são do card E3.3, e um filtro ligado sem requisito muda o
+         comportamento de todas as rotas existentes (§14.2: sem dependência nova sem
+         necessidade demonstrada). A versão é a gerenciada pelo parent do Spring Boot. -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-crypto</artifactId>
+    </dependency>
+
     <!-- Flyway: schema versionado por migração imutável (ver AGENTS.md). A estratégia
          tolerante de falha de migração é só de dev/test — ver FlywayConfig. -->
     <dependency>
