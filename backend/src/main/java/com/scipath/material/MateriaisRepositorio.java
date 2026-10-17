@@ -9,7 +9,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * Leitura pública de material (RF002) — a consulta por trás de {@code GET /api/materiais}.
+ * Leitura pública de material (RF002) — as consultas por trás de {@code GET /api/materiais}
+ * (a listagem com filtros) e da página de materiais de {@code GET /api/autores/{slug}}
+ * (RF006) — esta última servida por {@link #listarPublicadosDoAutor}, que é a mesma projeção
+ * com um predicado de igualdade a mais (RN013: um só lugar decide o que é material público).
  * SQL explícito com {@link JdbcClient}: o projeto não usa JPA, e uma listagem paginada com
  * três filtros opcionais não precisa de ORM para ser legível.
  *
@@ -252,6 +255,56 @@ public class MateriaisRepositorio {
                 .param("slug", slug)
                 .query(MAPEADOR_DETALHE)
                 .optional();
+    }
+
+    /**
+     * Página dos materiais publicados de um autor (RF006) — o que a página do perfil
+     * público ({@code GET /api/autores/{slug}}) mostra abaixo da identidade.
+     *
+     * <p>É a <b>mesma</b> consulta da listagem pública — {@link #CAMPOS}, {@link #JUNCOES},
+     * {@link #ELEGIVEL} e {@link #MAPEADOR} —, com um predicado de igualdade a mais
+     * ({@code p.slug}). Reusar a projeção, e não reescrevê-la aqui, é o que garante que o
+     * {@code categoria.slug} publicado na página do autor seja literalmente o valor que
+     * {@code GET /api/materiais?categoria=} aceita como filtro (RN013, RF007): duas cópias
+     * poderiam divergir — e divergir não dá erro, só quebra a navegação sem ninguém notar.
+     *
+     * <p><b>Ordenação.</b> A ordem é a padrão do contrato (§12.2, {@code recentes}: data de
+     * publicação decrescente, desempate por {@code id}): o endpoint do autor
+     * <b>não</b> oferece {@code ordem} — o contrato não a declara lá —, então não há decisão a
+     * tomar além da padrão. A ordem total é o que torna {@code LIMIT}/{@code OFFSET} correto
+     * (paginar não repete nem omite item).
+     *
+     * <p><b>Elegibilidade e contagem</b> são as da listagem: material PUBLICADO de conta ATIVA,
+     * e o {@code total} é a contagem da <i>mesma</i> consulta — uma contagem com junções
+     * diferentes do conteúdo é como o envelope passa a mentir sobre si mesmo.
+     *
+     * @param autorSlug {@code slug} do perfil já validado no controller; o perfil público
+     *                  foi verificado antes (a página do autor só chega aqui com perfil visível)
+     * @param pagina    página pedida, começando em 0
+     * @param tamanho   itens por página
+     */
+    public ResultadoPaginado<MaterialResumoResposta> listarPublicadosDoAutor(String autorSlug,
+            int pagina, int tamanho) {
+        String filtros = ELEGIVEL + "   AND p.slug = :autor\n";
+
+        Long total = jdbc.sql("SELECT count(*)" + JUNCOES + filtros)
+                .param("autor", autorSlug)
+                .query(Long.class)
+                .single();
+
+        String consulta = CAMPOS + JUNCOES + filtros + ordenacaoDe(OrdemMateriais.RECENTES)
+                + " LIMIT :limite OFFSET :deslocamento";
+
+        List<MaterialResumoResposta> itens = jdbc.sql(consulta)
+                .param("autor", autorSlug)
+                .param("limite", tamanho)
+                // Deslocamento em long, como na listagem: página * tamanho em int estoura e
+                // devolveria a primeira página como se fosse a milésima, sem erro nenhum.
+                .param("deslocamento", (long) pagina * tamanho)
+                .query(MAPEADOR)
+                .list();
+
+        return new ResultadoPaginado<>(itens, total == null ? 0L : total);
     }
 
     /** Liga só os filtros informados: consulta sem filtro não carrega parâmetro de filtro. */
