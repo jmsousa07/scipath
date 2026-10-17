@@ -3,6 +3,7 @@ package com.scipath.material;
 import com.scipath.taxonomia.ResultadoPaginado;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -66,6 +67,26 @@ public class MateriaisRepositorio {
                    c.slug AS categoria_slug, c.nome AS categoria_nome,
                    t.slug AS tipo_slug, t.nome AS tipo_nome,
                    l.slug AS licenca_slug, l.nome AS licenca_nome,
+                   l.descricao_curta AS licenca_descricao_curta
+            """;
+
+    /**
+     * Colunas publicadas no schema {@code MaterialDetalhe} do contrato v0.3, e só elas.
+     *
+     * <p>Difere do {@link #CAMPOS} da listagem em duas colunas — {@code l.identificador} e
+     * {@code l.url_referencia} — e no {@code estado_publicacao}: o detalhe publica a licença
+     * com o texto de referência (é onde há espaço para ele) e o estado de publicação. Nada
+     * privado entra: nenhuma coluna de {@code account}, {@code file_asset} ou {@code id}
+     * interno (RNF013).
+     */
+    private static final String CAMPOS_DETALHE = """
+            SELECT m.slug, m.titulo, m.descricao, m.estado_publicacao, m.publicado_em, m.atualizado_em,
+                   p.slug AS autor_slug, p.nome_publico AS autor_nome_publico,
+                   c.slug AS categoria_slug, c.nome AS categoria_nome,
+                   t.slug AS tipo_slug, t.nome AS tipo_nome,
+                   l.slug AS licenca_slug, l.nome AS licenca_nome,
+                   l.identificador AS licenca_identificador,
+                   l.url_referencia AS licenca_url_referencia,
                    l.descricao_curta AS licenca_descricao_curta
             """;
 
@@ -149,6 +170,25 @@ public class MateriaisRepositorio {
                 atualizadoEm.toInstant().equals(publicadoEm.toInstant()) ? null : atualizadoEm.toInstant());
     };
 
+    /** Colunas do detalhe mapeadas para o schema público, sem id interno nem coluna de arquivo. */
+    private static final RowMapper<MaterialDetalheResposta> MAPEADOR_DETALHE = (rs, linha) ->
+            new MaterialDetalheResposta(
+                    rs.getString("slug"),
+                    rs.getString("titulo"),
+                    rs.getString("descricao"),
+                    new AutorResumoResposta(rs.getString("autor_slug"), rs.getString("autor_nome_publico")),
+                    new CategoriaReferencia(rs.getString("categoria_slug"), rs.getString("categoria_nome")),
+                    new TipoMaterialReferencia(rs.getString("tipo_slug"), rs.getString("tipo_nome")),
+                    new LicencaDetalheResposta(
+                            rs.getString("licenca_slug"),
+                            rs.getString("licenca_nome"),
+                            rs.getString("licenca_identificador"),
+                            rs.getString("licenca_url_referencia"),
+                            rs.getString("licenca_descricao_curta")),
+                    rs.getString("estado_publicacao"),
+                    rs.getObject("publicado_em", OffsetDateTime.class).toInstant(),
+                    rs.getObject("atualizado_em", OffsetDateTime.class).toInstant());
+
     private final JdbcClient jdbc;
 
     public MateriaisRepositorio(JdbcClient jdbc) {
@@ -189,6 +229,29 @@ public class MateriaisRepositorio {
                 .list();
 
         return new ResultadoPaginado<>(itens, total == null ? 0L : total);
+    }
+
+    /**
+     * Material público identificado pelo {@code slug} (RF005), ou vazio quando ele não é
+     * público.
+     *
+     * <p>A elegibilidade é a <b>mesma</b> da listagem (RN002, CA008): material PUBLICADO de
+     * conta ATIVA. Aqui isso tem uma consequência a mais — material inexistente, {@code
+     * RETIRADO}, {@code EXCLUIDO} e material de conta não ativa caem todos no mesmo vazio, sem
+     * caminho separado no código. É o que torna o 404 indistinguível sem depender de o serviço
+     * lembrar de disfarçar: não existe informação diferente para vazar.
+     *
+     * <p>{@code m.slug} é {@code UNIQUE} (V1), então a consulta é uma leitura por índice e não
+     * precisa de {@code LIMIT}: no máximo uma linha atende.
+     *
+     * @param slug slug já validado no controller (formato do contrato)
+     */
+    public Optional<MaterialDetalheResposta> buscarPublicadoPorSlug(String slug) {
+        String consulta = CAMPOS_DETALHE + JUNCOES + ELEGIVEL + "   AND m.slug = :slug\n";
+        return jdbc.sql(consulta)
+                .param("slug", slug)
+                .query(MAPEADOR_DETALHE)
+                .optional();
     }
 
     /** Liga só os filtros informados: consulta sem filtro não carrega parâmetro de filtro. */
