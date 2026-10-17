@@ -15,23 +15,31 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Descoberta pública de material (tag {@code descoberta} do contrato v0.3): {@code GET
  * /api/materiais}, a listagem paginada que o visitante sem conta usa para encontrar material
- * (RF002, RF004), e {@code GET /api/materiais/{slug}}, o detalhe de um material (RF005).
+ * (RF002, RF003, RF004), e {@code GET /api/materiais/{slug}}, o detalhe de um material (RF005).
  *
- * <p>Os parâmetros da listagem são os do contrato — {@code categoria}, {@code tipo}, {@code
- * ordem}, {@code page}, {@code size}. O {@code q} (busca por texto, RF003) <b>não</b> é
- * declarado aqui: ele é a fronteira do card E2.3, e um parâmetro aceito e ignorado em silêncio
- * seria pior que a ausência dele — o cliente acharia que filtrou.
+ * <p>Os parâmetros da listagem são os do contrato — {@code q}, {@code categoria}, {@code tipo},
+ * {@code ordem}, {@code page}, {@code size} — e todos são <b>declarados</b>: parâmetro aceito
+ * e ignorado em silêncio seria pior que a ausência dele (o cliente acharia que filtrou).
  *
- * <p>Validação de entrada no servidor (RNF011, §14.3): slug fora do formato e {@code ordem}
- * fora do enum são recusados com <b>400</b> no {@code ProblemDetail} padrão, com o parâmetro
- * culpado em {@code errors[]} — recusa explícita, nunca correção silenciosa. Já {@code slug}
- * bem formado que não existe <b>não</b> é erro na listagem: devolve 200 com lista vazia
- * (RNF004). No detalhe, o mesmo slug bem formado e inexistente responde <b>404</b>, porque ali
- * o recurso pedido é um só — e o 404 é o mesmo de material fora do público (RN002, CA008).
+ * <p>A busca por texto (RF003) é declarada como {@code q}, com o teto de 200 caracteres do
+ * contrato. Ela <b>não</b> é filtrada por regex: o conteúdo do termo é livre (o DRS exige que
+ * caracteres especiais sejam "tratados com segurança") e quem decide o que o termo significa
+ * é o repositório, com {@code plainto_tsquery} — operador de busca não existe para o usuário
+ * (§12.1, ADR-0008). Termo que não encontra nada é 200 com lista vazia, nunca 404.
+ *
+ * <p>Validação de entrada no servidor (RNF011, §14.3): slug fora do formato, {@code ordem}
+ * fora do enum e {@code q} maior que o teto são recusados com <b>400</b> no
+ * {@code ProblemDetail} padrão, com o parâmetro culpado em {@code errors[]} — recusa
+ * explícita, nunca correção silenciosa. Já {@code slug} bem formado que não existe <b>não</b>
+ * é erro na listagem: devolve 200 com lista vazia (RNF004). No detalhe, o mesmo slug bem
+ * formado e inexistente responde <b>404</b>, porque ali o recurso pedido é um só — e é o
+ * mesmo 404 de material fora do público (RN002, CA008).
  *
  * <p>O teto de {@code size} é recusado (400), não truncado: um pedido de 5000 itens que
  * devolvesse 100 em silêncio faria o cliente paginar sobre um total que ele não alcança
- * (RNF021). É a mesma decisão que o {@code TaxonomiaController} já toma no mesmo contrato.
+ * (RNF021). É a mesma decisão que o {@code TaxonomiaController} já toma no mesmo contrato. O
+ * mesmo vale para {@code q}: um termo cortado em 200 caracteres mudaria o resultado sem o
+ * cliente saber.
  */
 @RestController
 @RequestMapping("/api")
@@ -53,6 +61,9 @@ public class MateriaisController {
     /** Valores do enum {@code ordem} no contrato (§12.2). */
     private static final String ORDENS_VALIDAS = "recentes|titulo";
 
+    /** Teto do termo de busca, igual ao {@code maxLength: 200} do contrato (RF003). */
+    static final int BUSCA_MAXIMA = 200;
+
     private final MateriaisService materiais;
 
     public MateriaisController(MateriaisService materiais) {
@@ -61,6 +72,9 @@ public class MateriaisController {
 
     @GetMapping("/materiais")
     public Pagina<MaterialResumoResposta> materiais(
+            @RequestParam(name = "q", required = false)
+            @Size(max = BUSCA_MAXIMA, message = "deve ter " + BUSCA_MAXIMA + " caracteres ou menos")
+            String q,
             @RequestParam(name = "categoria", required = false)
             @Pattern(regexp = FORMATO_SLUG,
                     message = "deve ser um slug de categoria (minúsculas, dígitos e hífen), como computacao-e-tecnologia")
@@ -77,7 +91,7 @@ public class MateriaisController {
             @RequestParam(name = "size", defaultValue = "" + TAMANHO_PADRAO)
             @Min(value = 1, message = "deve ser 1 ou mais")
             @Max(value = TAMANHO_MAXIMO, message = "deve ser " + TAMANHO_MAXIMO + " ou menos") int size) {
-        return materiais.listar(categoria, tipo, ordem, page, size);
+        return materiais.listar(q, categoria, tipo, ordem, page, size);
     }
 
     /**

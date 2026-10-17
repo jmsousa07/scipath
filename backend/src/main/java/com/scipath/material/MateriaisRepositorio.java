@@ -27,6 +27,31 @@ import org.springframework.stereotype.Repository;
  * planejador usar os índices do V1 ({@code material_categoria_idx}, {@code material_tipo_idx});
  * um {@code OR :param IS NULL} deixaria o filtro como expressão e perderia o índice.
  *
+ * <p><b>Busca por texto (RF003, §12.1, ADR-0008).</b> {@code q} vira um predicado de
+ * <i>full-text</i> sobre título e descrição — {@code tsvector @@ plainto_tsquery} — servido
+ * pelo índice GIN {@code material_busca_idx} da migração V3. Três escolhas que não são
+ * detalhe:
+ *
+ * <ul>
+ *   <li>{@code plainto_tsquery}, nunca {@code to_tsquery}: o primeiro trata a entrada como
+ *       TEXTO e o segundo como EXPRESSÃO, em que {@code &}, {@code |}, {@code !} e
+ *       parênteses são operadores. O contrato promete "caracteres especiais são tratados
+ *       como texto, nunca como operador" (§12.1) — e um {@code q=} vindo de terceiro não
+ *       pode virar sintaxe de consulta.</li>
+ *   <li>A dobra de acento ({@link #semAcento}) é a MESMA da expressão do índice. Índice e
+ *       consulta têm de ser a mesma expressão: é o que faz o planejador reconhecer
+ *       {@code material_busca_idx}, e é o que faz "matemática" e "matematica" devolverem o
+ *       mesmo conjunto (RN013).</li>
+ *   <li>O termo entra como parâmetro ligado ({@code :busca}); a string do predicado é
+ *       compilada de constantes, como a dos outros filtros.</li>
+ * </ul>
+ *
+ * <p>Consequência registrada: um termo cujas palavras são todas <i>stopwords</i> da
+ * configuração ("de", "a", "para") gera {@code tsquery} vazio, e {@code @@} com consulta
+ * vazia é falso — a resposta é 200 com lista vazia, que é o estado de "nenhum resultado"
+ * que o contrato já define (RNF004, RF003). Não há exceção para esse caso: um termo sem
+ * lexema não é um termo de busca.
+ *
  * <p><b>Ordenação.</b> Sempre explícita e sempre total (data + id, ou título + id) — ver
  * {@link OrdemMateriais} e {@link #ordenacaoDe}. O {@code LIMIT}/{@code OFFSET} só é correto
  * porque existe essa ordem total: é o que garante que paginar não repita nem omita item
@@ -89,6 +114,45 @@ public class MateriaisRepositorio {
                AND a.estado = 'ATIVO'
             """;
 
+    /**
+     * Mapa de dobra de acento da busca (ADR-0008). As duas strings têm 54 caracteres —
+     * {@code translate()} exige comprimentos iguais e falha alto se divergirem.
+     *
+     * <p>Dobra as duas caixas de propósito, sem {@code lower()}: {@code lower()} depende da
+     * collation do banco (num banco {@code LC_CTYPE=C} ele não dobra "Á"), e o que sobra
+     * depois do {@code translate} é ASCII, que o analisador do {@code tsvector} rebaixa de
+     * forma determinística. Assim o resultado da busca não depende de configuração da máquina.
+     *
+     * <p><b>A MESMA dupla está na expressão do índice</b> ({@code V3__busca_texto_material.sql}):
+     * índice e consulta precisam ser a mesma expressão, senão o planejador não reconhece o
+     * índice — é o que o {@code EXPLAIN} da evidência do card prova.
+     */
+    static final String ACENTOS = "ÀÁÂÃÄÅàáâãäåÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÇçÑñÝŸýÿ";
+
+    /** Acento dobrado: cada caractere de {@link #ACENTOS}, na mesma ordem. */
+    static final String SEM_ACENTOS = "AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCcNnYYyy";
+
+    /**
+     * Configuração de busca do PostgreSQL, <b>nomeada</b> em todo lugar. Nunca
+     * {@code default_text_search_config}: a busca não pode mudar de comportamento por causa
+     * de ajuste do servidor (ADR-0008).
+     */
+    private static final String CONFIG_BUSCA = "portuguese";
+
+    /**
+     * Predicado de busca por texto (RF003): o vetor de título + descrição casado contra a
+     * consulta do termo, ambos com a mesma dobra de acento. {@code plainto_tsquery} — e não
+     * {@code to_tsquery} — porque o contrato trata caracteres especiais como texto (§12.1);
+     * o valor entra ligado em {@code :busca}, e a string do predicado é constante.
+     *
+     * <p>Visível ao pacote (e não privado) porque o teste de unidade
+     * {@code MateriaisBuscaDobraTest} verifica que ele e o índice da migração V3 continuam
+     * sendo a mesma expressão — divergir não dá erro, só perde o índice.
+     */
+    static final String BUSCA =
+            "   AND " + vetorDe("m.titulo || ' ' || m.descricao")
+            + " @@ plainto_tsquery('" + CONFIG_BUSCA + "', " + semAcento(":busca") + ")\n";
+
     private static final RowMapper<MaterialResumoResposta> MAPEADOR = (rs, linha) -> {
         OffsetDateTime publicadoEm = rs.getObject("publicado_em", OffsetDateTime.class);
         OffsetDateTime atualizadoEm = rs.getObject("atualizado_em", OffsetDateTime.class);
@@ -134,26 +198,29 @@ public class MateriaisRepositorio {
     /**
      * Página de materiais públicos e o total que atende à mesma consulta.
      *
+     * @param busca     termo de busca por texto (RF003), ou {@code null} para não buscar;
+     *                  termo vazio é convertido em {@code null} pelo serviço
      * @param categoria {@code slug} da categoria, ou {@code null} para não filtrar por ela
      * @param tipo      {@code slug} do tipo de material, ou {@code null} para não filtrar
      * @param ordem     critério de ordenação (sempre definido — o padrão é do contrato)
      * @param pagina    página pedida, começando em 0
      * @param tamanho   itens por página
      */
-    public ResultadoPaginado<MaterialResumoResposta> listarPublicados(String categoria, String tipo,
-            OrdemMateriais ordem, int pagina, int tamanho) {
+    public ResultadoPaginado<MaterialResumoResposta> listarPublicados(String busca, String categoria,
+            String tipo, OrdemMateriais ordem, int pagina, int tamanho) {
         String filtros = ELEGIVEL
+                + (busca == null ? "" : BUSCA)
                 + (categoria == null ? "" : "   AND c.slug = :categoria\n")
                 + (tipo == null ? "" : "   AND t.slug = :tipo\n");
 
-        Long total = comFiltros(jdbc.sql("SELECT count(*)" + JUNCOES + filtros), categoria, tipo)
+        Long total = comFiltros(jdbc.sql("SELECT count(*)" + JUNCOES + filtros), busca, categoria, tipo)
                 .query(Long.class)
                 .single();
 
         String consulta = CAMPOS + JUNCOES + filtros + ordenacaoDe(ordem)
                 + " LIMIT :limite OFFSET :deslocamento";
 
-        List<MaterialResumoResposta> itens = comFiltros(jdbc.sql(consulta), categoria, tipo)
+        List<MaterialResumoResposta> itens = comFiltros(jdbc.sql(consulta), busca, categoria, tipo)
                 .param("limite", tamanho)
                 // Deslocamento em long: página * tamanho em int estoura numa página absurda e
                 // devolveria a primeira página como se fosse a milésima, sem erro nenhum.
@@ -188,8 +255,11 @@ public class MateriaisRepositorio {
     }
 
     /** Liga só os filtros informados: consulta sem filtro não carrega parâmetro de filtro. */
-    private static JdbcClient.StatementSpec comFiltros(JdbcClient.StatementSpec spec,
+    private static JdbcClient.StatementSpec comFiltros(JdbcClient.StatementSpec spec, String busca,
             String categoria, String tipo) {
+        if (busca != null) {
+            spec = spec.param("busca", busca);
+        }
         if (categoria != null) {
             spec = spec.param("categoria", categoria);
         }
@@ -197,6 +267,16 @@ public class MateriaisRepositorio {
             spec = spec.param("tipo", tipo);
         }
         return spec;
+    }
+
+    /** {@code texto} com acento dobrado, na mesma forma que o índice aplica ao documento. */
+    private static String semAcento(String texto) {
+        return "translate(" + texto + ", '" + ACENTOS + "', '" + SEM_ACENTOS + "')";
+    }
+
+    /** Vetor de busca do documento: título + descrição, com a dobra de acento do índice. */
+    private static String vetorDe(String texto) {
+        return "to_tsvector('" + CONFIG_BUSCA + "', " + semAcento(texto) + ")";
     }
 
     /**
