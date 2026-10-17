@@ -1,8 +1,10 @@
 # ADR-0003 — Autenticação por e-mail + senha, com verificação obrigatória para publicar
 
 - Data: 2026-10-16
-- Status: **aceita** — decisão do dono registrada nesta data (as alíneas marcadas _"proposta
-  técnica"_ aguardam ratificação e podem ser revisadas)
+- Status: **aceita** — decisão do dono registrada em 2026-10-16; **alíneas técnicas (a)–(f)
+  ratificadas pelo dono em 2026-10-17** (bcrypt 12, estados da conta, token de verificação,
+  recuperação sem enumeração, sessão em cookie `httpOnly` no servidor sem JWT, `EmailSender` com
+  outbox local). Revisão futura exige ADR novo, não ajuste silencioso.
 - Decisores: João Mateus (dono) · registrado pela orquestração
 - Resolve: DRS §20.3 itens 2 e 3
 - Requisitos relacionados: RF008–RF011, RN001, RN009, RN011, RNF009, RNF012, RNF013, RNF017,

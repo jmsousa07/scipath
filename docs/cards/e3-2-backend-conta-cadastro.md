@@ -9,11 +9,15 @@ fronteira; o **ADR-0003** fixa bcrypt 12, os estados da conta e a unicidade de e
 
 ## Escopo
 
-1. **Migração nova e aditiva** (`V4__conta_perfil.sql`, idempotente/reversível como as anteriores —
-   ver README das migrações): conta (identificador de login normalizado e único, hash de senha,
-   estado `PENDENTE_VERIFICACAO`/`ATIVO`/`SUSPENSO`, datas, `email_verificado_em`) e perfil
-   (nome público, slug **único**, biografia curta, instituição autodeclarada, áreas de interesse,
-   site, todos opcionais exceto nome e slug).
+1. **Não criar migração: o modelo já existe no `V1__modelo_mvp.sql`.** As tabelas `account` e
+   `profile` já estão no banco com as invariantes do ADR-0003 — `account_email_unico`,
+   `account_email_normalizado` (minúsculas, sem espaços), `account_estado_valido`,
+   `senha_hash`, `email_verificado_em`; e no perfil `profile_conta_unica` (1:1),
+   `profile_slug_unico`, `profile_slug_formato`, `afiliacao_declarada`, `areas_interesse`,
+   `links_externos`. O que **não existe** é a camada Java: nenhuma classe de conta/perfil está no
+   backend (conferido). O trabalho deste card é essa camada — entidade, repositório, serviço e
+   controller do cadastro. Se faltar coluna, **pare e registre bloqueio**: coluna nova é migração
+   aditiva de outro card, **nunca** alteração do V1 (regra 1 do AGENTS.md).
 2. Cadastro pelo endpoint do contrato v0.4: e-mail validado e **normalizado** (trim + caixa),
    senha com bcrypt custo 12, conta criada em `PENDENTE_VERIFICACAO`, perfil inicial com slug
    derivado do nome e garantido único.
@@ -38,8 +42,9 @@ Login/sessão (E3.3), tokens de verificação e recuperação (E3.4), editar per
 
 ## Evidência esperada
 
-Saída dos testes colada; `\d conta` e `\d perfil` do banco de teste; a linha de versão da migração
-aplicada. Renomeie o arquivo de evidência com o id do card (regra P1).
+Saída dos testes colada; `\d account` e `\d profile` do banco de teste provando que o schema é o
+do V1, **sem migração nova** (o `git diff` do card não toca `db/migration/`). Renomeie o arquivo de
+evidência com o id do card (regra P1).
 
 ## Rastreabilidade
 

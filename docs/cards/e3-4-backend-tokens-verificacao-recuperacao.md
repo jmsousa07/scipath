@@ -13,18 +13,23 @@ mas o token e o estado da conta nascem aqui.
 
 ## Escopo
 
-1. Interface `EmailSender` no domínio (mesmo padrão do `StorageService`) com implementação local de
+1. **Nada de migração:** a tabela `verification_token` já existe no `V1__modelo_mvp.sql`, com
+   `token_hash` (UNIQUE), `tipo` (`CONFIRMACAO_EMAIL` | `RECUPERACAO_SENHA`), `expira_em` e
+   `consumido_em` — o uso único e as validades do ADR-0003 já estão no banco. Este card escreve a
+   camada de aplicação. Se faltar coluna, **pare e registre bloqueio** (coluna nova é card de
+   migração aditiva).
+2. Interface `EmailSender` no domínio (mesmo padrão do `StorageService`) com implementação local de
    desenvolvimento que grava a mensagem em outbox acessível por comando de diagnóstico; nenhum
    token em log, nem no outbox em texto claro além do próprio link.
-2. Geração, envio, reenvio com cooldown (**429** no contrato) e confirmação da verificação de
+3. Geração, envio, reenvio com cooldown (**429** no contrato) e confirmação da verificação de
    e-mail: confirmar consome o token (uso único), registra `email_verificado_em` e leva a conta a
    `ATIVO`. Token inválido/expirado/reusado → erro do contrato, sem revelar detalhe do token.
-3. Recuperação de acesso (RF010): solicitação responde **igual** para e-mail existente e
+4. Recuperação de acesso (RF010): solicitação responde **igual** para e-mail existente e
    inexistente; confirmação com token válido troca a senha (bcrypt 12) e invalida as sessões
    abertas daquela conta.
-4. Falha de envio (RNF017): conta permanece `PENDENTE_VERIFICACAO`, nada é marcado como enviado, o
+5. Falha de envio (RNF017): conta permanece `PENDENTE_VERIFICACAO`, nada é marcado como enviado, o
    erro é registrado **sem token** e a interface tem como oferecer reenvio.
-5. Comando de diagnóstico do canal de e-mail (ex.: alvo no `Makefile` ou script em `infra/`) que
+6. Comando de diagnóstico do canal de e-mail (ex.: alvo no `Makefile` ou script em `infra/`) que
    mostra o último item do outbox — é o que torna o fluxo verificável sem servidor de e-mail.
 
 ## Fora de escopo
