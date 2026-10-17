@@ -49,6 +49,16 @@ export function EstadoDaSessao() {
         <span className="sc-caption">
           Sessão de <strong>{sessao.perfil?.nomePublico ?? ''}</strong>
         </span>
+        {/*
+          Caminho para a área do usuário (E3.7). O nome NÃO linka o perfil público — `/u/{slug}`
+          responde só para conta verificada (ADR-0003 (b)), e mandar uma conta pendente para um
+          404 seria pior que não linkar (a decisão é a mesma documentada no topo deste arquivo).
+          Já `/painel` responde para qualquer conta autenticada: é a tela que diz o estado da
+          conta e leva à edição do perfil.
+        */}
+        <Link className="sc-header__link" href="/painel">
+          Área do usuário
+        </Link>
         <Button variant="ghost" size="sm" loading={saindo} onClick={sair}>
           Sair
         </Button>
