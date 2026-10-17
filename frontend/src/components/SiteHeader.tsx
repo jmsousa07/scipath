@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { BrandMark } from '@/components/BrandMark';
+import { EstadoDaSessao } from '@/components/sessao/EstadoDaSessao';
 import { HeaderNav } from '@/components/HeaderNav';
 import { HeaderScrollState } from '@/components/HeaderScrollState';
 import { SearchForm } from '@/components/SearchForm';
@@ -24,6 +25,8 @@ export function SiteHeader() {
       </Link>
 
       <HeaderNav />
+
+      <EstadoDaSessao />
 
       <span className="sc-header__spacer" />
 
