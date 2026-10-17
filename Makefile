@@ -127,8 +127,12 @@ lint:            ## lint + typecheck (f0.3)
 	@test -f frontend/package.json || { echo "frontend/ ainda não existe (card f0.3)"; exit 1; }
 	@cd frontend && npm run lint && npm run typecheck
 
-e2e:             ## Playwright (f0.4)
-	@test -f e2e/package.json || { echo "e2e/ ainda não existe (card f0.4)"; exit 1; }
+e2e:             ## Playwright (f0.4) — NÃO faz parte do gate do MVP: ver ADR-0009
+	@# Decisão registrada no ADR-0009: a camada ponta a ponta do MVP é o harness de QA
+	@# (infra/qa-harness.sh + baterias em docs/qa/), rodado no card de QA da etapa. Playwright
+	@# não entra sem necessidade medida. O alvo continua DECLARANDO a ausência de e2e/ em vez
+	@# de passar em silêncio.
+	@test -f e2e/package.json || { echo "e2e/ ainda não existe (decisão no ADR-0009: o harness de QA é a camada ponta a ponta)"; exit 1; }
 	@cd e2e && npx playwright test
 
 contract\:check: ## valida o contrato OpenAPI
