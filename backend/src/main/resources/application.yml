@@ -31,3 +31,10 @@ server:
 scipath:
   # Preenchido pelo Maven (filtragem de recursos do spring-boot-starter-parent).
   version: '@project.version@'
+  # Prazos da sessão (ADR-0003 (e), contrato v0.4). Os dois são aplicados no servidor a cada
+  # requisição autenticada; `duracao-absoluta` é também o `Max-Age` da cookie, porque é o
+  # único dos dois que não se estende. O perfil `test` encurta os dois para a expiração caber
+  # em segundos (src/test/resources/application-test.yml).
+  sessao:
+    duracao-inatividade: 12h
+    duracao-absoluta: 7d

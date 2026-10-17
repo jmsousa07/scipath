@@ -45,6 +45,8 @@ verification_token  id, account_id, token_hash (SHA-256), tipo (CONFIRMACAO_EMAI
 profile          id, account_id (1:1), nome_publico, slug (único), biografia,
                  afiliacao_declarada (opcional), areas_interesse[], links_externos[],
                  criado_em, atualizado_em
+sessao           id, account_id, token_hash (SHA-256), csrf_token, criada_em,
+                 ultimo_uso_em, expira_em    # servidor, revogável, sem JWT (ADR-0003 (e))
 category         id, nome, slug (único), descricao (opcional), parent_id (opcional)
 material_type    id, nome, slug (único)          # nota de aula, slides, artigo, guia...
 license          id, nome, identificador, url_referencia, descricao_curta
