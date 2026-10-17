@@ -13,6 +13,8 @@
  * (a busca é renderizada no servidor, RNF023–RNF025).
  */
 import type {
+  AutorPublico,
+  CategoriaDaPagina,
   ItemTaxonomia,
   MaterialResumo,
   OrdemMateriais,
@@ -161,8 +163,14 @@ export function listarMateriais(consulta: ConsultaMateriais): Promise<Resultado<
  */
 const REVALIDACAO_TAXONOMIA_S = 3600;
 
-export function listarCategorias(): Promise<Resultado<Pagina<ItemTaxonomia>>> {
-  return requisitar<Pagina<ItemTaxonomia>>(`/categorias${comParametros({ size: 100 })}`, {
+/**
+ * Categorias da taxonomia. O tipo de retorno é o da categoria COMPLETA (`nome` +
+ * `descricao`), e não o `ItemTaxonomia` enxuto do filtro: `/categoria/[slug]` (RF007) é
+ * uma PÁGINA cuja razão de existir é dar contexto, e o contexto é o `descricao` que o
+ * contrato publica. Exibir um resumo escrito na tela seria inventar o que o dado já diz.
+ */
+export function listarCategorias(): Promise<Resultado<Pagina<CategoriaDaPagina>>> {
+  return requisitar<Pagina<CategoriaDaPagina>>(`/categorias${comParametros({ size: 100 })}`, {
     next: { revalidate: REVALIDACAO_TAXONOMIA_S },
   });
 }
@@ -170,5 +178,25 @@ export function listarCategorias(): Promise<Resultado<Pagina<ItemTaxonomia>>> {
 export function listarTiposMaterial(): Promise<Resultado<Pagina<ItemTaxonomia>>> {
   return requisitar<Pagina<ItemTaxonomia>>(`/tipos-material${comParametros({ size: 100 })}`, {
     next: { revalidate: REVALIDACAO_TAXONOMIA_S },
+  });
+}
+
+/**
+ * `GET /api/autores/{slug}` — identidade pública do autor e a página dos materiais dele
+ * (RF006, autor do contrato v0.3.0).
+ *
+ * `cache: 'no-store'` pela mesma razão da listagem: material recém-publicado tem de
+ * aparecer no perfil do autor, e resposta de cache aqui mostraria acervo que já mudou.
+ *
+ * `page` é 0-based (contrato) e a PRIMEIRA página não é enviada: o default do contrato é 0,
+ * então mandá-la só criaria uma segunda URL pedindo exatamente a mesma coisa (§12.2).
+ * O backend já recusa `page` negativo e `size` acima do teto; a tela não replica a
+ * validação do contrato — ela lê e valida o que a PESSOA escreveu na barra de endereços
+ * (`lib/pagina.ts`).
+ */
+export function obterAutor(slug: string, page: number): Promise<Resultado<AutorPublico>> {
+  const consulta = page > 0 ? { page } : {};
+  return requisitar<AutorPublico>(`/autores/${encodeURIComponent(slug)}${comParametros(consulta)}`, {
+    cache: 'no-store',
   });
 }

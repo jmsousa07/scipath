@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { dataCurta } from '@/lib/format';
-import { rotaAutor, rotaMaterial } from '@/lib/rotas';
+import { rotaAutor, rotaCategoria, rotaMaterial } from '@/lib/rotas';
 import type { MaterialResumo } from '@/lib/api/tipos';
 
 /**
@@ -15,6 +15,12 @@ import type { MaterialResumo } from '@/lib/api/tipos';
  * Reuso: este é o card do E2.8 e é o mesmo componente que o E2.10 usa nas rotas de
  * perfil e de categoria (não duplicar tela). Por isso ele só depende do `MaterialResumo`
  * do contrato, e não do estado da URL de `/explorar`.
+ *
+ * Categoria e autoria são LINKS (RF007): o card é o ponto onde a navegação material →
+ * categoria e material → autor começa. A categoria aponta para `/categoria/[slug]` — a
+ * página que dá contexto (o card E2.10) —, e não para `/explorar?categoria=`, que é a
+ * listagem filtrada: as duas existem, com propósitos diferentes, e a que explica o que é
+ * a categoria é esta.
  */
 export function CardMaterial({ material }: { material: MaterialResumo }) {
   const { slug, titulo, descricao, autor, categoria, tipo, licenca, publicadoEm, atualizadoEm } =
@@ -33,7 +39,8 @@ export function CardMaterial({ material }: { material: MaterialResumo }) {
     >
       <div className="sc-card__meta">
         <p className="sc-helper">
-          Categoria: {categoria.nome} · Autoria:{' '}
+          Categoria:{' '}
+          <Link href={rotaCategoria(categoria.slug)}>{categoria.nome}</Link> · Autoria:{' '}
           <Link href={rotaAutor(autor.slug)}>{autor.nomePublico}</Link> · Publicado em{' '}
           <time dateTime={publicadoEm}>{dataCurta(publicadoEm)}</time>
           {atualizadoEm ? (
