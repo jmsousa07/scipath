@@ -1,0 +1,95 @@
+/**
+ * Tipos da superfície pública da API — recorte LIDO pela descoberta pública, campo a
+ * campo conforme `contracts/openapi.yaml` (v0.3.0).
+ *
+ * Por que escritos à mão, e não gerados com `openapi-typescript`: gerar tipos exige
+ * adicionar uma dependência de desenvolvimento, e mexer em dependência é do card que
+ * mexe nelas (E1.10 é o dono; AGENTS.md — `npm install` fora desse card é proibido).
+ * Consequência registrada: NADA aqui é verificado contra o contrato pelo compilador.
+ * Se um schema mudar lá, é este arquivo que precisa acompanhar; quando a geração de
+ * tipos entrar no projeto, este arquivo vira o artefato gerado (vira card).
+ *
+ * Só entra aqui o que a tela consome. Campo do contrato que a tela não usa não é
+ * copiado "por completude": publicar no código um campo que ninguém exibe é a mesma
+ * fronteira contra ficção (§21.1) aplicada do lado do cliente.
+ */
+
+/** Envelope padrão de lista paginada (RF002, RNF021). `page` começa em 0. */
+export type Pagina<T> = {
+  items: T[];
+  page: number;
+  size: number;
+  total: number;
+};
+
+/** Identidade pública do autor na listagem (RF002, RF007). Sem dado de conta. */
+export type AutorResumo = {
+  slug: string;
+  nomePublico: string;
+};
+
+/** Categoria anexada ao material — `slug` é a chave estável aceita pelo filtro. */
+export type CategoriaRef = {
+  slug: string;
+  nome: string;
+};
+
+/** Tipo de material anexado ao material — `slug` é a chave estável do filtro. */
+export type TipoMaterialRef = {
+  slug: string;
+  nome: string;
+};
+
+/**
+ * Licença explícita (RN006). `descricaoCurta` é obrigatória no contrato justamente
+ * porque é ela que impede a leitura de que "estar público" significa domínio público
+ * (§13.2): a tela nunca exibe só o nome da licença.
+ */
+export type LicencaRef = {
+  slug: string;
+  nome: string;
+  descricaoCurta: string;
+};
+
+/** Item da descoberta pública (RF002). Todo item devolvido está PUBLICADO. */
+export type MaterialResumo = {
+  slug: string;
+  titulo: string;
+  descricao: string;
+  autor: AutorResumo;
+  categoria: CategoriaRef;
+  tipo: TipoMaterialRef;
+  licenca: LicencaRef;
+  /** Instante da publicação, em UTC com `Z` (chave da ordenação `recentes`). */
+  publicadoEm: string;
+  /** Ausente quando coincide com `publicadoEm`. */
+  atualizadoEm?: string;
+};
+
+/**
+ * Item de referência da taxonomia (ADR-0006), recortado ao que o filtro exibe.
+ * O schema completo (`id`, `descricao`, `ativo`) está no contrato e não é consumido aqui.
+ */
+export type ItemTaxonomia = {
+  slug: string;
+  nome: string;
+};
+
+/** Critério de ordenação aceito pelo contrato no parâmetro `ordem` (§12.2). */
+export type OrdemMateriais = 'recentes' | 'titulo';
+
+/** Erro de campo do `ProblemDetail` (RFC 7807) — presente só em erro de validação. */
+export type ErroDeCampo = {
+  campo: string;
+  mensagem: string;
+};
+
+/** Formato único de erro da API (`application/problem+json`). */
+export type ProblemDetail = {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  instance?: string;
+  errors?: ErroDeCampo[];
+};
