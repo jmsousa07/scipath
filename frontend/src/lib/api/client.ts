@@ -107,6 +107,12 @@ async function requisitar<T>(caminho: string, init: IniciarRequisicao): Promise<
  * Consulta da listagem pública, nos mesmos nomes do contrato. `page` é 0-based aqui
  * porque é assim que a API conta; a URL de `/explorar` é 1-based (ver
  * `lib/explorar/consulta.ts`) e a conversão acontece na fronteira, num lugar só.
+ *
+ * `size` é opcional e quem decide é a TELA: `/explorar` não o envia (usa o padrão do
+ * contrato, 20, e pagina) e a página inicial envia `6`, porque ela mostra um recorte
+ * ("os mais recentes") com o link para a listagem completa. O envelope da resposta
+ * devolve o `size` aplicado e o `total` da consulta inteira — nenhum número é
+ * inventado no cliente (DRS §12.4).
  */
 export type ConsultaMateriais = {
   q?: string;
@@ -114,6 +120,7 @@ export type ConsultaMateriais = {
   tipo?: string;
   ordem?: OrdemMateriais;
   page?: number;
+  size?: number;
 };
 
 function comParametros(pares: Record<string, string | number | undefined>): string {
@@ -127,9 +134,10 @@ function comParametros(pares: Record<string, string | number | undefined>): stri
 }
 
 /**
- * `GET /api/materiais` — listagem paginada (RF002). `size` NÃO é enviado: o padrão do
- * contrato (20) é o que a tela usa, e o envelope da resposta devolve o `size` aplicado
- * — nenhum número de itens por página é inventado aqui.
+ * `GET /api/materiais` — listagem paginada (RF002). `/explorar` não envia `size` (usa o
+ * padrão do contrato, 20, e pagina); a página inicial envia 6 para mostrar um recorte e
+ * linkar a listagem completa. O envelope da resposta devolve o `size` aplicado, então
+ * nenhum número de itens por página é inventado no cliente.
  *
  * `cache: 'no-store'`: a listagem é a superfície onde material novo tem de aparecer;
  * cache de resposta aqui significaria mostrar acervo que já mudou (§12.2).

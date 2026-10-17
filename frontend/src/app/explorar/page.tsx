@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { BuscaEFiltros } from './BuscaEFiltros';
-import { Recarregar } from './Recarregar';
 import { ListagemDeMateriais } from '@/components/dominio/ListagemDeMateriais';
 import { PageState } from '@/components/ui/PageState';
+import { Recarregar } from '@/components/ui/Recarregar';
 import { listarCategorias, listarMateriais, listarTiposMaterial, type Falha } from '@/lib/api/client';
 import {
   ORDENS,
