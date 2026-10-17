@@ -1,5 +1,6 @@
 package com.scipath.material;
 
+import com.scipath.error.NaoEncontradoException;
 import com.scipath.taxonomia.Pagina;
 import com.scipath.taxonomia.ResultadoPaginado;
 import org.springframework.stereotype.Service;
@@ -38,5 +39,24 @@ public class MateriaisService {
         // Conjunto vazio é 200 com items: [] — montar o envelope vazio é o caminho normal,
         // não um caso de erro (RNF004).
         return new Pagina<>(resultado.itens(), pagina, tamanho, resultado.total());
+    }
+
+    /**
+     * Detalhe público do material identificado pelo {@code slug} (RF005).
+     *
+     * <p><b>O 404 é indistinguível de propósito (RN002, CA008).</b> Material inexistente,
+     * {@code RETIRADO}, {@code EXCLUIDO} ou de conta não ativa chega aqui como o mesmo vazio do
+     * repositório, e sai como o mesmo erro — sem detalhe próprio. O detalhe é {@code null} porque
+     * o texto vai do padrão único de {@link com.scipath.error.ApiExceptionHandler} ("O recurso
+     * solicitado não foi encontrado.", o mesmo do exemplo de {@code ErroNaoEncontrado} no
+     * contrato): duas mensagens diferentes para "não existe" e "não é público" seriam exatamente a
+     * distinção que a regra proíbe, e uma constante repetida aqui poderia divergir do handler sem
+     * ninguém notar.
+     *
+     * @param slug slug já validado no controller (formato e tamanho do contrato)
+     */
+    public MaterialDetalheResposta buscarPorSlug(String slug) {
+        return repositorio.buscarPublicadoPorSlug(slug)
+                .orElseThrow(() -> new NaoEncontradoException(null));
     }
 }
