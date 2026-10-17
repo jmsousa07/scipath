@@ -8,6 +8,12 @@ descritivo; o número é a ordem.
   de referência, arquivo e material.
 - `V2__seed_taxonomia.sql` — seed da taxonomia (card E1.3): 6 tipos de material,
   13 categorias e 7 licenças, com `slug` como chave estável e `ativo = true`.
+- `V3__busca_texto_material.sql` — índice da busca por texto da listagem pública (card E2.3,
+  ADR-0008): `material_busca_idx`, GIN sobre `to_tsvector('portuguese', <título + descrição
+  com acento dobrado>)`. Só DDL de índice — **sem extensão, sem função, sem coluna nova**.
+  A dobra de acento é `translate()` explícito, e a MESMA expressão está em
+  `MateriaisRepositorio` (lado da consulta): se um lado mudar sem o outro, o índice deixa de
+  ser usado, sem erro nenhum. Por isso o card exige `EXPLAIN` como evidência.
 
 ## Como aplicar
 
@@ -89,10 +95,19 @@ DELETE FROM flyway_schema_history WHERE version = '2';
 ```
 
 Os `DELETE FROM material` existem porque a FK é `ON DELETE NO ACTION`: em banco com
-material publicado apontando para uma categoria da seed, apagar a categoria falha — de
-propósito, porque apagar taxonomia em uso nunca é operação de reversão de migração, é
+material publicado apontando para uma categoria da seed, apagar a categoria falha —
+de propósito, porque apagar taxonomia em uso nunca é operação de reversão de migração, é
 decisão de produto. Em banco de teste vazio as linhas de `material` não existem e os
 deletes são no-ops. O `DELETE` no histórico é o que permite reaplicar a `V2` depois.
+
+A `V3` só cria um índice: a reversão é o `DROP INDEX` e a linha no histórico — nada de dado,
+nada de schema de tabela. Em banco com dados, recriar o índice depois é apenas custo de
+construção (a busca continua correta, só mais lenta).
+
+```sql
+DROP INDEX IF EXISTS material_busca_idx;
+DELETE FROM flyway_schema_history WHERE version = '3';
+```
 
 Ordem inversa de `V1__modelo_mvp.sql`:
 

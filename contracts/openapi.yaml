@@ -539,7 +539,9 @@ components:
         acento e caixa: "matemática" e "matematica" casam o mesmo conjunto. Ausente ou vazia
         não é erro — devolve a listagem padrão (RF003). Não há ordenação nem promessa de
         relevância: o resultado sai na ordenação pedida por `ordem` (§12.2). Caracteres
-        especiais são tratados como texto, nunca como operador (§12.1).
+        especiais são tratados como texto, nunca como operador (§12.1). Termo acima do teto
+        de `maxLength` é recusado com **400** (ADR-0008): cortar em silêncio mudaria o
+        resultado sem o cliente saber.
       schema:
         type: string
         maxLength: 200
