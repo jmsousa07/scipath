@@ -31,10 +31,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * banco é limpo antes e depois de cada teste: a suíte não depende da ordem das classes nem
  * deixa linha para trás. O prefixo também deixa o {@code \\d account} da evidência legível.
  *
- * <p><b>O que este teste não faz:</b> não verifica sessão, cookie {@code SCIPATH_SESSAO} nem
- * {@code X-CSRF-Token}. O corpo do 201 é o do contrato ({@code SessaoAtual}), mas a sessão em
- * si é o card E3.3 — a tabela de sessão não existe no modelo aplicado (V1) e migração nova
- * não é deste card.
+ * <p><b>O que este teste não faz:</b> não verifica o valor da cookie de sessão nem a
+ * expiração — isso é o card E3.3, em {@code LoginSessaoIntegrationTest}. O que ele faz desde
+ * o E3.3 é mandar o {@code X-CSRF-Token} que a escrita exige: sem o cabeçalho, o cadastro
+ * responde <b>403</b> (contrato v0.4 — a escrita é protegida mesmo antes de existir sessão).
  *
  * <p>Mesma configuração de contexto das outras integrações ({@code RANDOM_PORT}): o Spring
  * reusa o contexto já subido e a máquina tem 954 MB (AGENTS.md, higiene de recursos).
@@ -84,10 +84,15 @@ class CadastroContaIntegrationTest {
         assertThat(resposta.getStatusCode().value()).as("201 é o status publicado no contrato").isEqualTo(201);
         JsonNode corpo = JSON.readTree(resposta.getBody());
         System.out.println("[E3.2] 201 cadastro válido -> " + resposta.getBody());
-        // Fronteira registrada no log de propósito: o CORPO é o do contrato, mas o
-        // Set-Cookie da sessão (e o X-CSRF-Token exigido nas escritas) é o card E3.3 — a
-        // tabela de sessão não existe no V1 e migração nova não é deste card.
-        System.out.println("[E3.2] cabeçalho Set-Cookie do 201 -> " + resposta.getHeaders().get("Set-Cookie"));
+        // Fronteira do E3.2 com o E3.3: o 201 já traz o Set-Cookie da sessão (contrato v0.4 —
+        // o cadastro sai autenticado). O valor não é verificado aqui; quem o exercita é o
+        // LoginSessaoIntegrationTest. A linha fica registrada para o atributo não voltar a
+        // desaparecer em silêncio.
+        System.out.println("[E3.2] cabeçalho Set-Cookie do 201 -> "
+                + resposta.getHeaders().getOrDefault("Set-Cookie", List.of()).stream()
+                        .map(linha -> linha.substring(0, linha.indexOf('=')) + "=<valor opaco omitido>"
+                                + linha.substring(linha.indexOf(';')))
+                        .toList());
 
         assertThat(corpo.get("autenticado").asBoolean()).isTrue();
         assertThat(corpo.get("estadoConta").asText()).isEqualTo("PENDENTE_VERIFICACAO");
@@ -228,6 +233,13 @@ class CadastroContaIntegrationTest {
     private ResponseEntity<String> cadastrar(String email, String senha, String nomePublico) {
         HttpHeaders cabecalhos = new HttpHeaders();
         cabecalhos.setContentType(MediaType.APPLICATION_JSON);
+        // Toda escrita exige o X-CSRF-Token (contrato v0.4) — inclusive o cadastro, que
+        // responde sem sessão. O token vem da cookie XSRF-TOKEN que a primeira leitura do app
+        // emite; o visitante o devolve no cabeçalho, e a cookie acompanha a requisição.
+        String csrf = csrfDeVisitante();
+        cabecalhos.add(HttpHeaders.COOKIE, "XSRF-TOKEN=" + csrf);
+        cabecalhos.add("X-CSRF-Token", csrf);
+
         String corpo = JSON.createObjectNode()
                 .put("email", email)
                 .put("senha", senha)
@@ -237,6 +249,16 @@ class CadastroContaIntegrationTest {
         ResponseEntity<String> resposta = rest.exchange("/api/contas", HttpMethod.POST,
                 new HttpEntity<>(corpo, cabecalhos), String.class);
         return resposta;
+    }
+
+    /** Token CSRF que o frontend lê na cookie XSRF-TOKEN da primeira leitura do app. */
+    private String csrfDeVisitante() {
+        ResponseEntity<String> estado = rest.getForEntity("/api/sessoes/atual", String.class);
+        return estado.getHeaders().getOrDefault(HttpHeaders.SET_COOKIE, List.of()).stream()
+                .filter(linha -> linha.startsWith("XSRF-TOKEN="))
+                .map(linha -> linha.substring("XSRF-TOKEN=".length(), linha.indexOf(';')))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("GET /api/sessoes/atual não emitiu a cookie XSRF-TOKEN"));
     }
 
     /** Remove só as linhas criadas por esta classe (o perfil sai antes, por causa da FK). */

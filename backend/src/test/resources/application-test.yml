@@ -30,3 +30,14 @@ spring:
       initialization-fail-timeout: 60000
       connection-timeout: 60000
       validation-timeout: 5000
+
+# Prazos de sessão no perfil de TESTE (card E3.3). São curtos de propósito: a expiração
+# por inatividade é um prazo de relógio real, e o card exige um teste que a provoque. Com
+# 12 h isso exigiria esperar 12 h ou mexer no relógio da JVM; com 5 s o teste espera o
+# prazo configurado e observa a recusa — a MESMA regra de produção, com outro número.
+# `duracao-absoluta` (30 s) é maior que a inatividade para que o teste de inatividade não
+# seja, na verdade, um teste do limite absoluto.
+scipath:
+  sessao:
+    duracao-inatividade: 5s
+    duracao-absoluta: 30s
