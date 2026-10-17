@@ -67,6 +67,46 @@ export type MaterialResumo = {
 };
 
 /**
+ * Licença no DETALHE do material: o mesmo `LicencaRef` da listagem, mais o
+ * `identificador` público (ex.: SPDX) e a `urlReferencia` do texto da licença
+ * (`LicencaRef` no contrato já os declara opcionais; a listagem não os consome).
+ *
+ * Os dois são AUSENTES quando a licença não tem identificador nem texto público
+ * (caso de "Todos os direitos reservados") — ausência é informação, e a tela não
+ * inventa um valor para preencher (RN006, §13.2).
+ */
+export type LicencaDetalhe = LicencaRef & {
+  identificador?: string;
+  urlReferencia?: string;
+};
+
+/**
+ * Material público completo (RF005) — `GET /api/materiais/{slug}`.
+ *
+ * `atualizadoEm` é obrigatório aqui (o contrato o lista em `required`), ao contrário
+ * do item de listagem, que o omite quando coincide com a publicação.
+ *
+ * O ACESSO AO ARQUIVO não está neste schema: a versão v0.3.0 do contrato não serve
+ * arquivo, e publicar um campo de download sem implementação seria fronteira contra
+ * ficção (DRS §21.1). A página do material, por isso, não pode oferecer botão de
+ * acesso — ela diz que não há arquivo disponível (ver `app/materiais/[slug]/page.tsx`).
+ * Quando o RF014 entrar, o campo nasce no contrato primeiro.
+ */
+export type MaterialDetalhe = {
+  slug: string;
+  titulo: string;
+  descricao: string;
+  autor: AutorResumo;
+  categoria: CategoriaRef;
+  tipo: TipoMaterialRef;
+  licenca: LicencaDetalhe;
+  /** Nesta superfície é sempre `PUBLICADO`: retirado/excluído responde 404. */
+  estado: 'PUBLICADO';
+  publicadoEm: string;
+  atualizadoEm: string;
+};
+
+/**
  * Item de referência da taxonomia (ADR-0006), recortado ao que o filtro exibe.
  * O schema completo (`id`, `descricao`, `ativo`) está no contrato e não é consumido aqui.
  */
