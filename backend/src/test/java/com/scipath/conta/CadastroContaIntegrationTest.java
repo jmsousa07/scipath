@@ -84,6 +84,10 @@ class CadastroContaIntegrationTest {
         assertThat(resposta.getStatusCode().value()).as("201 é o status publicado no contrato").isEqualTo(201);
         JsonNode corpo = JSON.readTree(resposta.getBody());
         System.out.println("[E3.2] 201 cadastro válido -> " + resposta.getBody());
+        // Fronteira registrada no log de propósito: o CORPO é o do contrato, mas o
+        // Set-Cookie da sessão (e o X-CSRF-Token exigido nas escritas) é o card E3.3 — a
+        // tabela de sessão não existe no V1 e migração nova não é deste card.
+        System.out.println("[E3.2] cabeçalho Set-Cookie do 201 -> " + resposta.getHeaders().get("Set-Cookie"));
 
         assertThat(corpo.get("autenticado").asBoolean()).isTrue();
         assertThat(corpo.get("estadoConta").asText()).isEqualTo("PENDENTE_VERIFICACAO");
@@ -232,8 +236,6 @@ class CadastroContaIntegrationTest {
 
         ResponseEntity<String> resposta = rest.exchange("/api/contas", HttpMethod.POST,
                 new HttpEntity<>(corpo, cabecalhos), String.class);
-        System.out.println("[E3.2] POST /api/contas " + resposta.getStatusCode().value()
-                + " | Set-Cookie: " + resposta.getHeaders().get("Set-Cookie"));
         return resposta;
     }
 
