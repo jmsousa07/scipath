@@ -4,6 +4,7 @@ import com.scipath.autor.PerfilPublico;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -24,6 +25,17 @@ public class PerfilRepositorio {
 
     private static final String CAMPOS = "id, account_id, nome_publico, slug, biografia,"
             + " afiliacao_declarada, areas_interesse, links_externos";
+
+    /** Linha de {@code profile} como {@link Perfil} — um mapeador só para as três leituras. */
+    private static final RowMapper<Perfil> MAPEADOR = (rs, linha) -> new Perfil(
+            rs.getObject("id", UUID.class),
+            rs.getObject("account_id", UUID.class),
+            rs.getString("nome_publico"),
+            rs.getString("slug"),
+            rs.getString("biografia"),
+            rs.getString("afiliacao_declarada"),
+            listaDeTexto(rs.getArray("areas_interesse")),
+            listaDeTexto(rs.getArray("links_externos")));
 
     private final JdbcClient jdbc;
 
@@ -58,15 +70,7 @@ public class PerfilRepositorio {
     public Optional<Perfil> buscarPorConta(UUID contaId) {
         return jdbc.sql("SELECT " + CAMPOS + " FROM profile WHERE account_id = :contaId")
                 .param("contaId", contaId)
-                .query((rs, linha) -> new Perfil(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("account_id", UUID.class),
-                        rs.getString("nome_publico"),
-                        rs.getString("slug"),
-                        rs.getString("biografia"),
-                        rs.getString("afiliacao_declarada"),
-                        listaDeTexto(rs.getArray("areas_interesse")),
-                        listaDeTexto(rs.getArray("links_externos"))))
+                .query(MAPEADOR)
                 .optional();
     }
 
@@ -80,13 +84,7 @@ public class PerfilRepositorio {
      * {@code id}, sem {@code account_id} (RNF013).
      */
     public Optional<PerfilPublico> buscarPublicoPorConta(UUID contaId) {
-        return buscarPorConta(contaId).map(perfil -> new PerfilPublico(
-                perfil.slug(),
-                perfil.nomePublico(),
-                perfil.biografia(),
-                perfil.afiliacaoDeclarada(),
-                perfil.areasInteresse(),
-                perfil.linksExternos()));
+        return buscarPorConta(contaId).map(PerfilRepositorio::publico);
     }
 
     /**
@@ -105,6 +103,97 @@ public class PerfilRepositorio {
                 .param("prefixo", base + "-%")
                 .query(String.class)
                 .list();
+    }
+
+    // ------------------------------------------------------------------ edição (E3.5)
+
+    /**
+     * Perfil identificado pelo próprio {@code id}, se existir — a releitura que fecha a edição.
+     *
+     * <p>É por este id que a edição grava, e o id vem da sessão (ADR-0003 (j)): a leitura
+     * depois da escrita usa a mesma chave, e é por isso que o 200 devolve o que o <b>SQL</b>
+     * guardou, não o que o cliente enviou.
+     */
+    public Optional<Perfil> buscarPorId(UUID perfilId) {
+        return jdbc.sql("SELECT " + CAMPOS + " FROM profile WHERE id = :perfilId")
+                .param("perfilId", perfilId)
+                .query(MAPEADOR)
+                .optional();
+    }
+
+    /**
+     * Perfil identificado pelo {@code id} já na forma pública do contrato
+     * ({@code PerfilPublico}) — a resposta de {@code PUT /perfil/atual}.
+     *
+     * <p>Mesma projeção de {@link #buscarPublicoPorConta}: sem {@code id} e sem
+     * {@code account_id}, e é por não existir campo de conta no tipo que o vazamento por
+     * engano é impossível (RNF013).
+     */
+    public Optional<PerfilPublico> buscarPublicoPorId(UUID perfilId) {
+        return buscarPorId(perfilId).map(PerfilRepositorio::publico);
+    }
+
+    /**
+     * O slug já pertence a <b>outro</b> perfil? — a checagem que vira 409 antes de tentar
+     * gravar (RN009).
+     *
+     * <p>O {@code id <> :perfilId} é a razão de o método existir em vez de uma consulta por
+     * slug: repetir o próprio slug numa edição (mudar só a biografia, por exemplo) é legítimo e
+     * não pode ser recusado como colisão. A {@code UNIQUE profile_slug_unico} continua sendo o
+     * juiz final da unicidade — esta consulta é conveniência para o formulário receber o campo
+     * culpado, não a garantia (RNF011).
+     */
+    public boolean slugEmUsoPorOutro(String slug, UUID perfilId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM profile WHERE slug = :slug AND id <> :perfilId)")
+                .param("slug", slug)
+                .param("perfilId", perfilId)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /**
+     * Substitui os campos públicos do perfil — a escrita de {@code PUT /perfil/atual}.
+     *
+     * <p><b>Substitui, não mescla:</b> as seis colunas entram sempre, e valor {@code null}
+     * grava {@code NULL} — "não informado", o mesmo estado de um perfil que nunca passou pela
+     * edição (o contrato v0.4 diz que o corpo substitui o conjunto de campos). O
+     * {@code WHERE id = :perfilId} é a fronteira de propriedade: o id vem da sessão e o
+     * {@code UPDATE} não alcança nenhuma outra linha (ADR-0003 (j), CA007).
+     *
+     * <p>{@code atualizado_em} é escrito pela aplicação, como o V1 documenta ("não há trigger:
+     * a regra de negócio fica no serviço") — o timestamp do banco é o do momento da escrita.
+     *
+     * <p>As duas colunas {@code text[]} recebem {@code String[]} ligado como parâmetro: o
+     * driver do PostgreSQL monta o array, e nenhum valor de requisição entra na string do SQL.
+     */
+    public void atualizar(UUID perfilId, String nomePublico, String slug, String biografia,
+            String afiliacaoDeclarada, List<String> areasInteresse, List<String> linksExternos) {
+        jdbc.sql("UPDATE profile SET nome_publico = :nomePublico, slug = :slug,"
+                        + " biografia = :biografia, afiliacao_declarada = :afiliacaoDeclarada,"
+                        + " areas_interesse = :areasInteresse, links_externos = :linksExternos,"
+                        + " atualizado_em = now() WHERE id = :perfilId")
+                .param("nomePublico", nomePublico)
+                .param("slug", slug)
+                .param("biografia", biografia)
+                .param("afiliacaoDeclarada", afiliacaoDeclarada)
+                .param("areasInteresse", arrayOuNulo(areasInteresse))
+                .param("linksExternos", arrayOuNulo(linksExternos))
+                .param("perfilId", perfilId)
+                .update();
+    }
+
+    /** Lista como {@code String[]} para a coluna {@code text[]}; lista vazia é {@code NULL}. */
+    private static String[] arrayOuNulo(List<String> valores) {
+        if (valores == null || valores.isEmpty()) {
+            return null;
+        }
+        return valores.toArray(new String[0]);
+    }
+
+    /** Projeção pública do perfil — a única forma pela qual ele sai daqui (RNF013). */
+    private static PerfilPublico publico(Perfil perfil) {
+        return new PerfilPublico(perfil.slug(), perfil.nomePublico(), perfil.biografia(),
+                perfil.afiliacaoDeclarada(), perfil.areasInteresse(), perfil.linksExternos());
     }
 
     /** {@code text[]} do PostgreSQL como lista Java; {@code NULL} é lista vazia (RN004). */
