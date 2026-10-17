@@ -16,7 +16,9 @@
     "check:style": "node scripts/check-style.mjs",
     "check:layout": "node scripts/check-layout.mjs",
     "check:states": "node scripts/check-states.mjs",
-    "verify": "npm run check:tokens && npm run check:style && npm run check:layout && npm run typecheck && npm run lint && npm run build && npm run check:states"
+    "check:sessao": "node scripts/check-sessao.mjs",
+    "check:erros-sessao": "node scripts/check-erros-sessao.mjs",
+    "verify": "npm run check:tokens && npm run check:style && npm run check:layout && npm run typecheck && npm run lint && npm run check:erros-sessao && npm run build && npm run check:states"
   },
   "dependencies": {
     "next": "16.4.2",

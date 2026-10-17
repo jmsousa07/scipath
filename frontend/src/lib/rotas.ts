@@ -52,3 +52,15 @@ export function rotaCategoria(slug: string): Route {
 export function rotaExplorar(url: string): Route {
   return url as Route;
 }
+
+/**
+ * Destino interno preservado pelo parâmetro `proximo` (DRS §15.3: 401 → login com o
+ * destino preservado). O valor vem da barra de endereços, então é montado em tempo de
+ * execução e o `typedRoutes` não o verifica: daí o cast. Quem ACEITA esse valor é
+ * `caminhoInterno` (`lib/sessao/destino.ts`), aplicado no SERVIDOR — só passa caminho
+ * interno (`/…`); um `?proximo=` apontando para outro domínio transformaria o login em
+ * redirecionador aberto, e um valor recusado nem chega ao formulário.
+ */
+export function rotaPreservada(url: string): Route {
+  return url as Route;
+}
