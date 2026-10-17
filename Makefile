@@ -139,8 +139,19 @@ test:            ## testes do backend (reproduzível de shell limpo; datasource 
 # (mesma forma dos alvos de backend). A receita NÃO usa "|| echo": com o projeto presente,
 # falha do lint/typecheck/teste tem de sair com exit != 0 — mascarar faria o alvo passar
 # verde sobre um frontend quebrado (defeito do E2.6-f1; precedente do E1.2a em db:migrate).
+# O lint depende de dependência INSTALADA, não só de código: sem frontend/node_modules — ou com
+# o diretório VAZIO, que era o estado do checkout principal em 2026-10-17 — o eslint morre com
+# "ERR_MODULE_NOT_FOUND: Cannot find package 'eslint-config-next'" ao ler frontend/eslint.config.mjs.
+# Um vermelho desses é indistinguível de defeito de merge e queima a run do gate (DRS §17.5), o
+# inverso do defeito do E1.2a/E2.6-f1 (alvo verde sem testar nada). Por isso o alvo DECLARA a
+# precondição antes de chamar o npm. Ele NÃO roda `npm ci` aqui: cada worker instala no próprio
+# worktree e instalação de dependência é de card de dependência, não do alvo (AGENTS.md, higiene
+# de recursos — npm e RAM são caros nesta máquina).
+# A prova é o binário que o eslint.config.mjs precisa: `.bin/eslint` só existe depois de
+# `npm ci`/`npm install`, então o teste -x pega tanto a pasta ausente quanto a pasta vazia.
 lint:            ## lint + typecheck (f0.3)
 	@test -f frontend/package.json || { echo "frontend/ ainda não existe (card f0.3)"; exit 1; }
+	@test -x frontend/node_modules/.bin/eslint || { echo "PRECONDIÇÃO de ambiente: frontend/node_modules ausente ou vazio neste checkout — ISTO NÃO É DEFEITO DE CÓDIGO; rode 'npm ci' em frontend/ (instalação de dependência é card de dependência, AGENTS.md; a suíte de QA instala por conta própria)"; exit 1; }
 	@cd frontend && npm run lint && npm run typecheck
 
 e2e:             ## Playwright (f0.4) — NÃO faz parte do gate do MVP: ver ADR-0009
