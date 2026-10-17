@@ -18,7 +18,7 @@ ENV_FILE       := $(if $(wildcard .env),.env,$(wildcard $(MAIN_ROOT)/.env))
 # Carrega o .env exportando cada variável (SPRING_DATASOURCE_*) sem imprimir segredo.
 LOAD_ENV := set -a; if [ -f "$(ENV_FILE)" ]; then . "$(ENV_FILE)"; fi; set +a;
 
-.PHONY: help doctor up db\:migrate db\:migrate\:test db\:seed\:dev db\:reset api\:dev web\:dev test lint e2e contract\:check
+.PHONY: help doctor up db\:migrate db\:migrate\:test db\:seed\:dev db\:reset api\:dev web\:dev email\:outbox test lint e2e contract\:check
 
 help:            ## lista os alvos
 	@grep -E '^[a-zA-Z_:\\]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=" *## "}{gsub(/\\/,"",$$1); sub(/:[ 	]*$$/,"",$$1); printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -95,6 +95,22 @@ db\:seed\:dev:   ## insere o seed de DESENVOLVIMENTO (recusa banco de teste e ho
 
 db\:reset:       ## recria o banco (destrutivo, só local — precisa confirmar)
 	@bash infra/db-setup.sh --reset
+
+# email:outbox é o "servidor de e-mail" de desenvolvimento (card E3.4, ADR-0003 (f)): sem SMTP e
+# sem Docker nesta máquina, o EmailSender grava a mensagem num arquivo e é daqui que quem
+# desenvolve tira o token de confirmação/recuperação. O token aparece EM CLARO neste alvo de
+# propósito — o outbox faz o papel da caixa de entrada, não é log da aplicação (RNF009).
+# O caminho é o mesmo da configuração (SCIPATH_OUTBOX_DIR vence, como no application.yml).
+email\:outbox:   ## mostra a última mensagem do outbox de e-mail (canal de desenvolvimento)
+	@$(LOAD_ENV) dir="$${SCIPATH_OUTBOX_DIR:-$$HOME/.scipath/outbox}"; \
+	arquivo="$$dir/outbox.jsonl"; \
+	if [ ! -f "$$arquivo" ]; then \
+	  echo "sem mensagens em $$arquivo"; \
+	  echo "o outbox só é criado quando um cadastro (verificação) ou uma solicitação (recuperação) emite um token — card E3.4"; \
+	  exit 1; \
+	fi; \
+	echo "== última mensagem do outbox ($$arquivo) =="; \
+	tail -1 "$$arquivo"
 
 api\:dev:        ## API em :8080
 	@test -f backend/pom.xml || { echo "backend/ ainda não existe (card F0.1)"; exit 1; }

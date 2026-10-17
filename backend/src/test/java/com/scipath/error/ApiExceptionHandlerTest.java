@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import com.scipath.email.FalhaDeEnvioDeEmailException;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -86,6 +87,26 @@ class ApiExceptionHandlerTest {
         @GetMapping("/fixture/acesso-negado")
         String acessoNegado() {
             throw new AcessoNegadoException("Este material pertence a outro autor.");
+        }
+
+        /** Cooldown de reenvio (E3.4): o pedido está correto, só chegou cedo. */
+        @GetMapping("/fixture/reenvio-em-cooldown")
+        String reenvioEmCooldown() {
+            throw new ReenvioEmCooldownException(42);
+        }
+
+        /** Campo de corpo recusado por regra do serviço — o token de confirmação (E3.4). */
+        @GetMapping("/fixture/token-recusado")
+        String tokenRecusado() {
+            throw new ValidacaoDeCampoException("token", "token inválido ou expirado");
+        }
+
+        /** Canal de e-mail fora do ar: o que o contrato publica como 500 no reenvio (E3.4). */
+        @GetMapping("/fixture/canal-de-email-quebrado")
+        String canalDeEmailQuebrado() {
+            throw new FalhaDeEnvioDeEmailException(
+                    "não foi possível gravar a mensagem no outbox de desenvolvimento em /home/exemplo/outbox",
+                    new java.io.IOException("No space left on device"));
         }
     }
 
@@ -239,5 +260,61 @@ class ApiExceptionHandlerTest {
                 .andReturn();
 
         System.out.println("[E1.4] 415 -> " + resultado.getResponse().getContentAsString());
+    }
+
+    @Test
+    @DisplayName("reenvio em cooldown responde 429 com Retry-After e sem errors[] (E3.4)")
+    void reenvioEmCooldownResponde429ComRetryAfter() throws Exception {
+        MvcResult resultado = mvc().perform(get("/fixture/reenvio-em-cooldown"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Retry-After", "42"))
+                .andExpect(jsonPath("$.type").value(ApiExceptionHandler.TIPO_REENVIO_EM_COOLDOWN))
+                .andExpect(jsonPath("$.title").value("Reenvio em cooldown"))
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.detail").value("Aguarde antes de pedir um novo e-mail de verificação."))
+                .andExpect(jsonPath("$.instance").value("/fixture/reenvio-em-cooldown"))
+                .andExpect(jsonPath("$.errors").doesNotExist())
+                .andReturn();
+
+        System.out.println("[E3.4] 429 cooldown -> Retry-After: "
+                + resultado.getResponse().getHeader("Retry-After") + " | "
+                + resultado.getResponse().getContentAsString());
+    }
+
+    @Test
+    @DisplayName("campo recusado por regra do serviço responde 422 validacao_campo com o campo (E3.4)")
+    void campoRecusadoPelaRegraResponde422() throws Exception {
+        MvcResult resultado = mvc().perform(get("/fixture/token-recusado"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value(ApiExceptionHandler.TIPO_VALIDACAO_CAMPO))
+                .andExpect(jsonPath("$.title").value("Campo inválido"))
+                .andExpect(jsonPath("$.detail").value("Um ou mais campos do corpo não foram aceitos."))
+                .andExpect(jsonPath("$.errors[0].campo").value("token"))
+                .andExpect(jsonPath("$.errors[0].mensagem").value("token inválido ou expirado"))
+                .andReturn();
+
+        System.out.println("[E3.4] 422 token recusado -> " + resultado.getResponse().getContentAsString());
+    }
+
+    @Test
+    @DisplayName("falha do canal de e-mail responde 500 sem detalhe interno (E3.4, RNF017)")
+    void falhaDeEnvioResponde500() throws Exception {
+        MvcResult resultado = mvc().perform(get("/fixture/canal-de-email-quebrado"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.type").value(ApiExceptionHandler.TIPO_INTERNO))
+                .andExpect(jsonPath("$.detail")
+                        .value(org.hamcrest.Matchers.containsString("Tente novamente")))
+                .andReturn();
+
+        String corpo = resultado.getResponse().getContentAsString();
+        assertThat(corpo)
+                .as("RNF012/RNF009: a resposta de falha não carrega caminho interno nem a causa")
+                .doesNotContain("outbox").doesNotContain("/home/exemplo")
+                .doesNotContain("No space left on device")
+                .doesNotContain("FalhaDeEnvioDeEmailException");
+        System.out.println("[E3.4] 500 canal de e-mail quebrado -> " + corpo);
     }
 }

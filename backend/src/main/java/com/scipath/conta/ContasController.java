@@ -2,6 +2,7 @@ package com.scipath.conta;
 
 import com.scipath.identidade.CookiesDeSessao;
 import com.scipath.identidade.SessaoService;
+import com.scipath.token.VerificacaoDeEmailService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -45,11 +46,14 @@ public class ContasController {
     private final CadastroService cadastro;
     private final SessaoService sessoes;
     private final CookiesDeSessao cookies;
+    private final VerificacaoDeEmailService verificacao;
 
-    public ContasController(CadastroService cadastro, SessaoService sessoes, CookiesDeSessao cookies) {
+    public ContasController(CadastroService cadastro, SessaoService sessoes, CookiesDeSessao cookies,
+            VerificacaoDeEmailService verificacao) {
         this.cadastro = cadastro;
         this.sessoes = sessoes;
         this.cookies = cookies;
+        this.verificacao = verificacao;
     }
 
     @PostMapping("/contas")
@@ -57,6 +61,16 @@ public class ContasController {
             HttpServletResponse resposta) {
         ResultadoDeCadastro resultado = cadastro.cadastrar(requisicao);
         cookies.abrir(resposta, sessoes.abrir(resultado.contaId()));
+
+        // A verificação de e-mail nasce aqui (E3.4, ADR-0003 (c)): a conta recém-criada precisa
+        // do link, e o contrato promete 201 com a sessão aberta — não promete que o e-mail saiu.
+        // Por isso o envio vem DEPOIS da transação do cadastro e da sessão, e uma falha de canal
+        // não vira erro na resposta: o serviço a registra sem token e a conta segue PENDENTE_...
+        // com o reenvio disponível (ADR-0003 (g) e (h)). Devolver 500 aqui deixaria o usuário com
+        // uma conta criada e sem entender por que o cadastro "falhou" (a segunda tentativa
+        // responderia 409).
+        verificacao.enviarConfirmacaoInicial(resultado.contaId(), requisicao.email());
+
         return ResponseEntity.status(HttpStatus.CREATED).body(resultado.estado());
     }
 }

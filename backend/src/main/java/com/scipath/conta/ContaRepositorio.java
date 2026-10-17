@@ -1,5 +1,6 @@
 package com.scipath.conta;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -65,15 +66,72 @@ public class ContaRepositorio {
     public Optional<Conta> buscarPorEmail(String email) {
         return jdbc.sql("SELECT " + CAMPOS + " FROM account WHERE email = :email")
                 .param("email", email)
-                .query((rs, linha) -> {
-                    OffsetDateTime verificadoEm = rs.getObject("email_verificado_em", OffsetDateTime.class);
-                    return new Conta(
-                            rs.getObject("id", UUID.class),
-                            rs.getString("email"),
-                            rs.getString("senha_hash"),
-                            EstadoConta.valueOf(rs.getString("estado")),
-                            verificadoEm == null ? null : verificadoEm.toInstant());
-                })
+                .query(ContaRepositorio::conta)
                 .optional();
+    }
+
+    /**
+     * Conta pelo identificador — o caminho de quem <b>já sabe</b> de quem é a operação.
+     *
+     * <p>É o que o reenvio de verificação usa (E3.4): a sessão autenticada entrega o
+     * {@code contaId} e não carrega endereço nenhum (o schema {@code SessaoAtual} do contrato não
+     * tem e-mail — RNF013), então o destinatário da mensagem só pode vir da linha da conta. É
+     * também a razão de o endereço nunca ser aceito do corpo da requisição naquele endpoint.
+     */
+    public Optional<Conta> buscarPorId(UUID id) {
+        return jdbc.sql("SELECT " + CAMPOS + " FROM account WHERE id = :id")
+                .param("id", id)
+                .query(ContaRepositorio::conta)
+                .optional();
+    }
+
+    /**
+     * Registra a verificação do e-mail e leva a conta a {@code ATIVO} — o estado que a publicação
+     * exige (ADR-0003 (b)).
+     *
+     * <p>Duas guardas escritas na própria instrução, e não no serviço, porque são invariantes da
+     * linha: {@code COALESCE} preserva o <b>primeiro</b> instante de verificação (confirmar de
+     * novo não reescreve a data de quem já era verificado) e o {@code CASE} só promove conta em
+     * {@code PENDENTE_VERIFICACAO} — uma conta {@code SUSPENSO} que confirme o e-mail
+     * <b>continua</b> suspensa. Confirmação de e-mail não é caminho para desfazer suspensão.
+     *
+     * @return linhas afetadas (0 quando o {@code id} não existe — invariante quebrada em outro lugar)
+     */
+    public int marcarEmailVerificado(UUID contaId, Instant agora) {
+        return jdbc.sql("UPDATE account"
+                        + " SET email_verificado_em = COALESCE(email_verificado_em, :agora),"
+                        + "     estado = CASE WHEN estado = 'PENDENTE_VERIFICACAO' THEN 'ATIVO' ELSE estado END,"
+                        + "     atualizado_em = :agora"
+                        + " WHERE id = :contaId")
+                .param("contaId", contaId)
+                .param("agora", OffsetDateTime.ofInstant(agora, java.time.ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
+     * Troca o hash da senha (recuperação de acesso, RF010).
+     *
+     * <p>O parâmetro é o <b>hash</b> bcrypt 12, nunca a senha: quem codifica é o serviço, com o
+     * codificador único do projeto ({@link com.scipath.config.ConfiguracaoDeSenha}), e o texto
+     * puro não chega a este método (RNF009). {@code atualizado_em} acompanha toda escrita na
+     * linha (comentário do V1: não há trigger, a regra fica no serviço).
+     */
+    public int atualizarSenhaHash(UUID contaId, String senhaHash, Instant agora) {
+        return jdbc.sql("UPDATE account SET senha_hash = :senhaHash, atualizado_em = :agora WHERE id = :contaId")
+                .param("contaId", contaId)
+                .param("senhaHash", senhaHash)
+                .param("agora", OffsetDateTime.ofInstant(agora, java.time.ZoneOffset.UTC))
+                .update();
+    }
+
+    /** Linha de {@code account} no record interno — o mapeamento fica em um lugar só. */
+    private static Conta conta(java.sql.ResultSet rs, int linha) throws java.sql.SQLException {
+        OffsetDateTime verificadoEm = rs.getObject("email_verificado_em", OffsetDateTime.class);
+        return new Conta(
+                rs.getObject("id", UUID.class),
+                rs.getString("email"),
+                rs.getString("senha_hash"),
+                EstadoConta.valueOf(rs.getString("estado")),
+                verificadoEm == null ? null : verificadoEm.toInstant());
     }
 }

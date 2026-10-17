@@ -41,3 +41,19 @@ scipath:
   sessao:
     duracao-inatividade: 5s
     duracao-absoluta: 30s
+
+  # Outbox do canal de e-mail no perfil de TESTE (card E3.4). O diretório é relativo ao
+  # `backend/` (o fork do surefire roda com o cwd do módulo) e cai em `target/`, que já é
+  # ignorado pelo git: a suíte nunca escreve no outbox de quem desenvolve, e a evidência lê o
+  # arquivo daqui para pegar o token que o cadastro gerou — sem implementação de teste
+  # substituindo o canal (um segundo contexto Spring custaria memória numa máquina de 954 MB,
+  # AGENTS.md).
+  #
+  # Os prazos de `scipath.token.*` NÃO são encurtados aqui de propósito: expiração e cooldown
+  # são provocados envelhecendo a linha em `verification_token` (o mesmo recurso que o E3.3 usou
+  # para o limite absoluto da sessão). Assim o teste prova a MESMA regra de produção, com os
+  # mesmos números, e a suíte não espera 24 h nem 60 s — e não há config especial que possa
+  # mascarar um defeito de cálculo de prazo.
+  email:
+    outbox:
+      diretorio: target/outbox-de-teste

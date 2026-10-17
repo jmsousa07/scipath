@@ -134,4 +134,24 @@ public class SessaoService {
         }
         return sessoes.revogarPorTokenHash(TokensOpacos.hash(tokenDaCookie)) > 0;
     }
+
+    /**
+     * Encerra <b>todas</b> as sessões abertas de uma conta — o que a recuperação de acesso
+     * (E3.4) chama depois de trocar a senha (RNF012).
+     *
+     * <p><b>Por que isto é do serviço de sessão, e não de quem trocou a senha.</b> A regra "o que
+     * é uma sessão viva" mora neste pacote; uma segunda classe apagando linha de {@code sessao}
+     * seria um segundo dono da mesma tabela. Quem troca a senha precisa de um efeito —
+     * "nenhuma cookie anterior autentica mais" —, e o efeito é este método.
+     *
+     * <p>Não altera a sessão corrente nem distingue uma da outra: a decisão da recuperação de
+     * acesso é derrubar <b>todas</b>, inclusive a de quem está trocando a senha (o segredo ali é
+     * o token do e-mail, não a cookie). Quem trocou a senha entra de novo.
+     *
+     * @return quantas sessões foram encerradas (0 = nenhuma estava aberta)
+     */
+    @Transactional
+    public int encerrarTodasDaConta(UUID contaId) {
+        return sessoes.revogarPorConta(contaId);
+    }
 }

@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -69,6 +70,9 @@ public class ApiExceptionHandler {
     public static final String TIPO_CONFLITO_UNICIDADE = "urn:scipath:erro:conflito_de_unicidade";
     public static final String TIPO_VALIDACAO_CAMPO = "urn:scipath:erro:validacao_campo";
 
+    /** Único 429 do contrato: reenvio de verificação dentro do cooldown (ADR-0003 (c)). */
+    public static final String TIPO_REENVIO_EM_COOLDOWN = "urn:scipath:erro:reenvio_em_cooldown";
+
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     /** Mensagem do {@code detail} para 400 de consulta/caminho — igual à do contrato. */
@@ -110,6 +114,29 @@ public class ApiExceptionHandler {
         for (ObjectError erro : ex.getBindingResult().getGlobalErrors()) {
             erros.add(new ErroDeCampo(erro.getObjectName(), mensagemUtil(erro.getDefaultMessage())));
         }
+        return problema(HttpStatus.UNPROCESSABLE_ENTITY, TIPO_VALIDACAO_CAMPO, "Campo inválido",
+                DETALHE_VALIDACAO_CAMPO, requisicao, erros);
+    }
+
+    /**
+     * Campo de corpo recusado por regra do <b>serviço</b> (e não do formato) — <b>422</b>
+     * {@code validacao_campo}, com {@code errors[]} apontando o campo.
+     *
+     * <p>O caso que esta classe traz (E3.4) é o token de confirmação: o corpo está lido, o campo
+     * existe e tem o tipo certo — o que falta é o valor corresponder a um token válido, e isso o
+     * Bean Validation não tem como saber. A resposta é <b>exatamente</b> a do contrato para
+     * token inválido, expirado ou já consumido: mesma classe de erro, mesmo {@code detail} e
+     * mesma mensagem de campo, sem distinguir os três casos nem revelar nada sobre o valor ou
+     * sobre a conta (RNF013).
+     *
+     * <p>É a mesma classe de erro do 422 de Bean Validation — e de propósito: quem trata
+     * formulário decide pelo 422 e aponta o campo de {@code errors[]}, sem precisar saber se a
+     * recusa veio do formato ou de uma regra de negócio.
+     */
+    @ExceptionHandler(ValidacaoDeCampoException.class)
+    public ResponseEntity<ProblemDetail> campoRecusadoPelaRegra(
+            ValidacaoDeCampoException ex, HttpServletRequest requisicao) {
+        List<ErroDeCampo> erros = List.of(new ErroDeCampo(ex.campo(), mensagemUtil(ex.motivoDoCampo())));
         return problema(HttpStatus.UNPROCESSABLE_ENTITY, TIPO_VALIDACAO_CAMPO, "Campo inválido",
                 DETALHE_VALIDACAO_CAMPO, requisicao, erros);
     }
@@ -270,6 +297,29 @@ public class ApiExceptionHandler {
                 DETALHE_CONFLITO, requisicao, null);
     }
 
+    /**
+     * Reenvio de verificação pedido antes de passar o cooldown — <b>429</b>
+     * {@code urn:scipath:erro:reenvio_em_cooldown}, com o cabeçalho {@code Retry-After} do
+     * contrato (ADR-0003 (c)).
+     *
+     * <p>Não traz {@code errors[]} — o pedido está correto, só chegou cedo —, e é o único 429
+     * do contrato. O cabeçalho é a parte acionável: é ele que permite ao frontend contar o tempo
+     * até poder reenviar, em vez de descobrir o limite por tentativa e erro (RNF004). O valor
+     * vem da exceção, calculado a partir do instante gravado no banco — o mesmo que o 202
+     * devolveu em {@code podeReenviarEm}.
+     */
+    @ExceptionHandler(ReenvioEmCooldownException.class)
+    public ResponseEntity<ProblemDetail> reenvioEmCooldown(
+            ReenvioEmCooldownException ex, HttpServletRequest requisicao) {
+        ResponseEntity<ProblemDetail> resposta = problema(HttpStatus.TOO_MANY_REQUESTS,
+                TIPO_REENVIO_EM_COOLDOWN, "Reenvio em cooldown",
+                mensagemUtil(ex.getMessage(), ReenvioEmCooldownException.DETALHE), requisicao, null);
+        return ResponseEntity.status(resposta.getStatusCode())
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .header(HttpHeaders.RETRY_AFTER, Integer.toString(ex.segundosAteLiberar()))
+                .body(resposta.getBody());
+    }
+
     /** {@code Content-Type} não aceito — mesma razão do 405 para não usar {@code errors[]}. */
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ProblemDetail> tipoNaoSuportado(
@@ -299,6 +349,7 @@ public class ApiExceptionHandler {
             case BAD_REQUEST -> TIPO_VALIDACAO;
             case UNPROCESSABLE_ENTITY -> TIPO_VALIDACAO_CAMPO;
             case CONFLICT -> TIPO_CONFLITO_UNICIDADE;
+            case TOO_MANY_REQUESTS -> TIPO_REENVIO_EM_COOLDOWN;
             case UNAUTHORIZED -> TIPO_NAO_AUTENTICADO;
             case FORBIDDEN -> TIPO_ACESSO_NEGADO;
             case NOT_FOUND -> TIPO_NAO_ENCONTRADO;
