@@ -108,11 +108,45 @@ export type MaterialDetalhe = {
 
 /**
  * Item de referência da taxonomia (ADR-0006), recortado ao que o filtro exibe.
- * O schema completo (`id`, `descricao`, `ativo`) está no contrato e não é consumido aqui.
+ * O schema completo (`id`, `descricao`, `ativo`) está no contrato; `descricao` só é copiada
+ * na variante abaixo, porque só a página de categoria (card E2.10) a exibe.
  */
 export type ItemTaxonomia = {
   slug: string;
   nome: string;
+};
+
+/**
+ * Categoria de referência como a PÁGINA `/categoria/[slug]` (RF007) precisa dela: `nome` e
+ * `descricao`. É o `descricao` do contrato — texto curto escrito para descoberta e SEO
+ * (§12) —, nunca um resumo redigido na tela.
+ */
+export type CategoriaDaPagina = ItemTaxonomia & {
+  descricao: string;
+};
+
+/**
+ * Identidade pública do autor e a página dos materiais publicados dele (`AutorPublico` do
+ * contrato v0.3.0, RF006).
+ *
+ * O que NÃO existe aqui, e não é omissão: e-mail de login, id de conta, hash de senha e
+ * token não estão no schema e não são copiados para cá (RNF013) — campo que a tela não
+ * exibe não entra no tipo, pela mesma fronteira contra ficção registrada no topo do
+ * arquivo. `biografia` e `afiliacaoDeclarada` são opcionais porque o contrato os declara
+ * ausentes quando não informados (RN004).
+ */
+export type AutorPublico = {
+  slug: string;
+  nomePublico: string;
+  biografia?: string;
+  /** Declaração do próprio autor — nunca vínculo atestado pela plataforma (RN011). */
+  afiliacaoDeclarada?: string;
+  /** Áreas de interesse declaradas; lista vazia quando o autor não informou. */
+  areasInteresse: string[];
+  /** Links externos declarados (texto livre); lista vazia quando não informados. */
+  linksExternos: string[];
+  /** Página dos materiais publicados do autor, no envelope padrão (RN021). */
+  materiais: Pagina<MaterialResumo>;
 };
 
 /** Critério de ordenação aceito pelo contrato no parâmetro `ordem` (§12.2). */

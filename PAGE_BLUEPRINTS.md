@@ -81,8 +81,20 @@ Rotas privadas **não** são indexadas (§12.3). Rotas públicas entregam conte�
 
 ### 5. Categoria — `/categoria/[slug]`
 - **Responsabilidade:** contexto da categoria + materiais associados.
-- Só vem a existir como rota pública se a taxonomia (`ADR-0006`) for ratificada com hierarquia
-  simples; caso contrário, filtro em `/explorar`.
+- **Conteúdo:** nome e descrição da categoria (do contrato), a lista dos materiais dela e o
+  endereço estável. Usa o **mesmo componente de listagem** de `/explorar` — não é uma segunda
+  tela (card E2.10).
+- **Estados:** os sete; categoria sem material → vazio explicativo, com as categorias que a
+  taxonomia devolveu como sugestão. Categoria fora das ativas (ou inexistente) → `não
+  encontrado`: a rota não inventa uma categoria a partir de um filtro sem resultado (o filtro
+  em `/explorar` continua respondendo 200 vazio para slug desconhecido — são perguntas
+  diferentes).
+- **Relação com `/explorar?categoria=…`:** as duas existem e não se substituem — esta dá o
+  contexto da categoria; aquela é a listagem filtrável (busca, tipo, ordem, paginação) do mesmo
+  recorte. O card de material aponta para as duas: o nome da categoria vai para cá, o chip de
+  filtro para a listagem.
+- **Taxonomia (`ADR-0006`, ratificado com um nível):** sem subcategorias; não existe hierarquia
+  profunda para exibir.
 
 ### 6. Login — `/entrar` e 7. Cadastro — `/cadastro`
 - **Responsabilidade:** autenticar / criar conta (`CA004`).

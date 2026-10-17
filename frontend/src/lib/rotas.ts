@@ -33,6 +33,21 @@ export function rotaAutor(slug: string): Route {
   return `/u/${slug}` as Route;
 }
 
+/**
+ * `/categoria/[slug]` — página da categoria (RF007; dono da rota: card E2.10).
+ *
+ * Com `as Route`, como as duas acima, e o motivo foi MEDIDO neste card: mesmo com a rota
+ * existindo no projeto, o `Route` do `typedRoutes` recusa um template literal montado em tempo
+ * de execução (`/categoria/${slug}` não é atribuível a `Route`) — o gerador de tipos só conhece
+ * os literais que aparecem escritos no código. `tsc --noEmit` sozinho não acusa, porque os tipos
+ * de rota são gerados no build; foi o `next build` que reprovou. O cast continua sendo o
+ * mecanismo do projeto (E1.7, E2.7, E2.9) e some quando houver geração de tipos a partir do
+ * contrato de rotas — card próprio.
+ */
+export function rotaCategoria(slug: string): Route {
+  return `/categoria/${slug}` as Route;
+}
+
 /** `/explorar` com ou sem filtros — rota desta tela; o cast cobre a query montada. */
 export function rotaExplorar(url: string): Route {
   return url as Route;
