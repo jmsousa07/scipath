@@ -63,6 +63,30 @@ public class MateriaisService {
     }
 
     /**
+     * Página dos materiais publicados de um autor (RF006, E2.5) — a lista que a página do
+     * perfil público publica no campo {@code materiais}.
+     *
+     * <p>O envelope é montado aqui, e não no serviço do perfil do autor: {@link Pagina} e a
+     * projeção pública de material são deste pacote, e quem pede a página recebe
+     * {@code items/page/size/total} prontos. Um segundo ponto que montasse o envelope poderia
+     * contar diferente do que devolve.
+     *
+     * <p>Autor sem material publicado é <b>200 com {@code items: []}</b> — o caminho normal,
+     * não um caso de erro (o card E2.5 é explícito: {@code total: 0}, nunca 404). Quem
+     * responde 404 é o perfil que não é público, e essa decisão é do serviço do autor, antes
+     * de chegar aqui.
+     *
+     * @param autorSlug {@code slug} do perfil, já validado no controller e já visível
+     * @param pagina    página dos materiais do autor, começando em 0
+     * @param tamanho   itens por página, já limitado pelo teto do contrato
+     */
+    public Pagina<MaterialResumoResposta> listarDoAutor(String autorSlug, int pagina, int tamanho) {
+        ResultadoPaginado<MaterialResumoResposta> resultado =
+                repositorio.listarPublicadosDoAutor(autorSlug, pagina, tamanho);
+        return new Pagina<>(resultado.itens(), pagina, tamanho, resultado.total());
+    }
+
+    /**
      * Normaliza o termo de busca: ausente, vazio ou só espaço é <b>ausência de busca</b>, e a
      * resposta é a listagem padrão — o contrato é explícito ("ausente ou vazia não é erro",
      * RF003) e o DRS repete ("busca vazia não gera erro; retorna estado inicial ou listagem
