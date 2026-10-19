@@ -22,9 +22,12 @@
  * | 401 `nao_autenticado` | abrir sessão | `invalid-field` | resumo, sem apontar campo |
  * | 401 `nao_autenticado` | escrita com identidade | `recoverable-failure` + `sessaoEncerrada` | resumo |
  * | 403 `acesso_negado` | qualquer | `recoverable-failure` + `acessoNegado` | resumo (`detail` do contrato) |
+ * | 403 `acesso_negado` | publicar, conta NÃO confirmada | `recoverable-failure` + `publicacaoBloqueada` | resumo (`detail`) + caminho de reenvio |
  * | 404 `nao_encontrado` | qualquer | `recoverable-failure` | resumo |
  * | 409 `conflito_de_unicidade` | qualquer | `invalid-field` | CAMPO em conflito (`errors[]`) |
- * | 415 `tipo_nao_suportado` | qualquer | `recoverable-failure` | resumo |
+ * | 413 `arquivo_muito_grande` | publicar | `invalid-file` (`tamanho`) | resumo (`detail` = limite corrente) |
+ * | 415 `tipo_nao_suportado` | publicar | `invalid-file` (`formato`) | resumo (`detail`) |
+ * | 415 `tipo_nao_suportado` | demais | `recoverable-failure` | resumo |
  * | 422 `validacao_campo` | qualquer | `invalid-field` | um por campo (`errors[]`) |
  * | 429 `reenvio_em_cooldown` | reenvio | `recoverable-failure` + `aguardarS` | resumo |
  * | 500 `interno` | qualquer | `recoverable-failure` | resumo |
@@ -47,7 +50,8 @@ export type OperacaoDeSessao =
   | 'criar-conta'
   | 'editar-perfil'
   | 'encerrar-sessao'
-  | 'reenviar-verificacao';
+  | 'reenviar-verificacao'
+  | 'publicar-material';
 
 /**
  * Falha na granularidade que o cliente distingue, espelhando `lib/api/client.ts` (a
@@ -65,7 +69,8 @@ export type EstadoDoFormulario =
   | 'submitting'
   | 'recoverable-failure'
   | 'success'
-  | 'duplicate-attempt';
+  | 'duplicate-attempt'
+  | 'invalid-file';
 
 export type Desfecho = {
   /** Estado do formulário a exibir (o `kind` de `<FormState>`). */
@@ -86,6 +91,18 @@ export type Desfecho = {
   sessaoEncerrada?: boolean;
   /** 403: a plataforma recusou a operação (CSRF ausente ou conta suspensa). */
   acessoNegado?: boolean;
+  /**
+   * 403 em `publicar-material` numa conta de e-mail NÃO confirmado (ADR-0003 (b)):
+   * a operação foi recusada pelo estado da conta, não por CSRF nem por permissão. A
+   * tela troca o "acesso negado" genérico pelo caminho de reenvio da confirmação.
+   */
+  publicacaoBloqueada?: boolean;
+  /** `invalid-file`: o motivo, para `<FormState>` compor a mensagem específica. */
+  arquivoMotivo?: 'tamanho' | 'formato';
+  /** `invalid-file` por tamanho: o limite em texto, como o ADR-0005 o configura. */
+  arquivoLimite?: string;
+  /** `invalid-file` por tamanho: o tamanho observado, em texto, quando conhecido. */
+  arquivoTamanho?: string;
 };
 
 /** Classe estável do `type` do contrato, sem o prefixo. */
@@ -117,6 +134,17 @@ const CAMPO_CONHECIDO = new Set([
   'afiliacaoDeclarada',
   'areasInteresse',
   'linksExternos',
+  // E4.6 — os campos do formulário de publicação (schema `PublicacaoMaterial`). O contrato
+  // aponta o campo culpado em `errors[]` (categoria/tipo/licença inexistente ou inativa → 422;
+  // `declaracaoDireito` ausente/false → 422), e sem eles aqui a mensagem do servidor cairia no
+  // resumo em vez do controle que a pessoa precisa corrigir (RNF004, RF018).
+  'titulo',
+  'descricao',
+  'categoriaSlug',
+  'tipoSlug',
+  'licencaSlug',
+  'arquivo',
+  'declaracaoDireito',
 ]);
 
 function primeiroCampo(campos: Record<string, string>): string | undefined {
@@ -173,8 +201,18 @@ function conflito(
  *
  * @param falha     resposta classificada (rede, corpo ou status + ProblemDetail)
  * @param operacao  qual operação de identidade foi recusada
+ * @param contexto  o que o CLIENTE já sabe e o status sozinho não diz:
+ *                  `contaVerificada` (o estado da conta lido no servidor antes de
+ *                  renderizar — é o que separa "confirme o e-mail" de "acesso
+ *                  negado" no 403 da publicação, ADR-0003 (b)) e `limiteArquivo`
+ *                  (o limite configurável do ADR-0005, em texto, para a mensagem
+ *                  de 413 quando o servidor não mandar o `detail`).
  */
-export function mapearFalhaDeEnvio(falha: FalhaDeEnvio, operacao: OperacaoDeSessao): Desfecho {
+export function mapearFalhaDeEnvio(
+  falha: FalhaDeEnvio,
+  operacao: OperacaoDeSessao,
+  contexto: { contaVerificada?: boolean; limiteArquivo?: string } = {},
+): Desfecho {
   if (falha.motivo === 'sem-resposta') {
     return {
       estado: 'recoverable-failure',
@@ -246,6 +284,21 @@ export function mapearFalhaDeEnvio(falha: FalhaDeEnvio, operacao: OperacaoDeSess
       };
 
     case 403:
+      // Publicação numa conta de e-mail NÃO confirmado (ADR-0003 (b)): o 403 não é "acesso
+      // negado" nem CSRF — é o estado da conta. Quem decide é o que o CLIENTE leu no servidor
+      // antes de renderizar (`contaVerificada`); sem essa informação, o 403 continua sendo o
+      // acesso negado genérico abaixo, em vez de a tela inventar uma causa que não conhece.
+      if (operacao === 'publicar-material' && contexto.contaVerificada === false) {
+        return {
+          estado: 'recoverable-failure',
+          classe: 'acesso_negado',
+          titulo: 'Confirme seu e-mail para publicar',
+          mensagem: `${detalheDoServidor ?? 'A publicação exige e-mail confirmado, e o da sua conta ainda não foi.'} Nada foi gravado: nenhum material incompleto é criado e o arquivo não é guardado. Peça outro link de confirmação no caminho abaixo — o endereço da conta não aparece nesta tela (RNF013).`,
+          campos: {},
+          foraDosCampos: [],
+          publicacaoBloqueada: true,
+        };
+      }
       return {
         estado: 'recoverable-failure',
         classe: 'acesso_negado',
@@ -272,7 +325,23 @@ export function mapearFalhaDeEnvio(falha: FalhaDeEnvio, operacao: OperacaoDeSess
     case 409:
       return conflito(detalheDoServidor, campos, fora, operacao);
 
+    case 413:
+      // Arquivo acima do limite (ADR-0005 §1, RF013). O `detail` do servidor diz o limite
+      // corrente ("excede o limite de X MB") e é ele que a tela mostra — o cliente não o
+      // redige de novo. Sem `detail`, a mensagem usa o limite que a tela recebeu para exibir
+      // (a autoridade continua sendo o servidor: o 413 é dele).
+      return desfechoDeArquivoInvalido('tamanho', {
+        limite: contexto.limiteArquivo,
+        mensagemDoServidor: detalheDoServidor,
+      });
+
     case 415:
+      // Na publicação, o 415 é o ARQUIVO que não é PDF válido (RF013, ADR-0005 §1) — o
+      // `Content-Type` da requisição é `multipart/form-data`, montado pelo próprio cliente.
+      // Nas demais escritas o 415 é o formato do pedido, e a mensagem genérica é a certa.
+      if (operacao === 'publicar-material') {
+        return desfechoDeArquivoInvalido('formato', { mensagemDoServidor: detalheDoServidor });
+      }
       return {
         estado: 'recoverable-failure',
         classe: 'tipo_nao_suportado',
@@ -354,6 +423,38 @@ export function desfechoDeCamposInvalidos(campos: Record<string, string>): Desfe
     campos,
     campoFoco: nomes[0],
     foraDosCampos: [],
+  };
+}
+
+/**
+ * `invalid-file` — arquivo acima do limite (`tamanho`) ou em formato não aceito (`formato`).
+ *
+ * A mensagem do SERVIDOR manda quando existe (`mensagemDoServidor`, do `detail` de 413/415):
+ * é ela que diz o limite corrente ("excede o limite de X MB"), que o cliente não conhece.
+ * Sem ela — caso da validação local, antes de qualquer requisição —, a frase é montada com o
+ * limite que a tela exibe e o tamanho observado, e diz o que fazer (RNF004). Os campos
+ * `arquivoMotivo`/`arquivoLimite`/`arquivoTamanho` viajam no desfecho para o `<FormState>`
+ * poder compor a mesma mensagem por conta própria quando a tela não passar texto nenhum.
+ */
+export function desfechoDeArquivoInvalido(
+  motivo: 'tamanho' | 'formato',
+  opcoes: { limite?: string; tamanho?: string; mensagemDoServidor?: string | null } = {},
+): Desfecho {
+  const { limite, tamanho, mensagemDoServidor } = opcoes;
+  const composta =
+    motivo === 'formato'
+      ? 'O arquivo não está em PDF. Converta para .pdf e envie de novo — os outros formatos não são servidos pela plataforma.'
+      : `${tamanho ? `O arquivo tem ${tamanho} e ` : ''}o limite é ${limite ?? 'o limite configurado'}. Reduza o PDF (exporte com menos imagens ou divida o documento em partes) e envie novamente.`;
+  return {
+    estado: 'invalid-file',
+    classe: motivo === 'tamanho' ? 'arquivo_muito_grande' : 'tipo_nao_suportado',
+    titulo: motivo === 'tamanho' ? 'O arquivo passa do limite' : 'O arquivo não está em PDF',
+    mensagem: mensagemDoServidor ?? composta,
+    campos: {},
+    foraDosCampos: [],
+    arquivoMotivo: motivo,
+    arquivoLimite: limite,
+    arquivoTamanho: tamanho,
   };
 }
 

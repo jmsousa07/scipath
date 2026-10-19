@@ -396,6 +396,38 @@
   font-size: 0.875rem;
 }
 
+/* ---------------------------------------------------------------------------
+   10b. Caixa de marcação (`.sc-field--check` / `.sc-check`) — card E4.6
+   `.sc-field__box` do DS2 é uma caixa de UMA linha em volta do controle: em volta
+   de um `checkbox` ela viraria uma moldura vazia ao lado de um quadrado pequeno.
+   Aqui o controle e o rótulo ficam lado a lado (o rótulo inteiro é alvo clicável) e
+   o quadrado é dimensionado para o alvo mínimo. Nada de valor novo de cor: o
+   `accent-color` é o token do azul primário do DS2.
+   --------------------------------------------------------------------------- */
+.sc-field--check {
+  max-width: 46rem;
+}
+
+.sc-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.sc-check input[type='checkbox'] {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.1rem;
+  accent-color: var(--sc-blue);
+  cursor: pointer;
+}
+
+.sc-check .sc-field__label {
+  cursor: pointer;
+  line-height: 1.45;
+}
+
 /* ===========================================================================
    DESCOBERTA PÚBLICA (card E2.8)
    ---------------------------------------------------------------------------
