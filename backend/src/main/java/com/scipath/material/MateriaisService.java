@@ -1,17 +1,19 @@
 package com.scipath.material;
 
+import com.scipath.arquivo.DisponibilidadeDeArquivo;
 import com.scipath.error.NaoEncontradoException;
 import com.scipath.taxonomia.Pagina;
 import com.scipath.taxonomia.ResultadoPaginado;
 import org.springframework.stereotype.Service;
 
 /**
- * Regra de leitura da listagem pública de material (RF002, RF003, RF004).
+ * Regra de leitura da listagem pública de material (RF002, RF003, RF004) e do detalhe (RF005).
  *
- * <p>O serviço existe para o envelope, o vocabulário de ordenação e o que é um termo de busca
- * serem decisão de negócio, não de transporte: o controller não decide o que {@code ordem}
- * omitida significa, nem o que um {@code q} em branco significa, nem monta
- * {@code items/page/size/total}.
+ * <p>O serviço existe para o envelope, o vocabulário de ordenação, o que é um termo de busca e o
+ * que o detalhe publica serem decisão de negócio, não de transporte: o controller não decide o que
+ * {@code ordem} omitida significa, nem o que um {@code q} em branco significa, nem monta
+ * {@code items/page/size/total}, nem responde por conta própria se o arquivo do material está
+ * disponível.
  *
  * <p>O envelope é o {@link Pagina} — o mesmo record genérico que a taxonomia já usa, porque no
  * contrato todas as listagens respondem exatamente os mesmos quatro campos (schema
@@ -22,9 +24,11 @@ import org.springframework.stereotype.Service;
 public class MateriaisService {
 
     private final MateriaisRepositorio repositorio;
+    private final DisponibilidadeDeArquivo disponibilidade;
 
-    public MateriaisService(MateriaisRepositorio repositorio) {
+    public MateriaisService(MateriaisRepositorio repositorio, DisponibilidadeDeArquivo disponibilidade) {
         this.repositorio = repositorio;
+        this.disponibilidade = disponibilidade;
     }
 
     /**
@@ -55,11 +59,40 @@ public class MateriaisService {
      * distinção que a regra proíbe, e uma constante repetida aqui poderia divergir do handler sem
      * ninguém notar.
      *
+     * <p><b>O arquivo entra sempre, e o motivo de um indisponível nunca (RF014, RNF014).</b> O
+     * metadado do arquivo é montado aqui — nome original sanitizado e tamanho, que são registro do
+     * recebimento — e a disponibilidade é perguntada a {@link DisponibilidadeDeArquivo}, a mesma
+     * condição que o download aplica. O material continua sendo detalhado normalmente quando o
+     * binário não pode ser servido: é o arquivo que está indisponível, não o material, e responder
+     * 404 ali esconderia um material público que existe (RN002 proíbe o inverso — revelar o que
+     * saiu do público, não esconder o que está nele).
+     *
+     * <p>O corpo é montado no serviço, e não no mapeamento da consulta, porque o que o contrato
+     * publica é decisão de negócio: o repositório devolve a linha ({@link DetalheDoMaterial}) e não
+     * consulta disco nenhum — a única pergunta que precisa do armazenamento é feita uma vez, aqui.
+     *
      * @param slug slug já validado no controller (formato e tamanho do contrato)
      */
     public MaterialDetalheResposta buscarPorSlug(String slug) {
-        return repositorio.buscarPublicadoPorSlug(slug)
+        DetalheDoMaterial detalhe = repositorio.buscarPublicadoPorSlug(slug)
                 .orElseThrow(() -> new NaoEncontradoException(null));
+
+        ArquivoDoMaterial arquivo = detalhe.arquivo();
+        return new MaterialDetalheResposta(
+                detalhe.slug(),
+                detalhe.titulo(),
+                detalhe.descricao(),
+                detalhe.autor(),
+                detalhe.categoria(),
+                detalhe.tipo(),
+                detalhe.licenca(),
+                new ArquivoMaterialResposta(
+                        arquivo.nomeOriginalSeguro(),
+                        arquivo.tamanhoBytes(),
+                        disponibilidade.podeServir(arquivo.estadoProcessamento(), arquivo.chaveInterna())),
+                detalhe.estadoPublicacao(),
+                detalhe.publicadoEm(),
+                detalhe.atualizadoEm());
     }
 
     /**

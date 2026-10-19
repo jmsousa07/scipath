@@ -74,13 +74,16 @@ public class MateriaisRepositorio {
             """;
 
     /**
-     * Colunas publicadas no schema {@code MaterialDetalhe} do contrato v0.3, e só elas.
+     * Colunas publicadas no schema {@code MaterialDetalhe} do contrato v0.5, e só elas.
      *
-     * <p>Difere do {@link #CAMPOS} da listagem em duas colunas — {@code l.identificador} e
-     * {@code l.url_referencia} — e no {@code estado_publicacao}: o detalhe publica a licença
-     * com o texto de referência (é onde há espaço para ele) e o estado de publicação. Nada
-     * privado entra: nenhuma coluna de {@code account}, {@code file_asset} ou {@code id}
-     * interno (RNF013).
+     * <p>Difere do {@link #CAMPOS} da listagem em duas colunas de licença — {@code l.identificador}
+     * e {@code l.url_referencia} —, no {@code estado_publicacao} (o detalhe publica a licença com o
+     * texto de referência e o estado de publicação) e no arquivo, que a listagem não publica.
+     *
+     * <p>As colunas de {@code file_asset} entram pelas de {@link #CAMPOS_ARQUIVO}: a resposta publica
+     * <b>nome e tamanho</b>, e o <b>estado</b> e a <b>chave</b> do arquivo ficam no servidor, onde
+     * decidem o {@code disponivel} (RF014, RNF014). Nada privado entra na resposta: nenhuma coluna de
+     * {@code account}, nenhum {@code id} interno (RNF013).
      */
     private static final String CAMPOS_DETALHE = """
             SELECT m.slug, m.titulo, m.descricao, m.estado_publicacao, m.publicado_em, m.atualizado_em,
@@ -90,13 +93,15 @@ public class MateriaisRepositorio {
                    l.slug AS licenca_slug, l.nome AS licenca_nome,
                    l.identificador AS licenca_identificador,
                    l.url_referencia AS licenca_url_referencia,
-                   l.descricao_curta AS licenca_descricao_curta
+                   l.descricao_curta AS licenca_descricao_curta,
+                   f.nome_original_seguro, f.chave_interna, f.tamanho_bytes,
+                   f.checksum, f.estado_processamento
             """;
 
     /**
-     * Colunas do arquivo do material (E4.3, RF014): as que o download publica — nome original
-     * sanitizado e tamanho — e as que ele confere sem publicar — chave do armazenamento, checksum
-     * e estado do {@code file_asset}. Nenhuma delas entra em schema do contrato.
+     * Colunas do arquivo do material (E4.3, E4.9, RF014): as que as duas leituras publicam — nome
+     * original sanitizado e tamanho — e as que elas conferem sem publicar — chave do armazenamento,
+     * checksum e estado do {@code file_asset}. Nenhuma delas entra em schema do contrato.
      */
     private static final String CAMPOS_ARQUIVO = """
             SELECT m.slug, f.nome_original_seguro, f.chave_interna, f.tamanho_bytes,
@@ -128,10 +133,10 @@ public class MateriaisRepositorio {
             """;
 
     /**
-     * Junções da leitura do arquivo publicado (E4.3): as <b>mesmas</b> da listagem e do detalhe,
-     * mais o {@code file_asset} do material. Reusar {@link #JUNCOES} — em vez de escrever a
-     * consulta do zero — é o que garante que a elegibilidade de {@link #ELEGIVEL} continue valendo
-     * para o download sem uma segunda cópia da regra (RN002, RN013).
+     * Junções das leituras que trazem o arquivo — o <b>detalhe</b> (E4.9) e o download (E4.3): as
+     * <b>mesmas</b> da listagem, mais o {@code file_asset} do material. Reusar {@link #JUNCOES} — em
+     * vez de escrever a consulta do zero — é o que garante que a elegibilidade de {@link #ELEGIVEL}
+     * continue valendo para as duas sem uma segunda cópia da regra (RN002, RN013).
      */
     private static final String JUNCOES_ARQUIVO = JUNCOES + """
             JOIN file_asset f    ON f.id = m.file_asset_id
@@ -193,9 +198,28 @@ public class MateriaisRepositorio {
                 atualizadoEm.toInstant().equals(publicadoEm.toInstant()) ? null : atualizadoEm.toInstant());
     };
 
-    /** Colunas do detalhe mapeadas para o schema público, sem id interno nem coluna de arquivo. */
-    private static final RowMapper<MaterialDetalheResposta> MAPEADOR_DETALHE = (rs, linha) ->
-            new MaterialDetalheResposta(
+    /**
+     * Linha de {@code file_asset} do material mapeada para a projeção interna ({@link
+     * ArquivoDoMaterial}) — a <b>mesma</b> do download (E4.3) e do detalhe (E4.9): um só mapeamento
+     * do arquivo, para que as duas leituras não divirjam no que é metadado publicável e no que fica
+     * no servidor.
+     */
+    private static final RowMapper<ArquivoDoMaterial> MAPEADOR_ARQUIVO = (rs, linha) ->
+            new ArquivoDoMaterial(
+                    rs.getString("slug"),
+                    rs.getString("nome_original_seguro"),
+                    rs.getString("chave_interna"),
+                    rs.getLong("tamanho_bytes"),
+                    rs.getString("checksum"),
+                    rs.getString("estado_processamento"));
+
+    /**
+     * Linha do detalhe mapeada para a projeção interna — o material <b>e</b> o arquivo, sem id
+     * interno. Quem monta o schema público é o {@link MateriaisService}, depois de decidir o
+     * {@code disponivel}: o mapeamento não consulta disco nenhum.
+     */
+    private static final RowMapper<DetalheDoMaterial> MAPEADOR_DETALHE = (rs, linha) ->
+            new DetalheDoMaterial(
                     rs.getString("slug"),
                     rs.getString("titulo"),
                     rs.getString("descricao"),
@@ -210,17 +234,8 @@ public class MateriaisRepositorio {
                             rs.getString("licenca_descricao_curta")),
                     rs.getString("estado_publicacao"),
                     rs.getObject("publicado_em", OffsetDateTime.class).toInstant(),
-                    rs.getObject("atualizado_em", OffsetDateTime.class).toInstant());
-
-    /** Linha de {@code file_asset} do material mapeada para a projeção interna do download. */
-    private static final RowMapper<ArquivoDoMaterial> MAPEADOR_ARQUIVO = (rs, linha) ->
-            new ArquivoDoMaterial(
-                    rs.getString("slug"),
-                    rs.getString("nome_original_seguro"),
-                    rs.getString("chave_interna"),
-                    rs.getLong("tamanho_bytes"),
-                    rs.getString("checksum"),
-                    rs.getString("estado_processamento"));
+                    rs.getObject("atualizado_em", OffsetDateTime.class).toInstant(),
+                    MAPEADOR_ARQUIVO.mapRow(rs, linha));
 
     private final JdbcClient jdbc;
 
@@ -266,7 +281,7 @@ public class MateriaisRepositorio {
 
     /**
      * Material público identificado pelo {@code slug} (RF005), ou vazio quando ele não é
-     * público.
+     * público — <b>com o arquivo</b> lido como o download o lê (E4.9, RF014).
      *
      * <p>A elegibilidade é a <b>mesma</b> da listagem (RN002, CA008): material PUBLICADO de
      * conta ATIVA. Aqui isso tem uma consequência a mais — material inexistente, {@code
@@ -274,13 +289,19 @@ public class MateriaisRepositorio {
      * caminho separado no código. É o que torna o 404 indistinguível sem depender de o serviço
      * lembrar de disfarçar: não existe informação diferente para vazar.
      *
+     * <p><b>O que sai daqui não é a resposta.</b> É a linha do material com o arquivo
+     * ({@link DetalheDoMaterial}); o que o schema publica — inclusive o
+     * {@code arquivo.disponivel} — é decidido no serviço. O repositório não consulta o
+     * armazenamento: "este material é público" (SQL) e "este arquivo pode ser servido agora"
+     * (estado do registro + binário no disco) são perguntas diferentes, e só a primeira é dele.
+     *
      * <p>{@code m.slug} é {@code UNIQUE} (V1), então a consulta é uma leitura por índice e não
      * precisa de {@code LIMIT}: no máximo uma linha atende.
      *
      * @param slug slug já validado no controller (formato do contrato)
      */
-    public Optional<MaterialDetalheResposta> buscarPublicadoPorSlug(String slug) {
-        String consulta = CAMPOS_DETALHE + JUNCOES + ELEGIVEL + "   AND m.slug = :slug\n";
+    public Optional<DetalheDoMaterial> buscarPublicadoPorSlug(String slug) {
+        String consulta = CAMPOS_DETALHE + JUNCOES_ARQUIVO + ELEGIVEL + "   AND m.slug = :slug\n";
         return jdbc.sql(consulta)
                 .param("slug", slug)
                 .query(MAPEADOR_DETALHE)

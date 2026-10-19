@@ -4,6 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.scipath.arquivo.PropriedadesDeArmazenamento;
+import com.scipath.arquivo.StorageService;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -13,10 +20,12 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -30,11 +39,18 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * é o que o <b>SQL</b> devolve para o visitante e como o <b>404</b> sai quando o material não é
  * público, e mock nenhum prova isso.
  *
- * <p><b>Dados controlados.</b> A classe semeia quatro materiais: dois publicados (com licenças
- * diferentes — uma com identificador e URL de referência, outra sem, para exercitar a ausência
- * dos dois campos), um RETIRADO, um EXCLUIDO e um publicado de conta PENDENTE_VERIFICACAO. O
- * banco é limpo antes e depois de cada teste, com o prefixo {@code teste-e2-4-} como marcador: ele
- * não fica sujo nem depende da ordem das classes da suíte.
+ * <p><b>Dados controlados.</b> A classe semeia materiais publicados e fora do público, cada um com
+ * a sua linha de {@code file_asset}. Dois publicados têm o <b>binário de verdade</b> promovido ao
+ * armazenamento pela mesma porta que a aplicação usa (E4.3) — um deles com licença que traz
+ * identificador e URL de referência, outro com licença sem os dois (para exercitar a ausência dos
+ * campos) — e são eles que provam o {@code arquivo} completo e {@code disponivel: true} (E4.9).
+ * Dois outros publicados provam o {@code disponivel: false} <b>com 200</b>: um cujo binário nunca
+ * foi promovido, e outro cujo registro de arquivo já está {@code PURGADO} (o binário existe no
+ * disco, mas o estado não permite servi-lo). Completam a seed um RETIRADO, um EXCLUIDO e um
+ * publicado de conta PENDENTE_VERIFICACAO — os três <b>com</b> binário no armazenamento, para que
+ * o 404 não possa ser explicado por "faltou o arquivo". Banco e diretório de armazenamento são
+ * limpos antes e depois de cada teste, com o prefixo {@code teste-e2-4-} como marcador: nada fica
+ * sujo nem depende da ordem das classes da suíte.
  *
  * <p><b>As três respostas de erro são asseridas por igualdade, não por semelhança.</b> O card fala
  * em 404 <i>indistinguível</i> (RN002, CA008); comparar só o status deixaria passar um detalhe
@@ -75,11 +91,29 @@ class MateriaisDetalheIntegrationTest {
     /** Distinta da publicação, de propósito: o detalhe publica a data de atualização sempre. */
     private static final Instant ATUALIZADO_EM = Instant.parse("2026-10-15T09:00:00Z");
 
+    /**
+     * Conteúdo do arquivo semeado: assinatura de PDF + corpo determinístico, com o tamanho que a
+     * linha de {@code file_asset} registra. O detalhe não lê o conteúdo (quem faz isso é o
+     * download, E4.3) — o que importa aqui é que o binário <b>existe</b> no armazenamento, que é a
+     * segunda condição do {@code disponivel} (E4.9).
+     */
+    private static final byte[] CONTEUDO_DO_ARQUIVO = pdfComCorpo(1024);
+
     @Autowired
     private TestRestTemplate rest;
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private PropriedadesDeArmazenamento propriedades;
+
+    @Autowired
+    private StorageService armazenamento;
+
+    /** Origem do arquivo de apoio: o armazenamento é alimentado pela porta, não pelo teste. */
+    @TempDir
+    Path areaDeApoio;
 
     @BeforeEach
     void semearDadosControlados() {
@@ -90,11 +124,24 @@ class MateriaisDetalheIntegrationTest {
         UUID perfilAtivo = inserirPerfil(contaAtiva, "Ana de Detalhe", PREFIXO + "ana");
         UUID perfilPendente = inserirPerfil(contaPendente, "Bruno de Detalhe", PREFIXO + "bruno");
 
-        inserirMaterial(perfilAtivo, "pub-licenca-completa", LICENCA_COMPLETA, "PUBLICADO");
-        inserirMaterial(perfilAtivo, "pub-licenca-sem-referencia", LICENCA_SEM_REFERENCIA, "PUBLICADO");
-        inserirMaterial(perfilAtivo, "retirado-01", LICENCA_COMPLETA, "RETIRADO");
-        inserirMaterial(perfilAtivo, "excluido-01", LICENCA_COMPLETA, "EXCLUIDO");
-        inserirMaterial(perfilPendente, "pendente-01", LICENCA_COMPLETA, "PUBLICADO");
+        // Publicados com o binário no armazenamento: arquivo completo e disponivel: true (E4.9).
+        inserirMaterial(perfilAtivo, "pub-licenca-completa", LICENCA_COMPLETA, "PUBLICADO",
+                "VALIDADO", CONTEUDO_DO_ARQUIVO);
+        inserirMaterial(perfilAtivo, "pub-licenca-sem-referencia", LICENCA_SEM_REFERENCIA, "PUBLICADO",
+                "VALIDADO", CONTEUDO_DO_ARQUIVO);
+        // Público, mas nada foi promovido ao armazenamento: o arquivo não é servível.
+        inserirMaterial(perfilAtivo, "pub-sem-binario", LICENCA_COMPLETA, "PUBLICADO",
+                "VALIDADO", null);
+        // Público, binário no disco, mas o registro não permite servi-lo (purgado pelo coletor).
+        inserirMaterial(perfilAtivo, "pub-purgado", LICENCA_COMPLETA, "PUBLICADO",
+                "PURGADO", CONTEUDO_DO_ARQUIVO);
+        // Fora do público, todos COM binário: o 404 não se explica por falta de arquivo.
+        inserirMaterial(perfilAtivo, "retirado-01", LICENCA_COMPLETA, "RETIRADO",
+                "VALIDADO", CONTEUDO_DO_ARQUIVO);
+        inserirMaterial(perfilAtivo, "excluido-01", LICENCA_COMPLETA, "EXCLUIDO",
+                "VALIDADO", CONTEUDO_DO_ARQUIVO);
+        inserirMaterial(perfilPendente, "pendente-01", LICENCA_COMPLETA, "PUBLICADO",
+                "VALIDADO", CONTEUDO_DO_ARQUIVO);
     }
 
     @AfterEach
@@ -105,7 +152,7 @@ class MateriaisDetalheIntegrationTest {
     // ------------------------------------------------------------------ critério 1: 200
 
     @Test
-    @DisplayName("material publicado responde 200 com o schema MaterialDetalhe, a licença explicada e o autor sem dado privado")
+    @DisplayName("material publicado responde 200 com o schema MaterialDetalhe, a licença explicada, o autor sem dado privado e o arquivo disponível")
     void materialPublicadoResponde200ComLicencaExplicada() {
         ResponseEntity<String> resposta = rest.getForEntity(
                 "/api/materiais/" + PREFIXO + "pub-licenca-completa", String.class);
@@ -118,9 +165,9 @@ class MateriaisDetalheIntegrationTest {
 
         JsonNode corpo = json(resposta.getBody());
         assertThat(camposDe(corpo))
-                .as("exatamente o schema MaterialDetalhe do contrato v0.3, nem um campo a mais")
+                .as("exatamente o schema MaterialDetalhe do contrato v0.5, nem um campo a mais")
                 .containsExactlyInAnyOrder("slug", "titulo", "descricao", "autor", "categoria", "tipo",
-                        "licenca", "estado", "publicadoEm", "atualizadoEm");
+                        "licenca", "arquivo", "estado", "publicadoEm", "atualizadoEm");
 
         assertThat(corpo.get("slug").asText()).isEqualTo(PREFIXO + "pub-licenca-completa");
         assertThat(corpo.get("titulo").asText()).isEqualTo(TITULO);
@@ -155,8 +202,28 @@ class MateriaisDetalheIntegrationTest {
                 .isEqualTo(textoDaDescricaoCurta(LICENCA_COMPLETA))
                 .isNotBlank();
 
+        // Arquivo (v0.5, E4.9): nome e tamanho vêm do registro do recebimento e a disponibilidade é
+        // decidida no servidor — aqui, com o binário no armazenamento, ela é true.
+        JsonNode arquivo = corpo.get("arquivo");
+        assertThat(camposDe(arquivo))
+                .as("exatamente o schema ArquivoMaterial do contrato, nem um campo a mais")
+                .containsExactlyInAnyOrder("nomeOriginal", "tamanhoBytes", "disponivel");
+        assertThat(arquivo.get("nomeOriginal").asText())
+                .as("nome sanitizado do recebimento, não o nome físico no armazenamento")
+                .isEqualTo(nomeOriginal("pub-licenca-completa"));
+        assertThat(arquivo.get("tamanhoBytes").asLong()).isEqualTo(CONTEUDO_DO_ARQUIVO.length);
+        assertThat(arquivo.get("disponivel").asBoolean())
+                .as("registro VALIDADO e binário no armazenamento: pode ser servido agora (RF014)")
+                .isTrue();
+        assertThat(arquivo.toString())
+                .as("o metadado do arquivo não carrega caminho, chave de armazenamento nem checksum (RNF014)")
+                .doesNotContain(propriedades.diretorio().toString())
+                .doesNotContain(PREFIXO + "chave-")
+                .doesNotContain("checksum");
+
         System.out.println("[E2.4] GET /api/materiais/" + PREFIXO + "pub-licenca-completa -> 200 " + corpo);
         System.out.println("[E2.4] licenca explicada -> " + licenca.get("descricaoCurta").asText());
+        System.out.println("[E4.9] arquivo no detalhe -> " + arquivo);
     }
 
     @Test
@@ -227,6 +294,56 @@ class MateriaisDetalheIntegrationTest {
         assertThat(distintos)
                 .as("os quatro 404 têm de ser o mesmo corpo, tirando o instance: %s", corposNormalizados)
                 .hasSize(1);
+    }
+
+    // ------------------------------- critério 1 (E4.9): disponibilidade decidida no servidor
+
+    @Test
+    @DisplayName("material público com o arquivo não servível responde 200 e disponivel: false, sem revelar o motivo")
+    void arquivoNaoServivelResponde200ComDisponivelFalso() {
+        Map<String, String> casos = new LinkedHashMap<>();
+        casos.put("binário nunca promovido ao armazenamento", "pub-sem-binario");
+        casos.put("registro do arquivo sem estado que permita servir", "pub-purgado");
+
+        for (Map.Entry<String, String> caso : casos.entrySet()) {
+            ResponseEntity<String> resposta = rest.getForEntity(
+                    "/api/materiais/" + PREFIXO + caso.getValue(), String.class);
+
+            assertThat(resposta.getStatusCode().value())
+                    .as("%s: o material É público e continua sendo detalhado (RN002)", caso.getKey())
+                    .isEqualTo(200);
+
+            String texto = resposta.getBody();
+            JsonNode corpo = json(texto);
+            assertThat(camposDe(corpo))
+                    .as("o schema MaterialDetalhe é o mesmo, servível ou não o arquivo")
+                    .containsExactlyInAnyOrder("slug", "titulo", "descricao", "autor", "categoria", "tipo",
+                            "licenca", "arquivo", "estado", "publicadoEm", "atualizadoEm");
+
+            JsonNode arquivo = corpo.get("arquivo");
+            assertThat(camposDe(arquivo)).containsExactlyInAnyOrder("nomeOriginal", "tamanhoBytes", "disponivel");
+            assertThat(arquivo.get("nomeOriginal").asText())
+                    .as("o metadado do arquivo é publicado mesmo indisponível: é registro do recebimento")
+                    .isEqualTo(nomeOriginal(caso.getValue()));
+            assertThat(arquivo.get("tamanhoBytes").asLong()).isEqualTo(CONTEUDO_DO_ARQUIVO.length);
+            assertThat(arquivo.get("disponivel").asBoolean())
+                    .as("%s: não pode ser servido agora (RF014)", caso.getKey())
+                    .isFalse();
+
+            // O motivo NÃO é publicado: nem o estado do arquivo, nem caminho, chave ou checksum
+            // (RNF013, RNF014). O visitante sabe que não dá para baixar, não por quê.
+            assertThat(texto)
+                    .as("o indisponível não revela o motivo")
+                    .doesNotContain("PURGADO")
+                    .doesNotContain("ORFAO")
+                    .doesNotContain("VALIDADO")
+                    .doesNotContain(propriedades.diretorio().toString())
+                    .doesNotContain(PREFIXO + "chave-")
+                    .doesNotContain("checksum");
+
+            System.out.println("[E4.9] GET /api/materiais/" + PREFIXO + caso.getValue()
+                    + " (" + caso.getKey() + ") -> 200 " + texto);
+        }
     }
 
     // ------------------------------------------------------------------ critério 3: 400
@@ -307,6 +424,15 @@ class MateriaisDetalheIntegrationTest {
         jdbc.update("DELETE FROM file_asset WHERE chave_interna LIKE ?", PREFIXO + "%");
         // Apagar a conta remove o perfil junto (ON DELETE CASCADE da V1).
         jdbc.update("DELETE FROM account WHERE email LIKE ?", PREFIXO + "%");
+        // E o binário promovido ao armazenamento sai também: o diretório é o mesmo das outras
+        // integrações, e a suíte não pode deixar lixo de arquivo atrás de si (RN012).
+        for (Path arquivo : arquivosNoArmazenamento()) {
+            try {
+                Files.deleteIfExists(arquivo);
+            } catch (IOException falha) {
+                throw new UncheckedIOException("não foi possível limpar " + arquivo, falha);
+            }
+        }
     }
 
     private UUID inserirConta(String sufixo, String estado) {
@@ -323,13 +449,20 @@ class MateriaisDetalheIntegrationTest {
                 UUID.class, conta, nomePublico, slug);
     }
 
-    private void inserirMaterial(UUID perfil, String identificador, String licenca, String estadoPublicacao) {
-        UUID arquivo = jdbc.queryForObject("""
+    /**
+     * Semeia {@code file_asset} + {@code material}. {@code estadoDoArquivo} é o estado gravado no
+     * registro; {@code conteudoNoArmazenamento} é o que de fato vai para o armazenamento, pela
+     * <b>mesma porta</b> que a aplicação usa (E4.3) — {@code null} quando nada foi promovido.
+     */
+    private void inserirMaterial(UUID perfil, String identificador, String licenca, String estadoPublicacao,
+            String estadoDoArquivo, byte[] conteudoNoArmazenamento) {
+        String chave = chaveDoArquivo(identificador);
+
+        jdbc.update("""
                 INSERT INTO file_asset (chave_interna, nome_original_seguro, tipo_detectado,
                                         tamanho_bytes, checksum, estado_processamento)
-                VALUES (?, 'teste.pdf', 'application/pdf', 1024, repeat('b', 64), 'VALIDADO')
-                RETURNING id
-                """, UUID.class, PREFIXO + identificador + ".pdf");
+                VALUES (?, ?, 'application/pdf', ?, repeat('b', 64), ?)
+                """, chave, nomeOriginal(identificador), (long) CONTEUDO_DO_ARQUIVO.length, estadoDoArquivo);
 
         jdbc.update("""
                 INSERT INTO material (slug, titulo, descricao, profile_id, category_id, material_type_id,
@@ -338,9 +471,59 @@ class MateriaisDetalheIntegrationTest {
                        (SELECT id FROM category WHERE slug = ?),
                        (SELECT id FROM material_type WHERE slug = ?),
                        (SELECT id FROM license WHERE slug = ?),
-                       ?, ?, ?, ?
+                       (SELECT id FROM file_asset WHERE chave_interna = ?),
+                       ?, ?, ?
                 """, PREFIXO + identificador, TITULO, DESCRICAO, perfil, CATEGORIA, TIPO, licenca,
-                arquivo, estadoPublicacao, emUtc(PUBLICADO_EM), emUtc(ATUALIZADO_EM));
+                chave, estadoPublicacao, emUtc(PUBLICADO_EM), emUtc(ATUALIZADO_EM));
+
+        if (conteudoNoArmazenamento != null) {
+            gravarNoArmazenamento(chave, conteudoNoArmazenamento);
+        }
+    }
+
+    /** Nome original sanitizado semeado: um por material, como o recebimento o registra (E4.2). */
+    private static String nomeOriginal(String identificador) {
+        return PREFIXO + identificador + ".pdf";
+    }
+
+    /** Chave interna do arquivo semeado — decide o caminho no armazenamento, nunca vai à resposta. */
+    private static String chaveDoArquivo(String identificador) {
+        return PREFIXO + "chave-" + identificador;
+    }
+
+    /** Promove um conteúdo ao armazenamento pela MESMA porta que a aplicação usa (E4.3). */
+    private void gravarNoArmazenamento(String chave, byte[] conteudo) {
+        try {
+            Path origem = areaDeApoio.resolve(chave + ".pdf");
+            Files.write(origem, conteudo);
+            armazenamento.guardar(chave, origem);
+        } catch (IOException falha) {
+            throw new UncheckedIOException("não foi possível preparar o arquivo de apoio " + chave, falha);
+        }
+    }
+
+    /** Só os arquivos desta classe — o diretório é o mesmo das outras integrações de backend. */
+    private List<Path> arquivosNoArmazenamento() {
+        Path diretorio = propriedades.diretorio();
+        if (!Files.isDirectory(diretorio)) {
+            return List.of();
+        }
+        try (Stream<Path> entradas = Files.list(diretorio)) {
+            return entradas.filter(caminho -> caminho.getFileName().toString().startsWith(PREFIXO)).toList();
+        } catch (IOException falha) {
+            throw new UncheckedIOException("não foi possível listar " + diretorio, falha);
+        }
+    }
+
+    /** PDF de apoio: assinatura de verdade + corpo determinístico, do tamanho pedido. */
+    private static byte[] pdfComCorpo(int tamanho) {
+        byte[] cabecalho = "%PDF-1.7\n".getBytes(StandardCharsets.UTF_8);
+        byte[] conteudo = new byte[Math.max(tamanho, cabecalho.length)];
+        System.arraycopy(cabecalho, 0, conteudo, 0, cabecalho.length);
+        for (int i = cabecalho.length; i < conteudo.length; i++) {
+            conteudo[i] = (byte) ('a' + (i % 26));
+        }
+        return conteudo;
     }
 
     /** Texto da licença na própria seed: o que o endpoint publica é o dado do banco, não de tela. */
