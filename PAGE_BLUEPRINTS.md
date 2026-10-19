@@ -42,6 +42,46 @@ Slugs estáveis e canônicos (`RNF025`).
 
 Rotas privadas **não** são indexadas (§12.3). Rotas públicas entregam conteúdo real no HTML.
 
+## Decisão: 200 vs 404 nas rotas dinâmicas (card E2.12)
+
+**Decisão tomada**, não ressalva: as três rotas públicas que resolvem **um recurso por `slug`**
+respondem **404 de verdade** quando o endereço não corresponde a recurso público — com o estado
+`não encontrado` do §15.3 no HTML entregue (RNF023, §12.3) e `noindex` (RNF024).
+
+| Endereço | Resposta | Corpo |
+|---|---|---|
+| `/materiais/[slug]` — material retirado, excluído ou inexistente; slug fora do formato | **404** | estado `não encontrado`, com o endereço pedido |
+| `/u/[slug]` — perfil não público (conta não ativa), perfil inexistente; slug ou `page` fora do formato | **404** | estado `não encontrado`, com o endereço pedido |
+| `/categoria/[slug]` — categoria fora das ativas (inexistente ou desativada); slug ou `page` fora do formato | **404** | estado `não encontrado` |
+| `/materiais/[slug]`, `/u/[slug]`, `/categoria/[slug]` — recurso público | **200** | conteúdo no HTML entregue |
+| `/u/[slug]`, `/categoria/[slug]` — existe e **não tem material** | **200** | estado `vazio` explicativo (ausência de material não é endereço errado) |
+| qualquer das três — API fora do ar, 5xx, 401/403 | **200** | estado que corresponde à causa (`erro de rede/servidor`, `sessão expirada`, `não autorizado`) — nunca `não encontrado` |
+| `/explorar?categoria=<desconhecida>` | **200** | listagem vazia: filtro sem resultado é consulta, não endereço errado |
+| endereço que não casa com rota nenhuma | **404** | `not-found.tsx` da raiz (`app/not-found.tsx`) |
+
+**Como o status é decidido:** pelo proxy (`frontend/src/proxy.ts`), fora da renderização, antes de o
+corpo começar a sair. O `notFound()` do App Router **não** serve: medido em rota dinâmica (cards
+E2.9 e E2.12), ele responde 404 com o corpo vazio — o estado viaja dentro do pacote de JavaScript e
+quem não executa JS veria página branca, contra RNF023. O proxy pergunta à API se o endereço resolve
+recurso público (`frontend/src/lib/recurso-publico.ts`, a mesma leitura que a tela faz) e, quando
+não resolve, reescreve a mesma requisição com `status: 404`; a página então renderiza o estado, como
+sempre renderizou. Custo declarado: uma leitura a mais por visita nessas três rotas.
+
+**A meta `robots` que sai no 404:** o Next injeta `<meta name="robots" content="noindex"/>` em toda
+resposta com status > 400 (`app-render: NonIndex`) e essa meta **substitui** a do `generateMetadata`
+— uma meta `robots` por página. Consequência: no 404 o `noindex` é do framework e o `nofollow` que a
+página declara não chega ao visitante. Não muda o que o card exige (segue fora do índice, CA011), e o
+`noindex, nofollow` declarado pela página continua valendo nas respostas **200** de erro (API fora do
+ar, 5xx), que não são 404. Fica registrado, não corrigido: forçar o `nofollow` exigiria mexer no
+status ou na árvore de metadata, fora do recorte do card.
+
+**O que não mudou:** a API. O 404 de recurso continua sendo dela, indistinguível entre inexistente,
+retirado e excluído (RN002, CA008) — e a página que os diferenciasse desfaria essa decisão. O
+contrato segue v0.3. As rotas privadas (`/painel*`) não entram nesta decisão: seguem com `noindex` e
+o estado na tela (fora do escopo do E2.12). Esta decisão **fecha a ressalva 1** de
+`docs/qa/aceite-etapa-2.md` — o laudo lá registrado vale para o commit que ele verificou, e a
+ressalva era esta troca (200 + `noindex`) que aqui deixa de existir.
+
 ## Páginas públicas
 
 ### 1. Início — `/`

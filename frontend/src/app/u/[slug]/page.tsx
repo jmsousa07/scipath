@@ -49,11 +49,14 @@ import { lerPagina, slugValido, urlComPagina } from '@/lib/pagina';
  * quem não executa JS (e o rastreador que só lê HTML) veria "Carregando" para sempre — contra
  * RNF023/§12.3.
  *
- * Pendência de plataforma registrada no card: um perfil que NÃO é público responde **200**
- * nesta tela, com o estado na página, porque quem responde 404 é a API e o estado precisa
- * estar no HTML (a alternativa — `notFound()` — entrega o 404 só dentro do pacote de
- * JavaScript; medido no card E2.9). O endereço sai marcado como `noindex, nofollow` (RNF024),
- * então ele não vira resultado de busca.
+ * STATUS das duas respostas (card E2.12, que fechou a troca antes registrada como pendência):
+ * o perfil que NÃO é público — e o que nunca existiu, o endereço fora do formato e o `page`
+ * fora do formato — responde **404 de verdade**, com o estado do DRS §15.3 no HTML entregue e
+ * `noindex` (RNF023, RNF024). Quem decide o status é o proxy (`src/proxy.ts`), fora
+ * da renderização, porque o `notFound()` do App Router entrega 404 com o corpo vazio (medido
+ * no card E2.9 e reconfirmado no E2.12); a página continua decidindo o que MOSTRAR. Falha de
+ * rede, 5xx e 401/403 seguem em 200, com o estado que corresponde à causa: 404 ali afirmaria
+ * que o endereço não corresponde a nada, e o que aconteceu foi outra coisa.
  */
 
 type Props = {

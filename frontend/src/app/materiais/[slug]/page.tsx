@@ -35,24 +35,32 @@ import { rotaAutor, rotaExplorar } from '@/lib/rotas';
  * (RN002, CA008), e a página que os diferenciasse desfaria essa decisão e revelaria o
  * que saiu do ar.
  *
- * Duas medições deste card explicam COMO o estado chega:
+ * COMO o estado chega, e com que status — o card E2.12 fechou a troca que este card havia
+ * registrado (antes: 200 com o estado; agora: 404 de verdade, com o mesmo estado):
  *
- *   1. `notFound()` **não** serve aqui. Medido com `curl`: numa rota dinâmica, o App
- *      Router entrega a resposta 404 com o corpo do estado apenas dentro do pacote de
- *      JavaScript — o HTML traz a casca e o `<main>` vazio. Quem não executa JS (e o
- *      rastreador que só lê HTML, RNF023/§12.3) veria uma página em branco. O mesmo vale
- *      chamando `notFound()` de `generateMetadata`, antes de o corpo começar a sair;
+ *   1. `notFound()` **não** serve aqui, e a medição continua valendo: numa rota dinâmica o
+ *      App Router responde 404 com o corpo VAZIO — o estado viaja dentro do pacote de
+ *      JavaScript (`NEXT_HTTP_ERROR_FALLBACK;404`) e o HTML entregue traz a casca e o
+ *      `<main>` sem conteúdo. Quem não executa JS (e o rastreador que só lê HTML,
+ *      RNF023/§12.3) veria uma página em branco. O mesmo vale chamando `notFound()` de
+ *      `generateMetadata`, antes de o corpo começar a sair;
  *   2. por isso o estado é renderizado pela PRÓPRIA página, no HTML entregue, e o
  *      `generateMetadata` marca o endereço como `noindex, nofollow` (RNF024): um material
- *      que saiu do ar não pode virar resultado de busca. Rota que não casa com endereço
- *      nenhum continua tendo o 404 de verdade, com a página de `not-found.tsx` da raiz
- *      (medido: sai renderizada, com o estado no HTML).
+ *      que saiu do ar não pode virar resultado de busca. No 404 quem entrega a meta é o
+ *      Next (`noindex`, status > 400), não esta página — o `noindex, nofollow` daqui vale
+ *      nas respostas 200 de erro; medido em `docs/qa/e2-12-evidencia.sh` (3.5 e 6.4);
+ *   3. o STATUS é decidido fora da renderização, em `src/proxy.ts`: o proxy pergunta à API
+ *      se o endereço resolve material público (`lib/recurso-publico.ts`) e, quando não
+ *      resolve, reescreve esta mesma requisição com `status: 404`. A página renderiza o
+ *      estado normalmente no corpo e a resposta sai 404 de verdade (CA011, §15.3). Falha
+ *      de rede, 5xx e 401/403 NÃO viram 404 — ali o estado é `erro de rede/servidor`,
+ *      `sessão expirada` ou `não autorizado` e o status continua 200, porque 404 afirmaria
+ *      que o endereço não corresponde a nada, e o que aconteceu foi outra coisa.
  *
- * Troca registrada: assim, a página de um material que não é público responde **200**
- * (com o estado e sem canonical), e quem responde 404 é a API. Fazer a PÁGINA responder
- * 404 exigiria saber a resposta antes de o corpo começar a sair (middleware ou route
- * handler) ou uma opção de Next que bufferiza a resposta para rastreadores — decisão com
- * efeito em SEO e operação, que não cabe neste card e fica anotada para um card próprio.
+ * O que a API responde não mudou: o 404 de recurso continua sendo dela, indistinguível
+ * entre retirado, excluído e inexistente (RN002, CA008). Rota que não casa com endereço
+ * nenhum continua tendo o 404 de verdade com a página de `not-found.tsx` da raiz (medido:
+ * sai renderizada, com o estado no HTML).
  *
  * Os sete estados do DRS §15.3 nesta rota: `sucesso` (conteúdo), `não encontrado`
  * (retirado, inexistente ou slug malformado), `erro de rede/servidor` (com "tentar de
