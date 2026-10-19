@@ -105,10 +105,88 @@
 }
 
 /* ---------------------------------------------------------------------------
+   4b. Revelação do foco e da âncora nas BORDAS da viewport (RNF006) — card E2.15
+   ---------------------------------------------------------------------------
+   Defeito (medido no E2.13 e reproduzido aqui, agora em repouso): o alvo que cai na
+   última fração de pixel do pé da viewport entra na tela e o FUNDO dele fica fora — o
+   14º alvo de Tab em /explorar/375×1200 pousa com 0,297 px fora (`bottom` 1200,297
+   contra `innerHeight` 1200), e a bateria do E2.11 mede isso como `naViewport=false`.
+   A causa é aritmética, não gosto: o ajuste mínimo precisa de 18,297 px de rolagem e a
+   rolagem para em pixel inteiro (18), deixando a sobra. O log do E2.13 registrou
+   12,297 px; a diferença não é de outro defeito, é de INSTRUMENTO — ver a nota em
+   `docs/qa/e2-13-cabecalho.mjs` (medir 120 ms depois do Tab, com
+   `scroll-behavior:smooth` de base.css, pega um quadro da animação, não o pouso).
+
+   MECANISMO, MEDIDO (não deduzido): o Chromium usa o scrollport RECUADO pelo
+   `scroll-padding` como a caixa de "isto está visível".
+     · se o TOPO do alvo está dentro dessa caixa, ele faz o ajuste MÍNIMO;
+     · se o topo está fora, ele CENTRALIZA o alvo nessa caixa.
+   Medido em 375×1200, 14ª parada de /explorar (alvo natural em top=1197,297):
+     padding 0/0    → rolagem  18 px · alvo top=1179,297 · 0,297 px FORA do pé
+     padding 240/24 → rolagem 500 px · alvo top= 697,297 · 481,7 px dentro (centralizado)
+     padding 240/0  → rolagem  18 px · alvo top=1179,297 · 0,297 px FORA (só o topo não basta)
+   Ou seja: sem recuo no pé o defeito é de fração de pixel; com recuo, o alvo passa a
+   ser CENTRALIZADO — e é por isso que o valor do pé PRECISA ser maior que o anel de
+   foco (`outline: 2px` + `outline-offset: 2px` = 4 px desenhados FORA da caixa), não
+   1 px: um recuo de 1–2 px caberia no critério (0,7 px de folga) e não mudaria a
+   classe de comportamento, mas deixaria o ANEL cortado — foco visível é o RNF006.
+   TROCA DECLARADA: um alvo cujo topo cai na última faixa de 24 px da viewport é
+   centralizado (≈500 px de rolagem no caso medido) em vez de ajustado por 18 px. É o
+   comportamento padrão do navegador para alvo fora da caixa visível — o mesmo que já
+   vale hoje para qualquer alvo abaixo da dobra — e o que se ganha é o alvo inteiro na
+   tela, com o anel, em vez de 0,297 px fora.
+
+   Vale para Tab/Shift+Tab, para âncora (`#conteudo`) e para `scrollIntoView`: é
+   comportamento de rolagem da aplicação inteira, não de uma rota, e é por isso que
+   mora aqui (RNF006 é transversal), não em `/explorar`.
+
+   OS DOIS VALORES E POR QUE ESTES
+   - `block-end: 1.5rem` (24 px): o pé. Cobre o anel de foco (4 px desenhados fora da
+     caixa) com folga larga, e não depende de arredondamento de fração de pixel — era
+     exatamente aí que o defeito morava.
+   - `block-start`: o topo. Aqui a folga tem de ser maior que a ALTURA DO CABEÇALHO, e
+     o cabeçalho tem duas formas no projeto:
+       · desktop (>=60rem): `fixed`, 64 px (o DS2, intocado) → 5rem = 80 px = 64 + 16;
+       · faixa estreita (<=60rem): `sticky` e no FLUXO (card E2.13), com altura MEDIDA
+         de 132 a 215 px nesta faixa (depende da largura E do estado da sessão).
+     Na faixa estreita o valor é 15rem = 240 px. Não é uma altura de cabeçalho
+     "chutada como espaçamento" — é um PISO, e a assimetria é o que importa:
+       · folga MAIOR que o cabeçalho é inofensiva: o alvo aparece abaixo dele (no salto
+         do "Pular para o conteúdo" a posição natural do conteúdo já fica dentro da
+         caixa recuada, então nada rola: medido, scrollY=0 e folga de 79 px);
+       · folga MENOR que o cabeçalho é o defeito de novo: o alvo volta a aparecer por
+         baixo dele — era o caso medido, folga −121 px, com o h1 top=79 sob um cabeçalho
+         de 0..200.
+     Por isso o valor é um piso com headroom sobre o MÁXIMO medido (215 px), e não a
+     média: 240 px cobre o pior caso medido com ~11% de sobra. A unidade é `rem` e não
+     `px` de propósito — o cabeçalho é construído em `rem` (padding, `min-height` e
+     linhas de texto), então com o tamanho de fonte do usuário aumentado o cabeçalho
+     cresce e o piso cresce na mesma proporção; em `px` o piso ficaria parado enquanto
+     o cabeçalho subia.
+     LIMITE DECLARADO: se o cabeçalho da faixa estreita passar de 240 px (mais uma
+     linha de estado, por exemplo), a revelação pela âncora volta a cobrir o alvo e
+     este número precisa ser revisto junto — medindo, não estimando.
+
+   `scroll-padding` NÃO afeta a página em repouso (o render no topo é idêntico), nem
+   `window.scrollTo` de rolagem normal: só as operações de "trazer isto para a
+   viewport". Nada de JavaScript envolvido (RNF023).
+   --------------------------------------------------------------------------- */
+:root {
+  scroll-padding-block-start: 5rem;   /* desktop: cabeçalho `fixed` de 64 px + 16 */
+  scroll-padding-block-end: 1.5rem;   /* pé: o alvo cabe inteiro, e o anel de foco também */
+}
+
+/* ---------------------------------------------------------------------------
    4. Breakpoints
    Alvo de verificação do card: 375 px (mobile) e 1440 px (desktop).
    --------------------------------------------------------------------------- */
 @media (max-width: 60rem) {
+  /* o cabeçalho desta faixa é `sticky` e entra no FLUXO (§4b): a revelação do foco
+     e a âncora `#conteudo` precisam de um piso maior que a altura dele aqui, que é
+     MEDIDA (132…215 px) e não declarada. 15rem = 240 px cobre o pior caso medido. */
+  :root {
+    scroll-padding-block-start: 15rem;
+  }
   /* CABEÇALHO DESTA FAIXA: `position:sticky`, e não o `fixed` do DS2 (card E2.13)
      ------------------------------------------------------------------------------
      O DS2 dimensiona o cabeçalho em 64 px e, no desktop, todo recuo de página conta
