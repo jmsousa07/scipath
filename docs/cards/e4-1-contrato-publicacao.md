@@ -14,11 +14,16 @@ ADR-0003 (verificação obrigatória para publicar); ADR-0006 (taxonomia por mig
 1. **`POST /materiais`** — publicar material próprio. Requisição `multipart/form-data` com os
    metadados e o arquivo na MESMA requisição (é o que torna a ordem do RN008 implementável: o
    servidor recebe, valida e só então grava material e arquivo numa transação).
-   - Campos: `titulo`, `descricao`, `categoriaId`, `tipoMaterialId`, `licencaId`, `arquivo`,
+   - Campos: `titulo`, `descricao`, `categoriaSlug`, `tipoSlug`, `licencaSlug`, `arquivo`,
      `declaracaoDireito` (confirmação de que possui direito de compartilhar — RF012).
+     **Alinhe com a leitura antes de nomear**: o contrato identifica taxonomia por `slug`
+     (`MaterialDetalhe`: `categoria.slug`, `tipo.slug`, `licenca.slug`) e **não expõe `id` em
+     nenhum lugar** — não invente `categoriaId`/`tipoMaterialId`/`licencaId`.
    - **O autor NÃO é campo**: vem da sessão (RF012: "definido pelo usuário autenticado no servidor,
      nunca por um campo livre enviado pelo cliente").
-   - Resposta `201` com `slug`, `estadoPublicacao` e a URL da página pública (RF012).
+   - Resposta `201` com `slug`, `estado` e a URL da página pública (RF012). O nome do campo é
+     `estado`: é o que o contrato já usa na leitura (`MaterialDetalhe.estado`), não
+     `estadoPublicacao` (esse é o nome da coluna no banco).
    - Erros com `ProblemDetail` e mensagem específica (RNF004): `400` campos inválidos; `401` sem
      sessão; `403` e-mail não verificado (ADR-0003); `413` acima do limite; `415` formato não
      aceito; `422` categoria/tipo/licença inexistente (RF018).
@@ -27,8 +32,10 @@ ADR-0003 (verificação obrigatória para publicar); ADR-0006 (taxonomia por mig
    - Material privado, retirado, excluído ou inexistente: **mesma resposta** (`404` equivalente),
      indistinguível (RN002, RN003) — a autorização é decidida no servidor.
    - O contrato NÃO expõe caminho, chave de storage nem credencial (RF014).
-3. **`GET /materiais/{slug}`**: acrescentar o campo que diz se o arquivo está disponível, sem
-   quebrar consumidores existentes (`docs/qa` e as baterias das etapas 2/3 usam o corpo atual).
+3. **`GET /materiais/{slug}`**: acrescentar ao `MaterialDetalhe` o que a tela precisa para
+   oferecer o download (sugestão: `arquivo: { nomeOriginal, tamanhoBytes, disponivel }`) — nomear
+   aqui, uma vez. **O resto do corpo fica intacto**: as baterias das etapas 2 e 3 leem o corpo
+   atual e não podem regredir.
 4. Subir `info.version` para **0.5.0** e registrar no `CHANGELOG` do contrato, se existir.
 
 ## Fora de escopo
