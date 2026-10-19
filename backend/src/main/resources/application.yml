@@ -62,3 +62,18 @@ scipath:
     validade-confirmacao-email: 24h
     validade-recuperacao-senha: 30m
     cooldown-reenvio: 60s
+
+  # Recebimento do arquivo enviado (card E4.2, RF013, ADR-0005 §1 e §2).
+  upload:
+    # O LIMITE de upload, num só lugar. O ADR-0005 §1 fixou 30 MB no MVP e exigiu que trocá-lo
+    # fosse uma linha de .env, não um card: este é o único ponto onde o número aparece. Os dois
+    # limites de multipart do servlet (arquivo e requisição) são CALCULADOS a partir dele em
+    # ConfiguracaoDeUpload — por isso `spring.servlet.multipart.*` não é lido: ter o mesmo
+    # limite em dois lugares é como ele passa a divergir sem ninguém notar.
+    # Aceita a forma legível ("30MB") ou o número puro em bytes.
+    max-bytes: ${SCIPATH_UPLOAD_MAX_BYTES:30MB}
+    # Área temporária de recebimento: onde o arquivo fica entre ser validado (E4.2) e ser movido
+    # para o storage definitivo (E4.3). Fora do repositório por padrão — como o outbox de e-mail
+    # (E3.4) — e, por construção, fora de qualquer diretório servido: nada em `resources/static`
+    # ou `frontend/public` alcança este caminho (RF013, RN008, §14.4).
+    diretorio-temporario: ${SCIPATH_UPLOAD_DIR_TEMPORARIO:${user.home}/.scipath/upload-temporario}
