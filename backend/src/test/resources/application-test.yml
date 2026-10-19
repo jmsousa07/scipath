@@ -73,3 +73,14 @@ scipath:
   upload:
     max-bytes: 1MB
     diretorio-temporario: target/upload-temporario-de-teste
+
+  # Armazenamento definitivo no perfil de TESTE (card E4.3). Mesma decisão da área temporária: cai
+  # em `target/` (relativo ao `backend/`, cwd do fork do surefire), já ignorado pelo git — a suíte
+  # nunca escreve no diretório de quem desenvolve, e a suíte tem um lugar determinístico para
+  # limpar antes e depois de cada teste.
+  #
+  # `target/` NÃO é raiz servida: nada em `resources/static` ou `frontend/public` alcança este
+  # caminho, e é isso que a suíte prova (critério 2 do card) — o diretório de storage não pode estar
+  # sob raiz servida nem aqui nem em produção.
+  storage:
+    diretorio: target/armazenamento-de-teste

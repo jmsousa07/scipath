@@ -63,6 +63,34 @@ public class MateriaisService {
     }
 
     /**
+     * Arquivo do material público identificado pelo {@code slug} (RF014) — a leitura que o download
+     * (E4.3) faz antes de conferir a integridade e servir o conteúdo.
+     *
+     * <p><b>O 404 continua indistinguível, e pelo mesmo motivo do detalhe.</b> Material
+     * inexistente, {@code RETIRADO}, {@code EXCLUIDO} e material de conta não ativa chegam aqui como
+     * o mesmo vazio do repositório e saem como o mesmo erro padrão — sem detalhe próprio, sem
+     * separar "não existe" de "não é público", sem dizer se havia arquivo. É a decisão de
+     * visibilidade <b>no servidor</b> (RN002, RN003): quem pede o arquivo não descobre, pela
+     * resposta, que o material existe fora do público.
+     *
+     * @param slug slug já validado no controller (formato e tamanho do contrato)
+     */
+    public ArquivoDoMaterial arquivoPorSlug(String slug) {
+        return repositorio.buscarArquivoPublicadoPorSlug(slug)
+                .orElseThrow(() -> new NaoEncontradoException(null));
+    }
+
+    /**
+     * Há material apontando para o arquivo desta chave? É o guarda da remoção (ADR-0005 §3): quem
+     * apaga o binário — o coletor de órfãos (E4.5) ou a purga da Etapa 5 — pergunta antes, e a
+     * resposta não depende de estado de publicação (material {@code RETIRADO} e {@code EXCLUIDO}
+     * dentro da janela continuam vivos).
+     */
+    public boolean existeMaterialParaArquivo(String chaveInterna) {
+        return repositorio.existeMaterialParaArquivo(chaveInterna);
+    }
+
+    /**
      * Página dos materiais publicados de um autor (RF006, E2.5) — a lista que a página do
      * perfil público publica no campo {@code materiais}.
      *

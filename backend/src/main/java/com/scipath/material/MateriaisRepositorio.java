@@ -94,6 +94,16 @@ public class MateriaisRepositorio {
             """;
 
     /**
+     * Colunas do arquivo do material (E4.3, RF014): as que o download publica — nome original
+     * sanitizado e tamanho — e as que ele confere sem publicar — chave do armazenamento, checksum
+     * e estado do {@code file_asset}. Nenhuma delas entra em schema do contrato.
+     */
+    private static final String CAMPOS_ARQUIVO = """
+            SELECT m.slug, f.nome_original_seguro, f.chave_interna, f.tamanho_bytes,
+                   f.checksum, f.estado_processamento
+            """;
+
+    /**
      * Junções da listagem. {@code profile} e {@code account} entram por causa da regra de
      * elegibilidade (RN002) — não há material público sem autor em conta ATIVA. As três
      * tabelas de referência entram para publicar o rótulo de exibição junto do slug
@@ -115,6 +125,16 @@ public class MateriaisRepositorio {
     private static final String ELEGIVEL = """
              WHERE m.estado_publicacao = 'PUBLICADO'
                AND a.estado = 'ATIVO'
+            """;
+
+    /**
+     * Junções da leitura do arquivo publicado (E4.3): as <b>mesmas</b> da listagem e do detalhe,
+     * mais o {@code file_asset} do material. Reusar {@link #JUNCOES} — em vez de escrever a
+     * consulta do zero — é o que garante que a elegibilidade de {@link #ELEGIVEL} continue valendo
+     * para o download sem uma segunda cópia da regra (RN002, RN013).
+     */
+    private static final String JUNCOES_ARQUIVO = JUNCOES + """
+            JOIN file_asset f    ON f.id = m.file_asset_id
             """;
 
     /**
@@ -192,6 +212,16 @@ public class MateriaisRepositorio {
                     rs.getObject("publicado_em", OffsetDateTime.class).toInstant(),
                     rs.getObject("atualizado_em", OffsetDateTime.class).toInstant());
 
+    /** Linha de {@code file_asset} do material mapeada para a projeção interna do download. */
+    private static final RowMapper<ArquivoDoMaterial> MAPEADOR_ARQUIVO = (rs, linha) ->
+            new ArquivoDoMaterial(
+                    rs.getString("slug"),
+                    rs.getString("nome_original_seguro"),
+                    rs.getString("chave_interna"),
+                    rs.getLong("tamanho_bytes"),
+                    rs.getString("checksum"),
+                    rs.getString("estado_processamento"));
+
     private final JdbcClient jdbc;
 
     public MateriaisRepositorio(JdbcClient jdbc) {
@@ -255,6 +285,52 @@ public class MateriaisRepositorio {
                 .param("slug", slug)
                 .query(MAPEADOR_DETALHE)
                 .optional();
+    }
+
+    /**
+     * Arquivo do material público identificado pelo {@code slug} (RF014), ou vazio quando o
+     * material não é público.
+     *
+     * <p><b>A visibilidade é a MESMA da listagem e do detalhe</b> — {@link #JUNCOES_ARQUIVO} e
+     * {@link #ELEGIVEL} são reusados literalmente. Material inexistente, {@code RETIRADO},
+     * {@code EXCLUIDO} e material de conta não ativa caem todos no mesmo vazio, e é isso que torna
+     * a resposta do download indistinguível sem que ninguém precise lembrar de disfarçá-la: não
+     * existe informação diferente para vazar (RN002, RN003, CA008).
+     *
+     * <p>{@code m.slug} é {@code UNIQUE} (V1) e o arquivo é 1:1 ({@code material_arquivo_unico}),
+     * então a leitura é por índice e no máximo uma linha atende.
+     *
+     * @param slug slug já validado no controller (formato e tamanho do contrato)
+     */
+    public Optional<ArquivoDoMaterial> buscarArquivoPublicadoPorSlug(String slug) {
+        String consulta = CAMPOS_ARQUIVO + JUNCOES_ARQUIVO + ELEGIVEL + "   AND m.slug = :slug\n";
+        return jdbc.sql(consulta)
+                .param("slug", slug)
+                .query(MAPEADOR_ARQUIVO)
+                .optional();
+    }
+
+    /**
+     * Há material apontando para o arquivo desta chave interna? A pergunta que o guarda de remoção
+     * faz antes de apagar um binário (ADR-0005 §3: o coletor <b>nunca</b> apaga arquivo referenciado
+     * por material vivo).
+     *
+     * <p><b>"Vivo" aqui é "existe material", em qualquer estado</b> — inclusive {@code RETIRADO}
+     * (retirado continua vivo: o autor pode republicar) e {@code EXCLUIDO} dentro da janela de
+     * retenção. É a leitura conservadora: ela pode adiar a remoção de um binário que a Etapa 5
+     * purgaria, e nunca apaga um que ainda é alcançável. A purga de {@code EXCLUIDO} depois dos 7
+     * dias de retenção (ADR-0005 §3) é da Etapa 5 e terá a sua própria decisão sobre o que conta
+     * como vivo <i>para ela</i> — este método não muda para atender aquele caso.
+     *
+     * <p>É uma consulta de existência: {@code EXISTS} para no primeiro material encontrado e não
+     * precisa materializar nada.
+     */
+    public boolean existeMaterialParaArquivo(String chaveInterna) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM material m JOIN file_asset f"
+                        + " ON f.id = m.file_asset_id WHERE f.chave_interna = :chave)")
+                .param("chave", chaveInterna)
+                .query(Boolean.class)
+                .single();
     }
 
     /**

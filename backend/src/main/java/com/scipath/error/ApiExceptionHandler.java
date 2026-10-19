@@ -434,6 +434,31 @@ public class ApiExceptionHandler {
                 "Arquivo muito grande", ArquivoMuitoGrandeException.detalhe(limiteEmBytes), requisicao, null);
     }
 
+    // ------------------------------------------------ 500 do download (integridade, RN008)
+
+    /**
+     * Conteúdo armazenado que não confere com o registro do material — <b>500</b>
+     * {@code urn:scipath:erro:interno} (card E4.3, RN008).
+     *
+     * <p><b>Por que 500, e não 404.</b> O material é público e existe: responder 404 diria ao
+     * visitante que ele não existe, e isso seria mentira — além de esconder a falha de quem
+     * operaria o sistema. O arquivo não pôde ser servido por falha do servidor, e é isso que a
+     * resposta diz.
+     *
+     * <p><b>O incidente é registrado aqui, num só lugar.</b> O {@code detail} da resposta é o
+     * genérico do contrato — sem caminho, chave de armazenamento, checksum esperado ou encontrado
+     * (RNF012, RNF014) —, e é o log abaixo que carrega o motivo completo da exceção: é o registro
+     * que o RN008 pede, inspecionável sem abrir o banco nem o disco.
+     */
+    @ExceptionHandler(IntegridadeDeArquivoException.class)
+    public ResponseEntity<ProblemDetail> integridadeDoArquivo(
+            IntegridadeDeArquivoException ex, HttpServletRequest requisicao) {
+        log.error("incidente de integridade no arquivo de material em {} {}: {}",
+                requisicao.getMethod(), requisicao.getRequestURI(), ex.getMessage());
+        return problema(HttpStatus.INTERNAL_SERVER_ERROR, TIPO_INTERNO, "Erro interno",
+                DETALHE_INTERNO, requisicao, null);
+    }
+
     /** Exceções do Spring que já carregam status próprio (ex.: {@code ResponseStatusException}). */
     @ExceptionHandler(ErrorResponseException.class)
     public ResponseEntity<ProblemDetail> comStatusProprio(
