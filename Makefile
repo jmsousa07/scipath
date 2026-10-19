@@ -18,7 +18,7 @@ ENV_FILE       := $(if $(wildcard .env),.env,$(wildcard $(MAIN_ROOT)/.env))
 # Carrega o .env exportando cada variável (SPRING_DATASOURCE_*) sem imprimir segredo.
 LOAD_ENV := set -a; if [ -f "$(ENV_FILE)" ]; then . "$(ENV_FILE)"; fi; set +a;
 
-.PHONY: help doctor up db\:migrate db\:migrate\:test db\:seed\:dev db\:reset api\:dev web\:dev email\:outbox test lint e2e contract\:check
+.PHONY: help doctor up db\:migrate db\:migrate\:test db\:seed\:dev db\:reset api\:dev web\:dev email\:outbox coleta\:orfaos test lint e2e contract\:check
 
 help:            ## lista os alvos
 	@grep -E '^[a-zA-Z_:\\]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=" *## "}{gsub(/\\/,"",$$1); sub(/:[ 	]*$$/,"",$$1); printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -116,6 +116,19 @@ api\:dev:        ## API em :8080
 	@test -f backend/pom.xml || { echo "backend/ ainda não existe (card F0.1)"; exit 1; }
 	@# Perfil dev: tolera banco fora na subida (ADR-0004 ajuste 3). Sem perfil o backend falha rápido.
 	@$(LOAD_ENV) export SPRING_PROFILES_ACTIVE=dev; cd backend && exec ./mvnw -q spring-boot:run
+
+# Coletor de arquivos órfãos (card E4.5; RN008, RN012, ADR-0005 §3). O disparo do PRODUTO é o
+# agendador da aplicação — `scipath.coleta.agendamento`, diário às 03:30 por padrão —, que roda
+# dentro do processo da API e escreve o resultado no log com o prefixo [coleta-orfaos].
+# Este alvo é o comando MANUAL de verificação: sobe a aplicação SEM servidor web (nenhuma porta é
+# aberta), com a coleta ligada na subida, e o processo termina quando a passada acaba. A janela de
+# segurança e o diretório de armazenamento são os de sempre (scipath.coleta.janela,
+# SCIPATH_STORAGE_DIR) — não há configuração paralela só para este caminho.
+coleta\:orfaos:  ## executa o coletor de órfãos UMA vez e sai (verificação manual; nada fica no ar)
+	@test -f backend/pom.xml || { echo "backend/ ainda não existe (card F0.1)"; exit 1; }
+	@$(LOAD_ENV) export SPRING_PROFILES_ACTIVE=dev; cd backend && \
+	  ./mvnw -q spring-boot:run \
+	    -Dspring-boot.run.arguments="--spring.main.web-application-type=none --scipath.coleta.ao-iniciar=true"
 
 # web:dev segue a mesma forma do lint/e2e (E2.6-f1): ausência do projeto declarada numa linha
 # com exit 1, receita real SEM "|| echo" — mascarar faria o alvo sair 0 sobre um next dev quebrado.

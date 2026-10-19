@@ -84,3 +84,22 @@ scipath:
   # sob raiz servida nem aqui nem em produção.
   storage:
     diretorio: target/armazenamento-de-teste
+
+  # Coletor de arquivos órfãos no perfil de TESTE (card E4.5). Mesma decisão do limite de upload
+  # (E4.2) e do diretório de armazenamento (E4.3): são os MESMOS valores de produção lidos pela
+  # MESMA linha de código, com outros números — de propósito.
+  #
+  # `janela: 1h` em vez das 24h de produção é o que dá conteúdo à afirmação "a janela é
+  # configuração, não constante": a suíte cria órfãos de 3 horas e espera que sejam coletados e um
+  # de agora e espera que não seja. Com a janela cravada em 24h no código, os de 3 horas NÃO seriam
+  # coletados e o teste reprovaria — um número lido da configuração passa.
+  #
+  # `agendado: false` desliga o disparo por relógio real dentro da suíte: um teste que depende de o
+  # relógio bater num horário é exatamente o resultado não reproduzível que o §17.5 recusa. A regra
+  # continua sendo exercitada — a suíte chama a MESMA rotina, e o agendamento é declarado em
+  # application.yml e conferido na subida (PropriedadesDeColeta).
+  coleta:
+    janela: 1h
+    agendamento: "0 30 3 * * *"
+    agendado: false
+    ao-iniciar: false

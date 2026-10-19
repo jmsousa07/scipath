@@ -103,6 +103,39 @@ Interface `StorageService` (domínio não conhece provedor) com implementação 
 - limites em configuração (§5.4): `scipath.upload.tipos-permitidos=pdf`,
   `scipath.upload.tamanho-maximo=50MB`.
 
+### 4.1 Coletor de arquivos órfãos (RN008, RN012; ADR-0005 §2 e §3)
+
+O RN008 admite que a transação de publicação falhe depois de o arquivo já ter sido movido para o
+armazenamento: sobra um binário que nenhum material alcança. O **coletor** é a rotina que o remove —
+e ela é segura e observável, como o RN012 exige.
+
+- **O que é um órfão:** linha de `file_asset` que **nenhum** `material` referencia (em nenhum estado
+  de publicação) e mais antiga que a **janela de segurança** (`scipath.coleta.janela`, padrão
+  `24h`). O critério é a ausência de material, não a etiqueta `ORFAO`: a marcação do E4.4 é melhor
+  esforço, e um processo interrompido pode deixar a linha em `VALIDADO` sem material nenhum.
+- **Nunca apaga arquivo de material vivo:** o guarda consulta o vínculo antes de tocar no
+  armazenamento e vale para **qualquer** estado — `PUBLICADO`, `RETIRADO` (republicável) e
+  `EXCLUIDO` dentro da janela de retenção. A purga de `EXCLUIDO` (7 dias) e a anonimização de
+  metadados (90 dias) são da Etapa 5 (RF017), **não** desta rotina.
+- **Ordem das duas remoções:** binário **e depois** registro. Se o processo morrer no meio, o banco
+  ainda descreve o arquivo (sem material) e a execução seguinte termina o serviço. A ordem inversa
+  deixaria um binário que nenhum registro conhece — lixo permanente, exatamente o que o RN012
+  proíbe.
+- **Idempotente:** a segunda execução examina zero candidatos e remove zero.
+- **Falha em um arquivo não derruba a varredura:** a falha é contada e registrada com a chave e o
+  motivo; o restante da passagem segue.
+- **Observável:** cada execução tem identificador próprio e escreve no log, com o prefixo
+  `[coleta-orfaos]`, uma linha por arquivo removido e um resumo
+  `execucao=<id> examinados=<n> removidos=<n> falhas=<n> janela=<prazo>`. Não é preciso abrir o
+  banco para saber o que a rotina fez: `grep '\[coleta-orfaos\]'` no log responde.
+- **Disparo declarado:** o agendador da aplicação roda a coleta conforme
+  `scipath.coleta.agendamento` (cron de 6 campos; padrão diário às 03:30). A expressão é conferida
+  na subida — uma expressão inválida falha ao subir em vez de deixar o coletor declarado e morto.
+  No perfil de teste o agendamento é desligado (`scipath.coleta.agendado: false`) para a suíte não
+  depender de relógio.
+- **Execução manual (verificação):** `make coleta:orfaos` sobe a aplicação **sem servidor web**,
+  roda **uma** passada e sai — nenhuma porta é aberta e nada fica no ar.
+
 ## 5. Páginas e estados (§15)
 
 Públicas: Início · Explorar materiais · Detalhe do material · Perfil público · Categoria (se
