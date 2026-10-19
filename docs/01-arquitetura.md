@@ -156,3 +156,53 @@ configuração/ambiente e **nunca** entram no repositório (RNF012).
 | Painel administrativo mínimo vs seed/migração | §2 (gestão de categorias/licenças) | ADR-0004 |
 | Hospedagem, backup e restauração | §7 | ADR-0006 (Etapa 0) |
 | Quem recebe denúncia de conteúdo e como | §5 (transparência), lançamento | ADR-0006 |
+
+## 9. Origem única entre a página e a API (sessão) — o mecanismo do ADR-0003 (e)
+
+O ADR-0003 (e) decide que a sessão vive em cookie `httpOnly` + `Secure` + `SameSite=Lax` e que
+frontend e API ficam **na mesma origem** (em desenvolvimento por proxy/`rewrite` de `/api` pelo
+Next; em produção por proxy reverso). O que faltava registrado era o **mecanismo concreto** —
+e é ele que responde, no lugar certo do código, à pergunta que a verificação da Etapa 3 (E3.8)
+fez do lado errado: o `next.config.ts` não declara proxy nenhum, e isso não significa que o
+navegador fale com a API em outra origem. Evidência medida: `docs/qa/e3-9-2026-10-19.log`.
+
+**Decisão.** O navegador só conhece a origem do frontend. O cliente de sessão
+(`frontend/src/lib/sessao/navegador.ts`) usa a constante `PROXY = '/api'` — caminho relativo,
+portanto **sempre a mesma origem da página** — e o encaminhamento para a API é feito por uma
+**rota do App Router**, `frontend/src/app/api/[...caminho]/route.ts`.
+
+**Por que rota, e não `rewrite` do `next.config.ts`.**
+
+1. `API_BASE_URL` é lido em **tempo de execução** (mesma razão do `lib/api/client.ts` de
+   servidor): a mesma imagem aponta para outro backend sem rebuild. Um `rewrite` congela o
+   destino da API no build.
+2. A rota preserva o que a sessão exige: `Cookie` do pedido vai como veio, **todos** os
+   `Set-Cookie` da resposta voltam (`getSetCookie()` — `SCIPATH_SESSAO` e `XSRF-TOKEN`),
+   `X-CSRF-Token` atravessa e o `ProblemDetail` do contrato chega intacto — é ele que a tela
+   usa para decidir o estado (DRS §15.3).
+3. Quando a API não responde, a resposta é **nossa** e diz isso (502 com corpo próprio): o
+   contrato não cobre "API inalcançável" com uma classe dele, e atribuir ao servidor um erro
+   que não veio dele seria mentir para a tela.
+
+**Por que não CORS explícito no backend.** O cookie de sessão é `httpOnly`: em pedido
+cross-origin, o navegador só o enviaria com `credentials: 'include'` e o servidor teria de
+responder origem explícita (nunca `*`) — ou seja, passaríamos a manter **duas** fronteiras de
+origem (a da página e a da API) para o mesmo cookie, e a origem da API voltaria ao código do
+cliente. O desenho do produto é o oposto: a descoberta pública é renderizada no servidor
+(RNF023–RNF025). **Não existe configuração de CORS no backend, e a ausência é a decisão** — não
+uma pendência a preencher.
+
+**Por que não inlinar `NEXT_PUBLIC_API_BASE_URL` no build.** Seria voltar ao pedido
+cross-origin (o cliente falaria direto com a origem da API) e, de novo, congelar o destino no
+build. `NEXT_PUBLIC_API_BASE_URL` continua aceito **apenas** como fallback dos módulos de
+servidor e da rota do proxy.
+
+**O que continua valendo.** A leitura de servidor (`lib/api/client.ts`) fala com a API pelo
+padrão de desenvolvimento `localhost:8080/api` (ou `API_BASE_URL`) — é ela que entrega o HTML
+do documento (RNF023) e o estado de `/painel` sem depender de JavaScript. O navegador não vê
+esse endereço em momento nenhum. Em produção, o mesmo trabalho é feito pelo proxy reverso da
+hospedagem (ADR-0003 (e)).
+
+**Regra prática para quem mexer nisto.** Um módulo `'use client'` que leia uma base absoluta da
+API é **defeito**, não configuração: a chamada de sessão tem de sair da origem da página
+(`/api/...`). A varredura que sustenta isso está na seção 2 da evidência do card E3.9.
