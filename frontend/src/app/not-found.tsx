@@ -14,8 +14,11 @@ import { PageState } from '@/components/ui/PageState';
  * material. O caso "material retirado ou inexistente" tem redação própria e é renderizado
  * pela PRÓPRIA página `/materiais/[slug]` (`EstadoDaFalha`, em `app/materiais/[slug]/`),
  * com o endereço pedido à vista — porque numa rota dinâmica o `notFound()` do App Router
- * entrega o estado apenas no pacote de JavaScript (medido neste card: o HTML sai com o
- * `<main>` vazio). A decisão e a troca estão registradas no docstring daquela página.
+ * entrega o estado apenas no pacote de JavaScript (medido no card E2.9: o HTML sai com o
+ * `<main>` vazio). O status 404 daquelas rotas é decidido fora da renderização, pelo proxy
+ * (`src/proxy.ts`, card E2.12); esta página é o 404 do endereço que não casa com rota
+ * nenhuma. As duas decisões estão registradas no docstring de `/materiais/[slug]` e em
+ * `PAGE_BLUEPRINTS.md`.
  *
  * O status 404 é o que mantém endereço inexistente fora do índice de busca (RNF024,
  * §12.3). A ação padrão do estado (`MENSAGENS_PAGINA['not-found']`) já leva à busca; o

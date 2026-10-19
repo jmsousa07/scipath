@@ -38,7 +38,9 @@ import type { Falha } from '@/lib/api/client';
  *
  * `data-state` no HTML: o estado `não encontrado` sai com o marcador do `PageState`, e é o
  * ÚNICO marcador da página nesse caso (por isso ele não aparece dentro de um bloco
- * `success`).
+ * `success`). O STATUS 404 que acompanha esse estado é decidido fora da renderização, pelo
+ * proxy (`src/proxy.ts`, card E2.12) — este componente decide o que a tela MOSTRA, e as duas
+ * decisões saem da mesma pergunta feita à API (`lib/recurso-publico.ts`).
  */
 export type EstadoDaFalhaProps = {
   falha: Falha;

@@ -42,6 +42,16 @@ import { rotaCategoria, rotaExplorar } from '@/lib/rotas';
  * 401/403 mapeados como nas outras rotas públicas, e `carregando` **sem** tela intermediária
  * pela razão medida nos cards E2.7–E2.9 (com `loading.tsx` o conteúdo real sai em bloco
  * `hidden` e quem não executa JS veria "Carregando" para sempre — contra RNF023/§12.3).
+ *
+ * STATUS: os casos de `não encontrado` — categoria desconhecida, slug fora do formato e
+ * `page` fora do formato — respondem **404 de verdade** desde o card E2.12, com o estado no
+ * HTML entregue e `noindex`. Quem decide o status é o proxy (`src/proxy.ts`), fora
+ * da renderização: esta página não mudou o que mostra, e a categoria que existe (com ou sem
+ * material) segue em 200 — ausência de material é `vazio`, não endereço errado.
+ *
+ * O `noindex` do 404 é do Next (status > 400 → meta dele, que substitui a do
+ * `generateMetadata`); o `noindex, nofollow` desta página vale nas respostas 200 de erro.
+ * Medido na bateria `docs/qa/e2-12-evidencia.sh` (3.5 e 6.4).
  */
 
 type Props = {
