@@ -91,3 +91,23 @@ scipath:
   # com o motivo no erro (PropriedadesDeArmazenamento), em vez de virar vazamento silencioso.
   storage:
     diretorio: ${SCIPATH_STORAGE_DIR:${user.home}/.scipath/arquivos}
+
+  # Coletor de arquivos órfãos (card E4.5, RN008, RN012, ADR-0005 §2 e §3).
+  #
+  # A janela de segurança é o único freio entre "arquivo sem material" e "arquivo apagado": só é
+  # coletado o que ficou sem material há MAIS tempo que ela. O padrão é conservador de propósito —
+  # a marcação de órfão acontece dentro da própria requisição de publicação que falhou (E4.4),
+  # então um dia inteiro de folga não atrasa nada de útil e continua bem abaixo dos 7 dias de
+  # retenção do material EXCLUIDO (que é da Etapa 5, não daqui).
+  #
+  # O horário é o disparo declarado da rotina: o agendador do Spring dispara `agendamento` (cron de
+  # 6 campos, com segundos) e a expressão é CONFERIDA na subida — uma expressão inválida falha ao
+  # subir em vez de deixar o coletor declarado e morto (PropriedadesDeColeta).
+  #
+  # `ao-iniciar: true` faz a coleta rodar UMA vez na subida e seguir: é o que dá o comando manual
+  # de verificação `make coleta:orfaos` (aplicação sem servidor web, uma passada, saída no log).
+  coleta:
+    janela: ${SCIPATH_COLETA_JANELA:24h}
+    agendamento: "${SCIPATH_COLETA_AGENDAMENTO:0 30 3 * * *}"
+    agendado: ${SCIPATH_COLETA_AGENDADO:true}
+    ao-iniciar: ${SCIPATH_COLETA_AO_INICIAR:false}
