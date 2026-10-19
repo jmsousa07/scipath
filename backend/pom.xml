@@ -97,6 +97,20 @@
           <systemPropertyVariables>
             <spring.profiles.active>test</spring.profiles.active>
           </systemPropertyVariables>
+          <!-- Locale do fork dos testes (card E4.8-f1, DRS §17.5). A JVM deriva
+               sun.jnu.encoding do locale do PROCESSO: um shell sem LANG (o 'env -i' do
+               critério E1.5) sobe com ANSI_X3.4-1968 e aí um Path com nome não-ASCII não
+               é representável — ArmazenamentoLocalTest.nomeOriginalNaoDecideOCaminho
+               reprovava com InvalidPathException mesmo sem defeito nenhum no produto. O
+               resultado da suíte não pode ser decidido pelo ambiente de quem rodou, então
+               o locale é fixado aqui, onde a JVM dos testes nasce — e não no Makefile, que
+               cobre só um dos modos de rodar (vale igual para ./mvnw -o test e para a IDE,
+               como o perfil acima). C.UTF-8 é o locale em que a suíte de 226 testes está
+               verde nesta máquina (medido 2026-10-19, shell sem LANG). -->
+          <environmentVariables>
+            <LANG>C.UTF-8</LANG>
+            <LC_ALL>C.UTF-8</LC_ALL>
+          </environmentVariables>
           <!-- Heap limitado no fork do surefire: a máquina tem 954 MB e roda o Maven
                (MAVEN_OPTS=-Xmx384m) e a JVM dos testes ao mesmo tempo (AGENTS.md —
                higiene de recursos). TieredStopAtLevel=1 corta a compilação JIT de nível
