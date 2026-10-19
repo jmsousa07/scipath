@@ -62,3 +62,32 @@ scipath:
     validade-confirmacao-email: 24h
     validade-recuperacao-senha: 30m
     cooldown-reenvio: 60s
+
+  # Recebimento do arquivo enviado (card E4.2, RF013, ADR-0005 §1 e §2).
+  upload:
+    # O LIMITE de upload, num só lugar. O ADR-0005 §1 fixou 30 MB no MVP e exigiu que trocá-lo
+    # fosse uma linha de .env, não um card: este é o único ponto onde o número aparece. Os dois
+    # limites de multipart do servlet (arquivo e requisição) são CALCULADOS a partir dele em
+    # ConfiguracaoDeUpload — por isso `spring.servlet.multipart.*` não é lido: ter o mesmo
+    # limite em dois lugares é como ele passa a divergir sem ninguém notar.
+    # Aceita a forma legível ("30MB") ou o número puro em bytes.
+    max-bytes: ${SCIPATH_UPLOAD_MAX_BYTES:30MB}
+    # Área temporária de recebimento: onde o arquivo fica entre ser validado (E4.2) e ser movido
+    # para o storage definitivo (E4.3). Fora do repositório por padrão — como o outbox de e-mail
+    # (E3.4) — e, por construção, fora de qualquer diretório servido: nada em `resources/static`
+    # ou `frontend/public` alcança este caminho (RF013, RN008, §14.4).
+    diretorio-temporario: ${SCIPATH_UPLOAD_DIR_TEMPORARIO:${user.home}/.scipath/upload-temporario}
+
+  # Armazenamento definitivo do arquivo publicado (card E4.3, ADR-0005 §2, RF014).
+  # É o destino do passo 2 da ordem do RN008: onde mora o arquivo que já passou por validação e que
+  # o material publicado referencia. Diretório SEPARADO da área temporária de recebimento de
+  # propósito — o coletor de órfãos (E4.5) precisa distinguir o que ainda não virou material do que
+  # já virou.
+  #
+  # FORA do repositório por padrão, como o outbox de e-mail (E3.4) e a área temporária (E4.2), e
+  # FORA de qualquer raiz servida: o arquivo é entregue por `GET /materiais/{slug}/arquivo`, que
+  # decide visibilidade e autorização no servidor — endereço direto venceria a regra (RF014,
+  # RNF014, §14.4). O valor é CONFERIDO na subida: diretório sob raiz servida ou vazio é recusado
+  # com o motivo no erro (PropriedadesDeArmazenamento), em vez de virar vazamento silencioso.
+  storage:
+    diretorio: ${SCIPATH_STORAGE_DIR:${user.home}/.scipath/arquivos}

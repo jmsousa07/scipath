@@ -57,3 +57,30 @@ scipath:
   email:
     outbox:
       diretorio: target/outbox-de-teste
+
+  # Recebimento do arquivo enviado no perfil de TESTE (card E4.2). Nada aqui é implementação
+  # de teste: são os MESMOS valores que produção lê, com outros números — de propósito.
+  #
+  # `max-bytes: 1MB` em vez dos 30 MB do ADR-0005 §1 é o que dá conteúdo ao critério "nenhum
+  # valor de limite literal no código": a MESMA linha de código recusa 1 MB nesta suíte e aceita
+  # em produção, e a mensagem do 413 nomeia o valor configurado ("O arquivo excede o limite de
+  # 1 MB."). Um limite cravado no código não passaria neste teste; um limite lido da configuração
+  # passa — e é o mesmo caminho que o operador usa para trocar o valor pelo .env.
+  #
+  # O diretório cai em `target/` (relativo ao `backend/`, cwd do fork do surefire), como o
+  # outbox do E3.4: a suíte nunca escreve na área de quem desenvolve, e `target/` já é ignorado
+  # pelo git.
+  upload:
+    max-bytes: 1MB
+    diretorio-temporario: target/upload-temporario-de-teste
+
+  # Armazenamento definitivo no perfil de TESTE (card E4.3). Mesma decisão da área temporária: cai
+  # em `target/` (relativo ao `backend/`, cwd do fork do surefire), já ignorado pelo git — a suíte
+  # nunca escreve no diretório de quem desenvolve, e a suíte tem um lugar determinístico para
+  # limpar antes e depois de cada teste.
+  #
+  # `target/` NÃO é raiz servida: nada em `resources/static` ou `frontend/public` alcança este
+  # caminho, e é isso que a suíte prova (critério 2 do card) — o diretório de storage não pode estar
+  # sob raiz servida nem aqui nem em produção.
+  storage:
+    diretorio: target/armazenamento-de-teste

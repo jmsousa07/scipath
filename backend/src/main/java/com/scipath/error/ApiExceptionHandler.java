@@ -6,6 +6,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -27,6 +28,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -48,8 +51,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * </ul>
  *
  * <p>Exceções do framework que não estão mapeadas abaixo caem no catch-all e viram
- * {@code 500}; por isso as que têm status próprio previsível (400, 401, 403, 404, 405, 409,
- * 415, 422 e {@link ErrorResponseException} em geral) estão mapeadas explicitamente.
+ * {@code 500}; por isso as que têm status próprio previsível (400, 401, 403, 404, 405, 409, 413,
+ * 415, 422, 429 e {@link ErrorResponseException} em geral) estão mapeadas explicitamente.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -72,6 +75,9 @@ public class ApiExceptionHandler {
 
     /** Único 429 do contrato: reenvio de verificação dentro do cooldown (ADR-0003 (c)). */
     public static final String TIPO_REENVIO_EM_COOLDOWN = "urn:scipath:erro:reenvio_em_cooldown";
+
+    /** Único 413 do contrato: arquivo acima do limite de upload (ADR-0005 §1). */
+    public static final String TIPO_ARQUIVO_MUITO_GRANDE = "urn:scipath:erro:arquivo_muito_grande";
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
@@ -320,14 +326,162 @@ public class ApiExceptionHandler {
                 .body(resposta.getBody());
     }
 
-    /** {@code Content-Type} não aceito — mesma razão do 405 para não usar {@code errors[]}. */
+    /**
+     * {@code Content-Type} não aceito — mesma razão do 405 para não usar {@code errors[]}.
+     *
+     * <p><b>O {@code detail} diz o tipo que <i>este</i> endpoint aceita</b>, e o valor vem do
+     * próprio {@link HttpMediaTypeNotSupportedException} ({@code getSupportedMediaTypes()}) — a
+     * lista que o MVC já calculou ao recusar a requisição. Ela não é adivinhação nem uma segunda
+     * tabela de rotas no tratamento de erro: as escritas deste contrato recebem
+     * {@code application/json} e {@code POST /materiais} recebe {@code multipart/form-data}
+     * (contrato v0.5), e uma mensagem fixa mandaria o cliente de publicação enviar JSON para um
+     * endpoint que só aceita formulário.
+     *
+     * <p>Tipos <b>curinga</b> ({@code *\/*}, {@code application/*+json}) saem da mensagem: eles
+     * aparecem nas rotas que não restringem o consumo (a lista do conversor de mensagens) e não
+     * dizem nada a quem precisa corrigir a requisição. Quando não sobra nenhum tipo concreto, o
+     * texto é o de antes — o {@code application/json} do vocabulário deste contrato.
+     */
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ProblemDetail> tipoNaoSuportado(
             HttpMediaTypeNotSupportedException ex, HttpServletRequest requisicao) {
         return problema(HttpStatus.UNSUPPORTED_MEDIA_TYPE, TIPO_TIPO_NAO_SUPORTADO,
                 "Tipo de conteúdo não suportado",
                 "Este endpoint não aceita o Content-Type enviado. Envie o corpo como "
-                        + MediaType.APPLICATION_JSON_VALUE + ".", requisicao, null);
+                        + tiposAceitos(ex) + ".", requisicao, null);
+    }
+
+    /** Tipos concretos que o endpoint aceita, como texto legível para o {@code detail}. */
+    private static String tiposAceitos(HttpMediaTypeNotSupportedException ex) {
+        String aceitos = ex.getSupportedMediaTypes().stream()
+                .filter(tipo -> !tipo.isWildcardType())
+                .map(MediaType::toString)
+                .collect(Collectors.joining(" ou "));
+        return aceitos.isEmpty() ? MediaType.APPLICATION_JSON_VALUE : aceitos;
+    }
+
+    // ------------------------------------------------ 413/415 do recebimento de arquivo
+
+    /**
+     * Arquivo acima do limite de upload — <b>413</b> {@code arquivo_muito_grande} (RF013,
+     * ADR-0005 §1).
+     *
+     * <p>A mensagem nomeia o limite <b>corrente</b> ("O arquivo excede o limite de 30 MB."), e é
+     * o valor configurado que entra nela: o limite é do ambiente
+     * ({@code SCIPATH_UPLOAD_MAX_BYTES}), não do código, e uma mensagem fixa passaria a mentir
+     * no dia em que o operador o trocasse (RNF004). Sem {@code errors[]} — arquivo não é campo
+     * de corpo e o motivo cabe no {@code detail}.
+     */
+    @ExceptionHandler(ArquivoMuitoGrandeException.class)
+    public ResponseEntity<ProblemDetail> arquivoMuitoGrande(
+            ArquivoMuitoGrandeException ex, HttpServletRequest requisicao) {
+        log.warn("arquivo acima do limite de {} bytes em {} {}",
+                ex.limiteEmBytes(), requisicao.getMethod(), requisicao.getRequestURI());
+        return arquivoMuitoGrande(ex.limiteEmBytes(), requisicao);
+    }
+
+    /**
+     * Recusa do próprio contêiner por limite de multipart — <b>413</b> na mesma classe de erro.
+     *
+     * <p>É a rede de segurança descrita em {@code ConfiguracaoDeUpload}: fica acima do limite do
+     * produto e só age em requisição absurdamente maior. Sem este mapeamento a recusa do
+     * contêiner cairia no catch-all e viraria <b>500</b> para um pedido que tem resposta
+     * (RNF004) — o oposto do que o contrato publica.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ProblemDetail> arquivoMuitoGrandeParaOConteiner(
+            MaxUploadSizeExceededException ex, HttpServletRequest requisicao) {
+        log.warn("multipart recusado pelo contêiner em {} {} (limite {} bytes)",
+                requisicao.getMethod(), requisicao.getRequestURI(), ex.getMaxUploadSize());
+        long limite = ex.getMaxUploadSize();
+        if (limite <= 0) {
+            // Sem o número não há como nomear o limite: melhor dizer o que aconteceu do que
+            // publicar "0 bytes". Não é o caminho comum — o contêiner recebe os dois limites
+            // calculados em ConfiguracaoDeUpload.
+            return problema(HttpStatus.PAYLOAD_TOO_LARGE, TIPO_ARQUIVO_MUITO_GRANDE,
+                    "Arquivo muito grande", "O arquivo excede o limite de upload desta instalação.",
+                    requisicao, null);
+        }
+        return arquivoMuitoGrande(limite, requisicao);
+    }
+
+    /**
+     * Arquivo que não é PDF — <b>415</b> {@code tipo_nao_suportado} (RF013, ADR-0005 §1).
+     *
+     * <p>Mesma classe de erro do {@code Content-Type} recusado, porque é o mesmo significado
+     * para o cliente: o formato enviado não é aceito. O {@code detail} é o do contrato; o
+     * motivo concreto (extensão, tipo declarado ou assinatura do conteúdo) vai só para o log —
+     * dizer ao cliente o que o servidor encontrou no arquivo é ruído para quem apenas errou o
+     * arquivo e informação útil para quem sonda (RNF011, RNF012).
+     */
+    @ExceptionHandler(FormatoDeArquivoNaoAceitoException.class)
+    public ResponseEntity<ProblemDetail> formatoDeArquivoNaoAceito(
+            FormatoDeArquivoNaoAceitoException ex, HttpServletRequest requisicao) {
+        log.warn("arquivo recusado por formato em {} {}: {}",
+                requisicao.getMethod(), requisicao.getRequestURI(), ex.motivo());
+        return problema(HttpStatus.UNSUPPORTED_MEDIA_TYPE, TIPO_TIPO_NAO_SUPORTADO,
+                "Tipo de conteúdo não suportado", FormatoDeArquivoNaoAceitoException.DETALHE,
+                requisicao, null);
+    }
+
+    /**
+     * Parte obrigatória do formulário ausente na requisição — <b>400</b> {@code validacao}.
+     *
+     * <p>O Spring falha antes de o serviço ver o arquivo, e sem este mapeamento a exceção cairia
+     * no catch-all como <b>500</b>: o cliente receberia erro de servidor por um formulário que
+     * veio sem o arquivo. É o mesmo 400 do contrato v0.5 — "campo obrigatório ausente no
+     * formulário devolve 400, o servidor não conseguiu ler o pedido como veio".
+     */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ProblemDetail> parteObrigatoriaAusente(
+            MissingServletRequestPartException ex, HttpServletRequest requisicao) {
+        return campoObrigatorioAusente(ex.getRequestPartName(), requisicao);
+    }
+
+    /** Parte presente mas vazia: o serviço vê que não há arquivo e recusa igual ao caso acima. */
+    @ExceptionHandler(CampoObrigatorioAusenteException.class)
+    public ResponseEntity<ProblemDetail> campoObrigatorioAusente(
+            CampoObrigatorioAusenteException ex, HttpServletRequest requisicao) {
+        return campoObrigatorioAusente(ex.campo(), requisicao);
+    }
+
+    /** Resposta do 400 de campo ausente — a mesma para a parte que não veio e para a vazia. */
+    private ResponseEntity<ProblemDetail> campoObrigatorioAusente(String campo, HttpServletRequest requisicao) {
+        String nomeDoCampo = nomeDoParametro(campo);
+        List<ErroDeCampo> erros = List.of(new ErroDeCampo(nomeDoCampo, "é obrigatório"));
+        return problema(HttpStatus.BAD_REQUEST, TIPO_VALIDACAO, "Requisição inválida",
+                "Falta o campo obrigatório '" + nomeDoCampo + "' no formulário.", requisicao, erros);
+    }
+
+    /** 413 com o {@code detail} do contrato, calculado a partir do limite em bytes. */
+    private ResponseEntity<ProblemDetail> arquivoMuitoGrande(long limiteEmBytes, HttpServletRequest requisicao) {
+        return problema(HttpStatus.PAYLOAD_TOO_LARGE, TIPO_ARQUIVO_MUITO_GRANDE,
+                "Arquivo muito grande", ArquivoMuitoGrandeException.detalhe(limiteEmBytes), requisicao, null);
+    }
+
+    // ------------------------------------------------ 500 do download (integridade, RN008)
+
+    /**
+     * Conteúdo armazenado que não confere com o registro do material — <b>500</b>
+     * {@code urn:scipath:erro:interno} (card E4.3, RN008).
+     *
+     * <p><b>Por que 500, e não 404.</b> O material é público e existe: responder 404 diria ao
+     * visitante que ele não existe, e isso seria mentira — além de esconder a falha de quem
+     * operaria o sistema. O arquivo não pôde ser servido por falha do servidor, e é isso que a
+     * resposta diz.
+     *
+     * <p><b>O incidente é registrado aqui, num só lugar.</b> O {@code detail} da resposta é o
+     * genérico do contrato — sem caminho, chave de armazenamento, checksum esperado ou encontrado
+     * (RNF012, RNF014) —, e é o log abaixo que carrega o motivo completo da exceção: é o registro
+     * que o RN008 pede, inspecionável sem abrir o banco nem o disco.
+     */
+    @ExceptionHandler(IntegridadeDeArquivoException.class)
+    public ResponseEntity<ProblemDetail> integridadeDoArquivo(
+            IntegridadeDeArquivoException ex, HttpServletRequest requisicao) {
+        log.error("incidente de integridade no arquivo de material em {} {}: {}",
+                requisicao.getMethod(), requisicao.getRequestURI(), ex.getMessage());
+        return problema(HttpStatus.INTERNAL_SERVER_ERROR, TIPO_INTERNO, "Erro interno",
+                DETALHE_INTERNO, requisicao, null);
     }
 
     /** Exceções do Spring que já carregam status próprio (ex.: {@code ResponseStatusException}). */
@@ -354,6 +508,7 @@ public class ApiExceptionHandler {
             case FORBIDDEN -> TIPO_ACESSO_NEGADO;
             case NOT_FOUND -> TIPO_NAO_ENCONTRADO;
             case METHOD_NOT_ALLOWED -> TIPO_METODO_NAO_PERMITIDO;
+            case PAYLOAD_TOO_LARGE -> TIPO_ARQUIVO_MUITO_GRANDE;
             case UNSUPPORTED_MEDIA_TYPE -> TIPO_TIPO_NAO_SUPORTADO;
             case INTERNAL_SERVER_ERROR, BAD_GATEWAY, SERVICE_UNAVAILABLE, GATEWAY_TIMEOUT -> TIPO_INTERNO;
             default -> TIPO_INTERNO;
