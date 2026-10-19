@@ -109,9 +109,30 @@
    Alvo de verificação do card: 375 px (mobile) e 1440 px (desktop).
    --------------------------------------------------------------------------- */
 @media (max-width: 60rem) {
-  /* o cabeçalho fixo cresce: a busca ocupa a linha de baixo em vez de espremer
-     marca + navegação + busca numa única linha de 64 px */
+  /* CABEÇALHO DESTA FAIXA: `position:sticky`, e não o `fixed` do DS2 (card E2.13)
+     ------------------------------------------------------------------------------
+     O DS2 dimensiona o cabeçalho em 64 px e, no desktop, todo recuo de página conta
+     com isso (`.sc-page` = 5.5rem = 88 px = 64 + 24 de folga). Aqui ele EMBRULHA — a
+     busca desce para a linha de baixo em vez de espremer marca + navegação + busca
+     numa linha só — e a altura deixa de ser um número: MEDIDA em 320…960 px, ela vai
+     de 132 px a 215 px, e não depende só da largura: o conteúdo do cabeçalho muda com
+     a sessão (`EstadoDaSessao`: anônimo / verificando / autenticado / indisponível —
+     o último acrescenta "Não foi possível verificar a sua sessão" e "Verificar de
+     novo"). O mesmo build mede 132 px contra a API com o seed do E2.6 (sessão
+     anônima, laudo do E2.11) e 200 px contra o fixture (sessão indisponível).
+
+     Nenhum `padding-top` em px dá conta dessas combinações: o que não casar deixa o
+     título sob o cabeçalho — o defeito medido no achado A do E2.11 (em 375 px o h1
+     de /explorar caía inteiro dentro da faixa do cabeçalho). `sticky` resolve por
+     construção: o cabeçalho entra no FLUXO do documento, a altura que ele ocupa é
+     reservada por ele mesmo, e o `padding-top` de `.sc-page` volta a ser espaçamento
+     — não compensação de altura. Continua colado no topo ao rolar (mesmo
+     comportamento visível de antes), sem JavaScript envolvido (RNF023).
+
+     No desktop (>=60rem) nada muda: `.sc-header` fica `fixed` em 64 px, como o DS2
+     define — lá o recuo de 88/96 px sempre esteve correto. */
   .sc-header {
+    position: sticky;
     height: auto;
     min-height: 4rem;
     flex-wrap: wrap;
