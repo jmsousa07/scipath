@@ -3,7 +3,7 @@ package com.scipath.material;
 import java.time.Instant;
 
 /**
- * Detalhe público de um material — schema {@code MaterialDetalhe} do contrato v0.3 (RF005):
+ * Detalhe público de um material — schema {@code MaterialDetalhe} do contrato v0.5 (RF005):
  * o que o visitante precisa para entender o material e confiar no que está vendo.
  *
  * <p><b>Autoria.</b> {@code autor} é o {@link AutorResumoResposta} — slug e nome público, os
@@ -31,8 +31,12 @@ import java.time.Instant;
  * de listagem, que o omite. No detalhe a data de última atualização é informação do próprio
  * material, não repetição de rótulo de card.
  *
- * <p>Sem acesso ao arquivo: a Etapa 2 não serve arquivo, e publicar campo de download sem
- * implementação seria fronteira contra ficção (DRS §21.1, RF014 na Etapa 4).
+ * <p><b>Arquivo do material (v0.5, RF014).</b> {@code arquivo} é o {@link ArquivoMaterialResposta}:
+ * nome original sanitizado, tamanho e se o arquivo pode ser servido agora — o que a tela precisa
+ * para oferecer o download <b>sem inventar endereço</b>. O endereço não é dado: quem serve o
+ * conteúdo é {@code GET /materiais/{slug}/arquivo}, decidido no servidor (RNF014). Por isso o campo
+ * é o mesmo para material cujo binário está servível e para material cujo binário não está — o que
+ * muda é {@code disponivel}, e a razão de um {@code false} não é publicada.
  */
 public record MaterialDetalheResposta(
         String slug,
@@ -42,6 +46,7 @@ public record MaterialDetalheResposta(
         CategoriaReferencia categoria,
         TipoMaterialReferencia tipo,
         LicencaDetalheResposta licenca,
+        ArquivoMaterialResposta arquivo,
         String estado,
         Instant publicadoEm,
         Instant atualizadoEm) {

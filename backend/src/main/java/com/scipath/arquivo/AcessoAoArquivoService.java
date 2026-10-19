@@ -49,9 +49,6 @@ public class AcessoAoArquivoService {
     /** Bloco de leitura: 8 KB, o mesmo do recebimento — irrelevante para a memória da máquina. */
     private static final int TAMANHO_DO_BLOCO = 8 * 1024;
 
-    /** Único estado de {@code file_asset} que pode ser servido (RN008): conteúdo já conferido. */
-    static final String ESTADO_VALIDADO = "VALIDADO";
-
     private final MateriaisService materiais;
     private final StorageService armazenamento;
 
@@ -72,7 +69,7 @@ public class AcessoAoArquivoService {
     public ArquivoServivel buscarPorSlug(String slug) {
         ArquivoDoMaterial arquivo = materiais.arquivoPorSlug(slug);
 
-        if (!ESTADO_VALIDADO.equals(arquivo.estadoProcessamento())) {
+        if (!DisponibilidadeDeArquivo.ESTADO_VALIDADO.equals(arquivo.estadoProcessamento())) {
             throw incidente(arquivo, "o arquivo não está VALIDADO e sim " + arquivo.estadoProcessamento());
         }
 
