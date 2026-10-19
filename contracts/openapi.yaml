@@ -2,10 +2,31 @@ openapi: 3.1.0
 
 info:
   title: SciPath API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Fronteira entre backend e frontend do SciPath. Este arquivo é a fonte de verdade:
     mudança de API começa aqui, no mesmo card da implementação (AGENTS.md, DRS §14.3).
+
+    v0.5.0 — publicação de material e acesso ao arquivo (card E4.1). Abre a Etapa 4 do DRS (§8.3):
+    publicar material próprio (`POST /materiais`, `multipart/form-data` com os metadados e o arquivo
+    na MESMA requisição) e baixar o arquivo de material público (`GET /materiais/{slug}/arquivo`).
+    Duas decisões de fronteira valem para todo o contrato:
+
+    - **Publicar é uma transação.** Metadados e arquivo chegam juntos porque é o que torna a ordem
+      do RN008 implementável: o servidor recebe, valida o arquivo, move para o storage definitivo e
+      só então grava material e arquivo **na mesma transação** (ADR-0005 §2). Nunca existe material
+      publicado apontando para arquivo não validado.
+    - **O arquivo é servido pelo servidor, nunca por caminho direto.** `GET /materiais/{slug}/arquivo`
+      decide visibilidade e autorização no servidor (RN002, RN003) e responde o mesmo 404 para
+      material inexistente, RETIRADO ou EXCLUIDO; o corpo nunca traz caminho, chave de storage nem
+      credencial (RF014, RNF014). O `MaterialDetalhe` ganha apenas o metadado que a tela precisa para
+      oferecer o download (`arquivo`), nunca o endereço interno.
+
+    A **v0.4.0 permanece íntegra**: nenhuma rota, campo ou resposta que a Etapa 3 usa mudou de forma
+    ou de significado. O que esta versão acrescenta são rotas, schemas e uma classe de erro nova
+    (`arquivo_muito_grande`, 413) ao vocabulário fechado; o único campo acrescentado a um schema
+    existente é `arquivo`, em `MaterialDetalhe` — a Etapa 2 lê o mesmo corpo de antes e continua
+    lendo o mesmo (o campo novo é aditivo).
 
     v0.4.0 — identidade, sessão e perfil (card E3.1). Abre a Etapa 3 do DRS (§18): criar conta,
     autenticar, encerrar sessão, editar o próprio perfil e confirmar o e-mail. A maior parte da
@@ -53,8 +74,8 @@ info:
       confirmação.
     - **Publicar exige conta `ATIVO`** (verificação de e-mail concluída — ADR-0003 (b)). Navegar,
       pesquisar e **editar o próprio perfil não exigem**: quem está em `PENDENTE_VERIFICACAO`
-      entra, navega e edita o perfil. O endpoint de publicação é da Etapa 4; a regra entra aqui
-      porque é o estado da conta que a define.
+      entra, navega e edita o perfil. O endpoint de publicação existe a partir da v0.5
+      (`POST /materiais`); a regra entra aqui porque é o estado da conta que a define.
     - **Nada privado na resposta.** E-mail de login, hash de senha, token e identificador interno
       de conta não existem em nenhum schema deste contrato — nem no perfil público, nem no perfil
       próprio, nem no estado da sessão (RNF013). O estado da sessão devolve o perfil público e o
@@ -86,13 +107,13 @@ info:
     Convenções vinculantes para todo endpoint:
     - **Erro único.** Toda resposta 4xx/5xx usa `application/problem+json` com o schema
       `ProblemDetail` (RFC 7807). `errors[]` só aparece em erro de campo. Não existe
-      segundo formato de erro no contrato. O `type` é um vocabulário **fechado** de dez
+      segundo formato de erro no contrato. O `type` é um vocabulário **fechado** de onze
       classes — `validacao` (400), `nao_autenticado` (401), `acesso_negado` (403),
       `nao_encontrado` (404), `metodo_nao_permitido` (405), `conflito_de_unicidade` (409),
-      `tipo_nao_suportado` (415), `validacao_campo` (422), `reenvio_em_cooldown` (429) e
-      `interno` (500) — enumerado no schema `ProblemDetail`, que também diz em que
-      situação cada uma aparece e se ela carrega `errors[]`. Cliente que precisa de um
-      `type` novo muda o contrato primeiro, nunca o código sozinho.
+      `arquivo_muito_grande` (413), `tipo_nao_suportado` (415), `validacao_campo` (422),
+      `reenvio_em_cooldown` (429) e `interno` (500) — enumerado no schema `ProblemDetail`, que
+      também diz em que situação cada uma aparece e se ela carrega `errors[]`. Cliente que
+      precisa de um `type` novo muda o contrato primeiro, nunca o código sozinho.
     - **Onde o valor errado está decide o código.** Valor recusado em **consulta ou caminho**
       (parâmetro de URL), ou pedido que o servidor não conseguiu ler, é **400**
       `urn:scipath:erro:validacao`; corpo lido com **campo** de valor inválido é **422**
@@ -137,6 +158,11 @@ tags:
     description: |-
       Cadastro, sessão e perfil próprio (RF008–RF011). Depois do cadastro o usuário já sai
       autenticado; a verificação de e-mail só é exigida para publicar (ADR-0003 (b)).
+  - name: publicacao
+    description: |-
+      Publicação de material próprio e acesso ao arquivo publicado (RF012–RF014, RF019).
+      Publicar exige sessão e conta `ATIVO` (ADR-0003 (b)); baixar o arquivo de material
+      público não exige sessão.
 
 paths:
   /health:
@@ -399,6 +425,106 @@ paths:
           $ref: '#/components/responses/ErroMetodoNaoPermitido'
         '500':
           $ref: '#/components/responses/ErroInesperado'
+    post:
+      tags: [publicacao]
+      summary: Publica um material próprio
+      description: |-
+        Publica um material da conta autenticada (RF012, §8.3). A requisição é
+        `multipart/form-data` e traz os metadados e o arquivo na **mesma** requisição: é o que
+        torna a ordem do RN008 implementável — o servidor recebe, valida o arquivo, move para o
+        storage definitivo e só então grava material e arquivo **numa transação** (ADR-0005 §2).
+        Falha no meio não deixa material público incompleto nem arquivo validado servido por
+        engano.
+
+        **O autor não é campo.** A autoria vem da sessão — a conta autenticada no servidor —,
+        nunca de um campo enviado pelo cliente (RF012, ADR-0003 (j)). Não existe neste schema
+        campo de autor, de conta ou de perfil; enviá-lo no corpo é ignorado, porque a propriedade
+        não é negociável pelo cliente.
+
+        **Publicar exige conta `ATIVO`** (verificação de e-mail concluída — ADR-0003 (b)): conta
+        `PENDENTE_VERIFICACAO` recebe **403** com mensagem que diz o que falta ("confirme seu
+        e-mail para publicar"), não um erro genérico. A escrita exige o `X-CSRF-Token`; sem
+        sessão a resposta é **401**, e o **403** de CSRF aparece quando há sessão (a autenticação
+        precede a checagem de CSRF).
+
+        **Taxonomia por `slug`.** Categoria, tipo de material e licença são enviados pelo `slug`
+        estável (ADR-0006) — o mesmo valor que a leitura devolve em `categoria.slug`, `tipo.slug`
+        e `licenca.slug` e que os filtros de descoberta aceitam. `slug` bem formado mas
+        inexistente (ou inativo) devolve **422** no campo correspondente (RF018); nenhuma licença
+        é atribuída automaticamente — o autor escolhe.
+
+        **O arquivo precisa ser PDF válido** (RF013, ADR-0005 §1), conferido por conteúdo, não só
+        pela extensão. Formato não aceito — PDF renomeado, MIME mentindo ou `Content-Type` que
+        não é `multipart/form-data` — devolve **415**. Arquivo acima do limite configurado
+        (`SCIPATH_UPLOAD_MAX_BYTES`, 30 MB por padrão) devolve **413** com a mensagem específica
+        ("arquivo acima de X MB"), nunca um 500 genérico (RNF004).
+
+        **`declaracaoDireito` é obrigatório e precisa ser `true`** (RF012): é a confirmação de que
+        o autor possui o direito de compartilhar o material. Ausente ou `false` devolve **422** no
+        campo. Campo obrigatório ausente no formulário devolve **400** (o servidor não conseguiu
+        ler o pedido como veio); campo presente com valor inválido devolve **422**
+        `validacao_campo`.
+
+        Sucesso devolve **201** com o `slug` gerado no servidor (único e estável), o `estado`
+        inicial (`PUBLICADO`) e a `urlPublica` da página do material (RF012, RF019).
+      operationId: publicarMaterial
+      security:
+        - SessaoCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCsrf'
+      requestBody:
+        required: true
+        description: |-
+          Metadados e arquivo do material na mesma requisição. Não há campo de autor: a autoria
+          vem da sessão. `categoriaSlug`, `tipoSlug` e `licencaSlug` são os `slug` estáveis da
+          taxonomia (RF018).
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PublicacaoMaterial'
+            examples:
+              publicacao:
+                summary: Publicação válida (o valor de `arquivo` representa o binário do PDF)
+                value:
+                  titulo: Introdução a algoritmos de ordenação
+                  descricao: Nota de aula sobre ordenação por comparação, com análise de complexidade e exemplos em pseudocódigo.
+                  categoriaSlug: computacao-e-tecnologia
+                  tipoSlug: nota-de-aula
+                  licencaSlug: cc-by-4.0
+                  declaracaoDireito: true
+                  arquivo: (conteúdo binário do PDF)
+      responses:
+        '201':
+          description: |-
+            Material publicado e já visível na descoberta (estado `PUBLICADO`, RF019). O `slug` é
+            gerado no servidor e é a chave estável da URL pública (RNF025).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialPublicado'
+              examples:
+                publicado:
+                  summary: Material publicado
+                  value:
+                    slug: introducao-a-algoritmos-de-ordenacao
+                    estado: PUBLICADO
+                    urlPublica: /materiais/introducao-a-algoritmos-de-ordenacao
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '401':
+          $ref: '#/components/responses/ErroNaoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErroAcessoNegado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '413':
+          $ref: '#/components/responses/ErroArquivoMuitoGrande'
+        '415':
+          $ref: '#/components/responses/ErroTipoNaoSuportado'
+        '422':
+          $ref: '#/components/responses/ErroValidacaoCampo'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
 
   /materiais/{slug}:
     get:
@@ -424,9 +550,10 @@ paths:
         estável, sem depender de estado do navegador. Dados estruturados só se forem
         corretos (§12.3).
 
-        Acesso ao arquivo não está nesta versão: a Etapa 2 não serve arquivo, e publicar um
-        campo de download sem implementação seria fronteira contra ficção (DRS §21.1). Entra
-        no card que implementar RF014.
+        Acesso ao arquivo (RF014, v0.5): o corpo traz `arquivo` com o que a tela precisa para
+        oferecer o download — nome original sanitizado, tamanho em bytes e se está disponível —,
+        nunca caminho, chave de storage nem credencial (RNF014). O download em si é
+        `GET /materiais/{slug}/arquivo`, decidido no servidor.
       operationId: getMaterial
       parameters:
         - $ref: '#/components/parameters/SlugRecurso'
@@ -459,9 +586,62 @@ paths:
                       identificador: CC-BY-4.0
                       urlReferencia: https://creativecommons.org/licenses/by/4.0/
                       descricaoCurta: Você pode reutilizar e adaptar o material, inclusive comercialmente, dando crédito ao autor.
+                    arquivo:
+                      nomeOriginal: introducao-a-algoritmos-de-ordenacao.pdf
+                      tamanhoBytes: 348160
+                      disponivel: true
                     estado: PUBLICADO
                     publicadoEm: '2026-10-14T15:10:00Z'
                     atualizadoEm: '2026-10-14T15:10:00Z'
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '404':
+          $ref: '#/components/responses/ErroNaoEncontrado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /materiais/{slug}/arquivo:
+    get:
+      tags: [publicacao]
+      summary: Baixa o arquivo de um material público
+      description: |-
+        Entrega o arquivo PDF do material público identificado pelo `slug` (RF014, §14.4). A
+        resposta é o próprio arquivo, com `Content-Disposition: attachment` e o nome original
+        sanitizado sugerido para salvar.
+
+        **Visibilidade decidida no servidor.** Material inexistente, RETIRADO, EXCLUIDO ou de
+        conta não ATIVA responde **404**, todos de forma **indistinguível** — mesmo status, mesmo
+        corpo, sem revelar que o material existe fora do público (RN002, RN003, CA008). É o mesmo
+        `urn:scipath:erro:nao_encontrado` de qualquer endereço sem recurso.
+
+        **Nada de infraestrutura na resposta.** O contrato não expõe caminho, chave de storage,
+        checksum nem credencial: o arquivo é servido pelo servidor, nunca por endereço direto
+        (RF014, RNF014). Divergência de integridade entre o arquivo em disco e o registro do
+        `file_asset` faz o servidor **não servir** o arquivo e responder erro (RN008) — o corpo
+        do erro não carrega o caminho nem o detalhe interno.
+
+        Não exige sessão: é a leitura pública do arquivo publicado.
+      operationId: baixarArquivoMaterial
+      parameters:
+        - $ref: '#/components/parameters/SlugRecurso'
+      responses:
+        '200':
+          description: Arquivo do material público.
+          headers:
+            Content-Disposition:
+              description: |-
+                `attachment` com o nome original sanitizado do arquivo, para o navegador salvar
+                em vez de abrir no visualizador embutido.
+              schema:
+                type: string
+              example: attachment; filename="introducao-a-algoritmos-de-ordenacao.pdf"
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
         '400':
           $ref: '#/components/responses/ErroValidacao'
         '404':
@@ -1178,11 +1358,12 @@ components:
       required: true
       description: |
         Token CSRF da sessão corrente, exigido em toda escrita — cadastro, login, logout, editar
-        perfil e reenvio de verificação. O servidor o emite na cookie `XSRF-TOKEN`, legível pelo
-        frontend da mesma origem (ao contrário da cookie de sessão), e o cliente devolve o valor
-        neste cabeçalho; a primeira leitura do app já traz a cookie. Ausente ou sem
-        correspondência com a sessão → **403** `acesso_negado`. Numa escrita que exige identidade
-        e chega **sem sessão**, a resposta é **401**: a autenticação precede a checagem de CSRF.
+        perfil, reenvio de verificação e publicação de material. O servidor o emite na cookie
+        `XSRF-TOKEN`, legível pelo frontend da mesma origem (ao contrário da cookie de sessão), e
+        o cliente devolve o valor neste cabeçalho; a primeira leitura do app já traz a cookie.
+        Ausente ou sem correspondência com a sessão → **403** `acesso_negado`. Numa escrita que
+        exige identidade e chega **sem sessão**, a resposta é **401**: a autenticação precede a
+        checagem de CSRF.
         As confirmações por token (verificação de e-mail, recuperação de senha) não exigem o
         cabeçalho: o segredo vai no corpo e não há cookie de sessão em jogo.
       schema:
@@ -1302,7 +1483,9 @@ components:
       description: |
         Há identidade, mas a operação não é permitida — ou falta o `X-CSRF-Token` na escrita. No
         login, conta `SUSPENSO` com credenciais corretas também responde este 403: quem provou ser
-        o dono tem o direito de saber por que não entra. Sem `errors[]`.
+        o dono tem o direito de saber por que não entra. Na publicação, conta
+        `PENDENTE_VERIFICACAO` responde este 403 (ADR-0003 (b)) — o `detail` diz que falta
+        confirmar o e-mail, para a tela oferecer o reenvio em vez de um erro cru. Sem `errors[]`.
       content:
         application/problem+json:
           schema:
@@ -1324,6 +1507,14 @@ components:
                 status: 403
                 detail: Esta conta está suspensa e não pode entrar.
                 instance: /api/sessoes
+            emailNaoVerificado:
+              summary: Publicação com e-mail ainda não confirmado
+              value:
+                type: urn:scipath:erro:acesso_negado
+                title: Acesso negado
+                status: 403
+                detail: Confirme seu e-mail para publicar material.
+                instance: /api/materiais
 
     ErroConflitoUnicidade:
       description: |
@@ -1360,10 +1551,34 @@ components:
                   - campo: slug
                     mensagem: já está em uso
 
+    ErroArquivoMuitoGrande:
+      description: |
+        O arquivo enviado excede o limite de upload (RF013, ADR-0005 §1). O limite **não é
+        constante**: é configuração (`SCIPATH_UPLOAD_MAX_BYTES`, 30 MB por padrão), e a mensagem
+        diz o valor corrente ("arquivo acima de X MB") — nunca um 500 genérico (RNF004). Sem
+        `errors[]`: o arquivo não é campo de corpo, e o motivo está no `detail`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            arquivoGrande:
+              summary: Publicação com arquivo acima do limite
+              value:
+                type: urn:scipath:erro:arquivo_muito_grande
+                title: Arquivo muito grande
+                status: 413
+                detail: O arquivo excede o limite de 30 MB.
+                instance: /api/materiais
+
     ErroTipoNaoSuportado:
       description: |
         O `Content-Type` da requisição não é aceito. As escritas deste contrato recebem
-        `application/json`. Sem `errors[]` — `Content-Type` não é campo.
+        `application/json`; a publicação de material (`POST /materiais`) recebe
+        `multipart/form-data`. Nessa rota o 415 também cobre o **arquivo** cujo conteúdo não é PDF
+        válido — PDF renomeado ou MIME mentindo (RF013, ADR-0005 §1): a extensão nunca decide
+        sozinha. Sem `errors[]` — `Content-Type` não é campo, e o formato recusado é explicado no
+        `detail`.
       content:
         application/problem+json:
           schema:
@@ -1377,14 +1592,23 @@ components:
                 status: 415
                 detail: Este endpoint recebe 'application/json'.
                 instance: /api/contas
+            arquivoNaoPdf:
+              summary: Publicação com arquivo que não é PDF válido
+              value:
+                type: urn:scipath:erro:tipo_nao_suportado
+                title: Tipo de mídia não suportado
+                status: 415
+                detail: O arquivo enviado não é um PDF válido.
+                instance: /api/materiais
 
     ErroValidacaoCampo:
       description: |
         O corpo foi lido e um campo tem valor inválido — e-mail fora do formato, senha fora do
         intervalo, `slug` fora do padrão, token de confirmação inválido, expirado ou já
-        consumido. Traz `errors[]` com o campo culpado. É o código do formulário: o 400 fica para
-        o pedido que o servidor não conseguiu processar como veio (consulta/caminho inválido,
-        corpo ilegível).
+        consumido. Na publicação, também é este 422: `categoriaSlug`, `tipoSlug` ou `licencaSlug`
+        inexistente (ou inativo) e `declaracaoDireito` ausente ou `false` (RF012, RF018). Traz
+        `errors[]` com o campo culpado. É o código do formulário: o 400 fica para o pedido que o
+        servidor não conseguiu processar como veio (consulta/caminho inválido, corpo ilegível).
 
         No token de confirmação, a mensagem é a mesma para inválido, expirado e já consumido, e
         não revela nada sobre o token nem sobre a conta (RNF013).
@@ -1426,6 +1650,28 @@ components:
                 errors:
                   - campo: token
                     mensagem: token inválido ou expirado
+            categoriaInexistente:
+              summary: Publicação com categoria que não existe
+              value:
+                type: urn:scipath:erro:validacao_campo
+                title: Campo inválido
+                status: 422
+                detail: Um ou mais campos do corpo não foram aceitos.
+                instance: /api/materiais
+                errors:
+                  - campo: categoriaSlug
+                    mensagem: categoria inexistente ou inativa
+            direitoNaoDeclarado:
+              summary: Publicação sem confirmar o direito de compartilhar
+              value:
+                type: urn:scipath:erro:validacao_campo
+                title: Campo inválido
+                status: 422
+                detail: Um ou mais campos do corpo não foram aceitos.
+                instance: /api/materiais
+                errors:
+                  - campo: declaracaoDireito
+                    mensagem: é preciso confirmar que você tem o direito de compartilhar o material
 
     ErroReenvioEmCooldown:
       description: |
@@ -1775,15 +2021,16 @@ components:
     MaterialDetalhe:
       type: object
       description: |
-        Material público completo (RF005): autoria, categoria, tipo, licença explicada e
-        estado de publicação. Nenhum dado privado — não há e-mail, hash, token, chave de
-        storage nem identificador de conta (RNF013). Nenhuma marca de revisão,
-        certificação, curadoria ou verificação científica (RN010, RN011, CA012).
+        Material público completo (RF005): autoria, categoria, tipo, licença explicada, estado
+        de publicação e o metadado do arquivo para download (RF014). Nenhum dado privado — não
+        há e-mail, hash, token, chave de storage, caminho interno nem identificador de conta
+        (RNF013, RNF014). Nenhuma marca de revisão, certificação, curadoria ou verificação
+        científica (RN010, RN011, CA012).
 
-        O acesso ao arquivo (nome, formato, download) não faz parte desta versão: a Etapa 2
-        não serve arquivo, e publicar um campo de download sem implementação seria fronteira
-        contra ficção (DRS §21.1). Entra no card que implementar RF014.
-      required: [slug, titulo, descricao, autor, categoria, tipo, licenca, estado, publicadoEm, atualizadoEm]
+        `arquivo` traz só o que a tela precisa para oferecer o download — nome original
+        sanitizado, tamanho e disponibilidade. O endereço interno do arquivo nunca aparece:
+        quem decide o acesso é `GET /materiais/{slug}/arquivo`, no servidor (RF014, RNF014).
+      required: [slug, titulo, descricao, autor, categoria, tipo, licenca, arquivo, estado, publicadoEm, atualizadoEm]
       properties:
         slug:
           type: string
@@ -1806,6 +2053,8 @@ components:
           $ref: '#/components/schemas/TipoMaterialRef'
         licenca:
           $ref: '#/components/schemas/LicencaRef'
+        arquivo:
+          $ref: '#/components/schemas/ArquivoMaterial'
         estado:
           type: string
           enum: [PUBLICADO]
@@ -1823,6 +2072,117 @@ components:
           format: date-time
           description: Instante da última atualização (RF005).
           example: '2026-10-14T15:10:00Z'
+
+    ArquivoMaterial:
+      type: object
+      description: |
+        Metadado público do arquivo do material (RF014), o necessário para a tela oferecer o
+        download sem revelar infraestrutura. Não há caminho, chave de storage, checksum nem
+        credencial: o download é decidido no servidor por `GET /materiais/{slug}/arquivo`
+        (RF014, RNF014).
+      required: [nomeOriginal, tamanhoBytes, disponivel]
+      properties:
+        nomeOriginal:
+          type: string
+          description: |
+            Nome original do arquivo, sanitizado — é o nome sugerido no download
+            (`Content-Disposition`). O nome físico no storage é uma chave interna e nunca aparece.
+          example: introducao-a-algoritmos-de-ordenacao.pdf
+        tamanhoBytes:
+          type: integer
+          minimum: 0
+          description: Tamanho do arquivo em bytes.
+          example: 348160
+        disponivel:
+          type: boolean
+          description: |
+            `true` quando o arquivo está acessível agora para download. `false` permite à tela não
+            oferecer um link que responderia 404; a razão nunca é exposta.
+          example: true
+
+    PublicacaoMaterial:
+      type: object
+      description: |
+        Metadados e arquivo de uma publicação (RF012, §8.3), enviados juntos em
+        `multipart/form-data`. **Não existe campo de autor, de conta ou de perfil**: a autoria vem
+        da sessão (ADR-0003 (j)). `categoriaSlug`, `tipoSlug` e `licencaSlug` são os `slug`
+        estáveis da taxonomia (ADR-0006, RF018) — os mesmos valores que a leitura devolve.
+      required: [titulo, descricao, categoriaSlug, tipoSlug, licencaSlug, arquivo, declaracaoDireito]
+      properties:
+        titulo:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Título do material (RN004); é o `title` de SEO da página.
+          example: Introdução a algoritmos de ordenação
+        descricao:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Descrição do material (RN004); é a base do `description` de SEO.
+          example: Nota de aula sobre ordenação por comparação, com análise de complexidade e exemplos em pseudocódigo.
+        categoriaSlug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: |
+            `slug` da categoria do material (RF018). Precisa existir e estar ativa; inexistente ou
+            inativa → 422 no campo.
+          example: computacao-e-tecnologia
+        tipoSlug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: |
+            `slug` do tipo de material (RF018). Precisa existir e estar ativo; inexistente ou
+            inativo → 422 no campo.
+          example: nota-de-aula
+        licencaSlug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9.]+)*$'
+          description: |
+            `slug` da licença de reutilização (RF018, RN006). Precisa existir e estar ativa;
+            nenhuma licença é atribuída automaticamente — o autor escolhe. Inexistente ou inativa
+            → 422 no campo.
+          example: cc-by-4.0
+        arquivo:
+          type: string
+          format: binary
+          description: |
+            Conteúdo do arquivo, na mesma requisição dos metadados (RF012, RN008). Precisa ser PDF
+            válido por conteúdo (RF013): formato recusado → 415; acima do limite → 413.
+        declaracaoDireito:
+          type: boolean
+          description: |
+            Confirmação de que o autor possui o direito de compartilhar o material (RF012).
+            Obrigatório e precisa ser `true`; ausente ou `false` → 422 no campo.
+          example: true
+
+    MaterialPublicado:
+      type: object
+      description: |
+        Resultado de uma publicação (RF012). O `slug` é gerado no servidor, único e estável
+        (RNF025); `estado` é o estado de publicação (o nome da coluna no banco,
+        `estado_publicacao`, não aparece no contrato); `urlPublica` é o caminho da página pública
+        do material.
+      required: [slug, estado, urlPublica]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: Identificador público e estável do material; base da URL canônica (RNF025).
+          example: introducao-a-algoritmos-de-ordenacao
+        estado:
+          type: string
+          enum: [PUBLICADO]
+          description: Estado de publicação após o sucesso; a publicação nasce `PUBLICADO` (RF019).
+          example: PUBLICADO
+        urlPublica:
+          type: string
+          pattern: '^/materiais/[a-z0-9]+(-[a-z0-9]+)*$'
+          description: |
+            Caminho da página pública do material no frontend (RF012, RNF025). É derivado do
+            `slug`, é estável e o cliente navega para ele diretamente — o contrato não inventa um
+            host nem expõe rota de API.
+          example: /materiais/introducao-a-algoritmos-de-ordenacao
 
     PerfilPublico:
       type: object
@@ -2117,7 +2477,7 @@ components:
         seguro para exibir (RNF012 — sem stack trace, SQL ou caminho de arquivo);
         `errors[]` só aparece em erro de campo, nunca em erro sistêmico.
 
-        Vocabulário fechado: a API emite exatamente estas dez classes, cada uma com o
+        Vocabulário fechado: a API emite exatamente estas onze classes, cada uma com o
         status HTTP correspondente. O `status` no corpo repete o status da resposta; o
         cliente decide por `type`.
 
@@ -2125,30 +2485,33 @@ components:
         |---|---|---|---|
         | `urn:scipath:erro:validacao` | 400 | o pedido não pôde ser processado como veio: valor recusado em consulta/caminho, ou corpo ilegível | sim, quando aponta o parâmetro |
         | `urn:scipath:erro:nao_autenticado` | 401 | a operação exige identidade e não há sessão válida (ausente, expirada ou revogada) | não |
-        | `urn:scipath:erro:acesso_negado` | 403 | há identidade e ela não tem permissão; inclui escrita sem `X-CSRF-Token` e login em conta suspensa | não |
+        | `urn:scipath:erro:acesso_negado` | 403 | há identidade e ela não tem permissão; inclui escrita sem `X-CSRF-Token`, login em conta suspensa e publicação com e-mail não verificado | não |
         | `urn:scipath:erro:nao_encontrado` | 404 | o recurso pedido não existe, ou o endereço não corresponde a nenhum recurso ou endpoint | não |
         | `urn:scipath:erro:metodo_nao_permitido` | 405 | o endereço existe, mas não responde a este método | não |
         | `urn:scipath:erro:conflito_de_unicidade` | 409 | o valor já pertence a outro registro: e-mail já cadastrado ou `slug` já em uso | sim, o campo em conflito |
-        | `urn:scipath:erro:tipo_nao_suportado` | 415 | o `Content-Type` enviado não é aceito | não |
-        | `urn:scipath:erro:validacao_campo` | 422 | o corpo foi lido e um campo tem valor inválido (formato, intervalo, token inválido/expirado) | sim, um item por campo culpado |
+        | `urn:scipath:erro:arquivo_muito_grande` | 413 | o arquivo enviado excede o limite de upload configurado | não |
+        | `urn:scipath:erro:tipo_nao_suportado` | 415 | o `Content-Type` enviado não é aceito, ou o arquivo publicado não é PDF válido | não |
+        | `urn:scipath:erro:validacao_campo` | 422 | o corpo foi lido e um campo tem valor inválido (formato, intervalo, token inválido/expirado, taxonomia inexistente) | sim, um item por campo culpado |
         | `urn:scipath:erro:reenvio_em_cooldown` | 429 | reenvio de verificação pedido antes do fim do cooldown de 60 s | não |
         | `urn:scipath:erro:interno` | 500 | falha inesperada; detalhe técnico fica só no log do servidor | não |
 
         `errors[]` acompanha o erro que aponta um campo: `validacao` (400), quando o valor
         recusado é um parâmetro de consulta ou de caminho; `conflito_de_unicidade` (409), com o
         campo que colidiu; e `validacao_campo` (422), com um item por campo do corpo culpado. Erro
-        que não é de campo não carrega a lista — 401, 403, 404, 405, 415, 429 e 500 explicam a
+        que não é de campo não carrega a lista — 401, 403, 404, 405, 413, 415, 429 e 500 explicam a
         situação no `detail`.
 
         Um endpoint só documenta os status que o seu caminho pode produzir: 405 aparece em todo
         endpoint publicado (o caminho existe, o método errado é recusado); 404 aparece nos
-        endpoints com recurso no caminho (`/materiais/{slug}`, `/autores/{slug}`); 415 nas
-        escritas que recebem corpo JSON; 401 nas operações que exigem identidade; 403 nas
-        escritas que exigem `X-CSRF-Token` e no login de conta suspensa; 409 nos dois pontos de
-        unicidade (cadastro e `slug` de perfil); 422 nos endpoints que leem corpo; 429 só no
-        reenvio de verificação. A classe existe neste schema mesmo antes de o endpoint existir
-        porque o formato foi implementado de uma vez (card E1.4) — o que muda depois é qual
-        endpoint pode devolvê-la, não o formato.
+        endpoints com recurso no caminho (`/materiais/{slug}`, `/autores/{slug}` e
+        `/materiais/{slug}/arquivo`); 413 aparece na publicação quando o arquivo excede o limite;
+        415 nas escritas que recebem corpo (`application/json` ou o `multipart/form-data` da
+        publicação); 401 nas operações que exigem identidade; 403 nas escritas que exigem
+        `X-CSRF-Token`, no login de conta suspensa e na publicação com e-mail não verificado; 409
+        nos dois pontos de unicidade (cadastro e `slug` de perfil); 422 nos endpoints que leem
+        corpo; 429 só no reenvio de verificação. A classe existe neste schema mesmo antes de o
+        endpoint existir porque o formato foi implementado de uma vez (card E1.4) — o que muda
+        depois é qual endpoint pode devolvê-la, não o formato.
       required: [type, title, status]
       properties:
         type:
@@ -2161,6 +2524,7 @@ components:
             - urn:scipath:erro:nao_encontrado
             - urn:scipath:erro:metodo_nao_permitido
             - urn:scipath:erro:conflito_de_unicidade
+            - urn:scipath:erro:arquivo_muito_grande
             - urn:scipath:erro:tipo_nao_suportado
             - urn:scipath:erro:validacao_campo
             - urn:scipath:erro:reenvio_em_cooldown
