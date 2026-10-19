@@ -162,20 +162,51 @@ else
 fi
 
 # ============================================================================
-secao "4. REVERSÃO EXERCITADA (E1.2 critério 3) — procedimento do README, ordem inversa"
+secao "4. REVERSÃO EXERCITADA (E1.2 critério 3) — ordem inversa derivada do catálogo"
 
 h2 "4.1 Estado antes da reversão (scipath_test)"
-psqlq -d scipath_test -tAc "select 'tabelas do V1 presentes = ' || count(*) from information_schema.tables where table_schema='public' and table_name in ('account','verification_token','profile','category','material_type','license','file_asset','material');"
+psqlq -d scipath_test -tAc "select 'tabelas do modelo presentes = ' || count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name <> 'flyway_schema_history';"
 
-h2 "4.2 Drop na ordem inversa das dependências + remoção da versão do histórico"
-DROP_V1="DROP TABLE IF EXISTS material; DROP TABLE IF EXISTS file_asset; DROP TABLE IF EXISTS verification_token; DROP TABLE IF EXISTS profile; DROP TABLE IF EXISTS account; DROP TABLE IF EXISTS category; DROP TABLE IF EXISTS material_type; DROP TABLE IF EXISTS license; DELETE FROM flyway_schema_history WHERE version IN ('1','2');"
-psqlq -d scipath_test -v ON_ERROR_STOP=1 -e -c "$DROP_V1"
+h2 "4.2 Drop na ordem inversa das dependências + remoção das versões do histórico"
+echo "A ordem NÃO é lista fixa: é derivada do catálogo (pg_constraint). Uma tabela só cai"
+echo "quando nenhuma outra ainda existente a referencia; assim uma FK nova (como a de"
+echo "'sessao' -> 'account' da V4) não quebra o critério de novo. O histórico perde todas"
+echo "as versões aplicadas, senão o Flyway pularia a reaplicação."
+REVERSAO_SQL=$(cat <<'SQL'
+DO $$
+DECLARE alvo text;
+BEGIN
+  LOOP
+    SELECT c.relname INTO alvo
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relkind = 'r'
+      AND c.relname <> 'flyway_schema_history'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint con
+        JOIN pg_class dep ON dep.oid = con.conrelid
+        WHERE con.contype = 'f'
+          AND con.confrelid = c.oid
+          AND dep.oid <> c.oid          -- auto-referência não bloqueia (ex.: category.parent_id)
+      )
+    LIMIT 1;
+    EXIT WHEN alvo IS NULL;
+    RAISE NOTICE 'DROP TABLE % (ordem inversa de dependência)', alvo;
+    EXECUTE format('DROP TABLE IF EXISTS public.%I', alvo);
+  END LOOP;
+END $$;
+DELETE FROM flyway_schema_history;
+SQL
+)
+psqlq -d scipath_test -v ON_ERROR_STOP=1 -e -c "$REVERSAO_SQL" 2>&1
 echo "reversão exit=$?"
 
 h2 "4.3 Depois da reversão (esperado: nenhuma tabela do modelo)"
 psqlq -d scipath_test -c "\dt"
-restantes=$(psqlq -d scipath_test -tAc "select count(*) from information_schema.tables where table_schema='public' and table_name in ('account','verification_token','profile','category','material_type','license','file_asset','material')")
-echo "-- tabelas do modelo restantes: $restantes"
+restantes=$(psqlq -d scipath_test -tAc "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name <> 'flyway_schema_history'")
+echo "-- tabelas do modelo restantes (todas menos flyway_schema_history): $restantes"
 
 h2 "4.4 Reaplicação (a reversão é reversível)"
 executar "remigrate-test" make -C "$WORKTREE" db:migrate:test
@@ -251,11 +282,16 @@ ocorrencias=$(grep -rIl --exclude-dir=.git --exclude-dir=node_modules --exclude-
 echo "-- arquivos com o valor da senha (esperado 0): $ocorrencias"
 
 h2 "7.2 Padrões de segredo (chave privada, token, senha literais)"
+echo "Escopo: TODO o repositório versionado, menos os lugares onde um literal com forma de"
+echo "segredo é legítimo por construção — duplo de teste (backend/**/src/test/**), script de"
+echo "verificação (frontend/scripts/check-*.mjs) e a própria evidência (docs/qa/**). Segredo"
+echo "REAL não escapa: a senha do .env é procurada em arquivo algum com essas exclusões (7.1)."
 padroes=$(grep -rInE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target \
   --exclude='*.log' --exclude='*.md' --exclude='*.example' \
   -e 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' \
   -e '(password|senha|secret|token)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{8,}' \
-  "$WORKTREE" 2>/dev/null | grep -viE 'password.*\$|senha_hash|hash-de-teste|PASSWORD NULL|"password": ""' | head -20 || true)
+  "$WORKTREE" 2>/dev/null | grep -viE 'password.*\$|senha_hash|hash-de-teste|PASSWORD NULL|"password": ""' \
+  | grep -vE '/(docs/qa/|src/test/|scripts/check-)' | head -20 || true)
 echo "${padroes:-(0 ocorrências)}"
 npad=$(printf '%s' "$padroes" | grep -c . || true)
 if [[ "$ocorrencias" -eq 0 && "${npad:-0}" -eq 0 ]]; then
