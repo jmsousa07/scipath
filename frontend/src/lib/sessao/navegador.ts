@@ -25,8 +25,10 @@ import type {
   CadastroConta,
   Credenciais,
   EdicaoPerfil,
+  MaterialPublicado,
   PerfilPublico,
   ProblemDetail,
+  PublicacaoMaterial,
   ReenvioVerificacao,
   SessaoAtual,
 } from '../api/tipos';
@@ -108,9 +110,24 @@ async function executar<T>(
   caminho: string,
   metodo: 'GET' | 'POST' | 'PUT' | 'DELETE',
   corpo?: unknown,
+  opcoes: {
+    multipart?: boolean;
+    limiteMs?: number;
+    /**
+     * O que o status sozinho não diz e a tradução precisa saber — ver o terceiro parâmetro de
+     * `mapearFalhaDeEnvio`. A publicação o usa: o 403 dela é "confirme o e-mail" quando a conta
+     * é a `PENDENTE_VERIFICACAO` que a tela leu no servidor (ADR-0003 (b)).
+     */
+    contexto?: { contaVerificada?: boolean; limiteArquivo?: string };
+  } = {},
 ): Promise<ResultadoDeEnvio<T>> {
+  const multipart = opcoes.multipart === true && corpo !== undefined;
   const cabecalhos: Record<string, string> = { accept: 'application/json' };
-  if (corpo !== undefined) cabecalhos['content-type'] = 'application/json';
+  // `multipart/form-data` NÃO recebe `content-type` escrito à mão: o cabeçalho precisa carregar o
+  // `boundary` que o próprio navegador gerou ao montar o `FormData`, e escrevê-lo aqui (sem o
+  // boundary) faria o servidor não conseguir ler o corpo. É a diferença que a publicação (E4.6)
+  // trouxe: os metadados e o arquivo viajam na mesma requisição (RF012, RN008).
+  if (corpo !== undefined && !multipart) cabecalhos['content-type'] = 'application/json';
   if (metodo !== 'GET') {
     const token = await garantirTokenCsrf();
     if (token) cabecalhos[CABECALHO_CSRF] = token;
@@ -123,8 +140,8 @@ async function executar<T>(
       credentials: 'same-origin',
       cache: 'no-store',
       headers: cabecalhos,
-      body: corpo === undefined ? undefined : JSON.stringify(corpo),
-      signal: AbortSignal.timeout(LIMITE_MS),
+      body: corpo === undefined ? undefined : multipart ? (corpo as FormData) : JSON.stringify(corpo),
+      signal: AbortSignal.timeout(opcoes.limiteMs ?? LIMITE_MS),
     });
   } catch {
     return { ok: false, desfecho: mapearFalhaDeEnvio({ motivo: 'sem-resposta' }, operacao) };
@@ -143,6 +160,7 @@ async function executar<T>(
           retryAfterS: retryAfter(resposta),
         },
         operacao,
+        opcoes.contexto,
       ),
     };
   }
@@ -206,6 +224,56 @@ export function editarPerfil(dados: EdicaoPerfil): Promise<ResultadoDeEnvio<Perf
 }
 
 /**
+ * `POST /api/materiais` — publica um material da conta autenticada (RF012, card E4.6).
+ *
+ * Por que este envio não é igual aos outros três, em uma frase: os METADADOS e o ARQUIVO
+ * viajam na MESMA requisição (`multipart/form-data`), porque é isso que torna a ordem do
+ * RN008 implementável no servidor — ele recebe, valida o PDF por conteúdo, move para o
+ * storage e só então grava material e arquivo numa transação (ADR-0005 §2). Mandar o
+ * arquivo num segundo pedido deixaria a janela em que existiria material sem arquivo ou
+ * arquivo sem material.
+ *
+ * O que este envio NÃO manda, e é o desenho do contrato: **não há campo de autor**. A
+ * autoria vem da sessão (`ADR-0003 (j)`) — não existe corpo capaz de publicar em nome de
+ * outra conta. `categoriaSlug`, `tipoSlug` e `licencaSlug` são os `slug` da taxonomia
+ * (RF018), e nenhum deles tem valor padrão: a licença, em especial, é escolha explícita do
+ * autor (RN006) — o servidor não atribui uma em silêncio.
+ *
+ * O teto de tempo é maior que o das outras escritas (120 s) e isso é requisito, não
+ * folga: a requisição carrega até o limite do ADR-0005 (30 MB por padrão) e é justamente
+ * numa máquina pequena que um upload legítimo demoraria mais que os 8 s das escritas de
+ * identidade. Um teto curto aqui abortaria um envio válido e diria ao usuário que a rede
+ * falhou.
+ */
+const LIMITE_PUBLICACAO_MS = 120_000;
+
+export function publicarMaterial(
+  dados: PublicacaoMaterial,
+  contexto: { contaVerificada: boolean; limiteArquivo?: string },
+): Promise<ResultadoDeEnvio<MaterialPublicado>> {
+  const corpo = new FormData();
+  corpo.set('titulo', dados.titulo);
+  corpo.set('descricao', dados.descricao);
+  corpo.set('categoriaSlug', dados.categoriaSlug);
+  corpo.set('tipoSlug', dados.tipoSlug);
+  corpo.set('licencaSlug', dados.licencaSlug);
+  // O contrato tipa `declaracaoDireito` como boolean; em `multipart/form-data` todo campo é
+  // texto, então o valor vai como `'true'`. O que o servidor recusa é ausente/`false` — e é
+  // por isso que a tela nunca deixa o campo vazio: ela só envia o que a pessoa confirmou.
+  corpo.set('declaracaoDireito', String(dados.declaracaoDireito));
+  // Terceiro argumento com o nome do arquivo: sem ele o `FormData` usaria o padrão `blob` e o
+  // nome original (sanitizado pelo servidor) viraria outro — o contrato publica o nome
+  // original justamente para o download sugerir o arquivo certo (RF014).
+  corpo.set('arquivo', dados.arquivo, dados.arquivo.name);
+
+  return executar<MaterialPublicado>('publicar-material', '/materiais', 'POST', corpo, {
+    multipart: true,
+    limiteMs: LIMITE_PUBLICACAO_MS,
+    contexto,
+  });
+}
+
+/**
  * Desfecho de sucesso da EDIÇÃO DO PERFIL (RF011).
  *
  * O texto depende do estado da conta de propósito: `PUT /perfil/atual` grava a alteração em
@@ -222,6 +290,25 @@ export function desfechoDePerfilSalvo(perfil: PerfilPublico, jaVerificada: boole
     mensagem: jaVerificada
       ? `O seu perfil público foi atualizado: o endereço /u/${perfil.slug} já mostra o que está acima. A alteração vale para o perfil que qualquer visitante abre.`
       : `A alteração foi salva e vale para o seu perfil. O endereço /u/${perfil.slug} passa a responder a visitantes quando a confirmação do e-mail for concluída — enquanto a conta está pendente, o perfil aparece só aqui.`,
+    campos: {},
+    foraDosCampos: [],
+  };
+}
+
+/**
+ * Desfecho de sucesso da PUBLICAÇÃO de um material (RF012, card E4.6).
+ *
+ * O que a mensagem tem de dizer, e nada além: que o material está no ar com o estado
+ * `PUBLICADO` (RF019) e qual é o endereço público. Sem "enviado com sucesso" vazio: quem
+ * publicou precisa saber que o arquivo foi gravado junto dos dados (numa transação — RN008,
+ * ADR-0005 §2) e que a página já responde a qualquer visitante.
+ */
+export function desfechoDeMaterialPublicado(material: MaterialPublicado): Desfecho {
+  return {
+    estado: 'success',
+    classe: 'material-publicado',
+    titulo: 'Material publicado',
+    mensagem: `O material e o arquivo foram gravados na mesma operação e ele já está no ar com o estado ${material.estado}: quem tiver o endereço abre a página sem precisar de conta. O endereço público é ${material.urlPublica}.`,
     campos: {},
     foraDosCampos: [],
   };

@@ -261,3 +261,52 @@ export type EdicaoPerfil = {
   areasInteresse?: string[];
   linksExternos?: string[];
 };
+
+/* ---------------------------------------------------------------------------
+   Publicação de material — recorte da tag `publicacao` do contrato v0.5.0
+   (RF012, RF018, RF019) que o formulário de `/painel/publicar` lê e escreve.
+   Mesma fronteira contra ficção do topo deste arquivo: entra o campo que a tela
+   usa — e, no caso da licença, a `descricaoCurta`, porque é ela que explica a
+   escolha em linguagem simples (RF018, RN006). O campo de AUTOR não existe aqui
+   de propósito: a autoria vem da sessão, nunca do corpo enviado (ADR-0003 (j)).
+   --------------------------------------------------------------------------- */
+
+/**
+ * `PublicacaoMaterial` — o que o formulário envia em `POST /materiais`
+ * (`multipart/form-data`, os metadados e o arquivo na MESMA requisição: é o que
+ * torna a ordem do RN008 implementável no servidor).
+ *
+ * `categoriaSlug`, `tipoSlug` e `licencaSlug` são os `slug` estáveis da taxonomia
+ * (ADR-0006, RF018) — os mesmos valores que `/categorias`, `/tipos-material` e
+ * `/licencas` devolvem e que os filtros de descoberta aceitam. Nenhum deles tem
+ * valor padrão: quem escolhe é o autor, e `''` é "ainda não escolheu" — não é uma
+ * licença atribuída em silêncio.
+ *
+ * `declaracaoDireito` é obrigatório e precisa ser `true` (RF012): é a confirmação
+ * de que o autor possui o direito de compartilhar o material. Ausente ou `false`
+ * o servidor recusa com 422 no campo.
+ */
+export type PublicacaoMaterial = {
+  titulo: string;
+  descricao: string;
+  categoriaSlug: string;
+  tipoSlug: string;
+  licencaSlug: string;
+  declaracaoDireito: boolean;
+  arquivo: File;
+};
+
+/**
+ * `MaterialPublicado` — resposta **201** de `POST /materiais` (RF012, RF019).
+ *
+ * O `slug` é gerado no SERVIDOR (único e estável, RNF025) e é a chave da URL
+ * pública: o cliente navega para `urlPublica`, que o contrato publica no mesmo
+ * campo em vez de obrigar a tela a montar o endereço por conta própria.
+ */
+export type MaterialPublicado = {
+  slug: string;
+  /** A publicação nasce PUBLICADO (RF019) — o enum do contrato tem um único valor. */
+  estado: 'PUBLICADO';
+  /** Caminho da página pública do material (ex.: `/materiais/…`). */
+  urlPublica: string;
+};

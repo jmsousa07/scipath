@@ -16,6 +16,7 @@ import type {
   AutorPublico,
   CategoriaDaPagina,
   ItemTaxonomia,
+  LicencaRef,
   MaterialDetalhe,
   MaterialResumo,
   OrdemMateriais,
@@ -195,6 +196,25 @@ export function listarCategorias(): Promise<Resultado<Pagina<CategoriaDaPagina>>
 
 export function listarTiposMaterial(): Promise<Resultado<Pagina<ItemTaxonomia>>> {
   return requisitar<Pagina<ItemTaxonomia>>(`/tipos-material${comParametros({ size: 100 })}`, {
+    next: { revalidate: REVALIDACAO_TAXONOMIA_S },
+  });
+}
+
+/**
+ * `GET /api/licencas` — licenças de reutilização ativas (RF018, RN006), para o autor
+ * escolher na publicação.
+ *
+ * Duas decisões, as mesmas das vizinhas — e uma a mais:
+ *
+ * 1. `size=100` explícito e `revalidate: 3600` pelas mesmas razões de categoria e tipo
+ *    (dado de referência alterado só por migração Flyway, ADR-0006);
+ * 2. o tipo de retorno é `LicencaRef` (com `descricaoCurta`), não o `ItemTaxonomia` do
+ *    filtro: a tela de publicação precisa explicar em linguagem simples o que a licença
+ *    permite, e essa explicação É o `descricaoCurta` do contrato — escrevê-la na tela
+ *    seria redigir de novo o que o dado já diz (RF018, RN006).
+ */
+export function listarLicencas(): Promise<Resultado<Pagina<LicencaRef>>> {
+  return requisitar<Pagina<LicencaRef>>(`/licencas${comParametros({ size: 100 })}`, {
     next: { revalidate: REVALIDACAO_TAXONOMIA_S },
   });
 }

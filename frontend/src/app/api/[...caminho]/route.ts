@@ -52,6 +52,13 @@ async function encaminhar(
   cabecalhos.delete('connection');
   cabecalhos.delete('content-length');
   cabecalhos.delete('accept-encoding');
+  // `expect: 100-continue` é um pedido do CLIENTE ao PRÓXIMO salto ("me diga se posso mandar o
+  // corpo"); quem tem de responder isso é este servidor, e o `fetch` do Node RECUSA a requisição
+  // quando ele segue adiante (medido: `fetch failed` → 502 na publicação). O caso aparece em
+  // corpo grande — o `curl` o acrescenta acima de 1 KB e a publicação é a primeira escrita do
+  // produto que manda arquivo (E4.6). Sem esta linha, todo upload feito por um cliente que
+  // anuncia `Expect` falha com "API inalcançável", que é uma mentira sobre a causa.
+  cabecalhos.delete('expect');
 
   const temCorpo = pedido.method !== 'GET' && pedido.method !== 'HEAD';
 
