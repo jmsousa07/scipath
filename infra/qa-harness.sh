@@ -200,7 +200,7 @@ END $$;
 DELETE FROM flyway_schema_history;
 SQL
 )
-psqlq -d scipath_test -v ON_ERROR_STOP=1 -e -c "$REVERSAO_SQL"
+psqlq -d scipath_test -v ON_ERROR_STOP=1 -e -c "$REVERSAO_SQL" 2>&1
 echo "reversão exit=$?"
 
 h2 "4.3 Depois da reversão (esperado: nenhuma tabela do modelo)"
