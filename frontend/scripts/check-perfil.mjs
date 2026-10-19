@@ -144,12 +144,24 @@ console.log('\n2. GET /painel com cookie de conta PENDENTE_VERIFICACAO');
   verificar('linka a edição do perfil', contem(html, 'href="/painel/perfil"'));
   verificar('linka a descoberta de materiais (tela que existe)', contem(html, 'href="/explorar"'));
   verificar(
-    'NÃO promete telas de etapas futuras (sem link para publicar/materiais próprios)',
-    !contem(html, 'href="/painel/publicar"') && !contem(html, 'href="/painel/materiais"'),
+    'aponta para a tela de publicação, que existe desde o E4.6 (/painel/publicar)',
+    contem(html, 'href="/painel/publicar"'),
   );
   verificar(
-    'avisa que a área não guarda espaço para o que não existe',
-    contem(html, 'não existem telas de publicação'),
+    'NÃO aponta para a listagem de materiais próprios, que ainda não existe',
+    !contem(html, 'href="/painel/materiais"'),
+  );
+  verificar(
+    'NÃO afirma mais que não existem telas de publicação (frase falsa do E4.6 removida)',
+    !/não existem telas de publica/i.test(html),
+  );
+  verificar(
+    'o cartão de publicação avisa que publicar exige e-mail confirmado (ADR-0003 (b))',
+    contem(html, 'data-acao="publicar"') && /Publicar exige[\s\S]{0,120}e-mail confirmado/.test(html),
+  );
+  verificar(
+    'e diz que a listagem dos materiais próprios ainda não existe (o que segue verdade)',
+    /listagem dos seus próprios materiais[\s\S]{0,160}ainda não existe/i.test(html),
   );
   verificar(
     'mostra a afiliação como declaração (RN011)',
@@ -172,6 +184,20 @@ console.log('\n3. GET /painel com cookie de conta ATIVO — o outro estado de co
   verificar('marca o estado da conta como ativa', contem(html, 'data-estado-conta="ATIVO"'));
   verificar('explica que o que a plataforma verifica é o e-mail, e nada além', contem(html, 'nada além'));
   verificar('linka o perfil público no endereço estável', contem(html, 'href="/u/joao-souza"'));
+  // Critério 2 do card E4.10: com a conta ATIVO, o HTML entregue aponta para a publicação e
+  // não carrega mais a afirmação de que essa tela não existe.
+  verificar(
+    'aponta para a tela de publicação, que existe (/painel/publicar)',
+    contem(html, 'href="/painel/publicar"'),
+  );
+  verificar(
+    'NÃO contém a frase que negava a tela de publicação',
+    !/não existem telas de publica/i.test(html),
+  );
+  verificar(
+    'o cartão de publicação convida a publicar (conta ativa, sem aviso de pendência)',
+    contem(html, 'data-acao="publicar"') && /Envie um PDF/.test(html) && !/Publicar exige/.test(html),
+  );
   verificar(
     'NÃO mostra o bloco de reenvio (conta já confirmada)',
     !contem(html, 'data-aviso="reenvio-de-verificacao"'),

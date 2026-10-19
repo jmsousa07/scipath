@@ -21,11 +21,14 @@ import { lerSessaoNoServidor } from '@/lib/sessao/servidor';
  * `cookies()`, a rota é dinâmica por construção: nenhuma página privada pode ser servida do
  * cache para outra pessoa.
  *
- * Sobre o que a área do usuário NÃO tem, e isso é decisão registrada: **não há bloco de espaço
- * reservado** para "materiais próprios" nem para "publicar material". As duas telas são de
- * etapas seguintes do produto (§15.2 as lista; o MVP as entrega depois) e o §21.5 proíbe deixar
- * "pronto" o que não existe — um cartão vazio prometendo tela futura é pior que a ausência. Em
- * vez disso, a tela aponta só para o que está no ar e diz isso em uma linha.
+ * Sobre o que a área do usuário aponta, e isso é decisão registrada: ela leva às telas que
+ * EXISTEM — a edição do perfil público e a publicação de material (`/painel/publicar`, entregue
+ * no E4.6). A listagem dos materiais próprios com editar/retirar/excluir é de etapa seguinte do
+ * produto (§15.2 a lista; o MVP a entrega depois) e o §21.5 proíbe deixar "pronto" o que não
+ * existe — um cartão vazio prometendo tela futura é pior que a ausência. Então não há bloco nem
+ * link para ela: há a frase que diz que ela ainda não existe. O cartão de publicação avisa que
+ * publicar exige e-mail confirmado quando a conta está `PENDENTE_VERIFICACAO` (ADR-0003 (b)),
+ * para esta área não mandar a pessoa a uma tela que a bloquearia sem aviso.
  *
  * Dado privado (RNF013): o que esta tela exibe é escrito campo por campo, e o perfil que ela
  * recebe também já vem copiado campo a campo de `SessaoAtual`/`PerfilPublico` por
@@ -100,9 +103,10 @@ export default async function PainelPage() {
         </p>
         <h1 className="sc-h1">{nome}</h1>
         <p className="sc-sec__lead">
-          Esta é a sua área: o estado da conta, o que ela já pode fazer na plataforma e o caminho
-          para editar o seu perfil público. Nada de publicação ou de gestão de materiais aparece
-          aqui — essas telas são de etapas seguintes do produto e não existem ainda.
+          Esta é a sua área: o estado da conta, o que ela já pode fazer na plataforma e os
+          caminhos para editar o seu perfil público e publicar um material. A listagem dos seus
+          próprios materiais — com editar, retirar e excluir — ainda não existe nesta versão, e
+          por isso não há um caminho para ela aqui.
         </p>
       </header>
 
@@ -159,17 +163,40 @@ export default async function PainelPage() {
           O que você pode fazer agora
         </h2>
         <ul className="sc-body mt-4 grid list-none gap-4 p-0 sm:grid-cols-2">
-          <li className="sc-card sc-card--pad">
+          <li className="sc-card sc-card--pad" data-acao="publicar">
+            <h3 className="sc-card__title">Publicar material</h3>
+            {contaAtiva ? (
+              <p className="sc-card__copy">
+                Envie um PDF com título, descrição, categoria, tipo e licença. A autoria é a sua
+                conta e a licença é escolha sua — as duas ficam visíveis na página pública do
+                material, e os dados são gravados junto do arquivo.
+              </p>
+            ) : (
+              <p className="sc-card__copy">
+                Publicar exige <strong>e-mail confirmado</strong> (ADR-0003 (b)) — é a única
+                operação que exige. Com a conta pendente, a tela de publicação explica o motivo em
+                vez de abrir o formulário; o caminho para reenviar o e-mail está no estado da
+                conta, acima.
+              </p>
+            )}
+            <Link
+              className={`sc-btn sc-btn--sm ${contaAtiva ? 'sc-btn--primary' : 'sc-btn--ghost'}`}
+              href="/painel/publicar"
+            >
+              Publicar material
+            </Link>
+          </li>
+          <li className="sc-card sc-card--pad" data-acao="editar-perfil">
             <h3 className="sc-card__title">Editar o perfil público</h3>
             <p className="sc-card__copy">
               Nome público, identificador do endereço, biografia, instituição declarada, áreas de
               interesse e links — com prévia de como o perfil aparece para quem o abre.
             </p>
-            <Link className="sc-btn sc-btn--primary sc-btn--sm" href="/painel/perfil">
+            <Link className="sc-btn sc-btn--ghost sc-btn--sm" href="/painel/perfil">
               Editar perfil
             </Link>
           </li>
-          <li className="sc-card sc-card--pad">
+          <li className="sc-card sc-card--pad" data-acao="explorar">
             <h3 className="sc-card__title">Explorar materiais publicados</h3>
             <p className="sc-card__copy">
               Buscar por palavra-chave, filtrar por categoria, tipo e ordem, e abrir o material com
@@ -181,9 +208,9 @@ export default async function PainelPage() {
           </li>
         </ul>
         <p className="sc-helper sc-measure mt-4">
-          Nesta versão da plataforma não existem telas de publicação nem de listagem dos seus
-          materiais; por isso esta área aponta apenas para o que já está no ar. Quando essas telas
-          forem entregues, elas passam a ter um card nesta lista.
+          A listagem dos seus próprios materiais — com editar, retirar e excluir — ainda não existe
+          nesta versão da plataforma; por isso ela ainda não aparece como card nesta lista. Quando
+          for entregue, passa a ter um.
         </p>
       </section>
 
