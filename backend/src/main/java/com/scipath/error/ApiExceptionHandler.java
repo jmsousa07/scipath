@@ -6,6 +6,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -325,14 +326,38 @@ public class ApiExceptionHandler {
                 .body(resposta.getBody());
     }
 
-    /** {@code Content-Type} não aceito — mesma razão do 405 para não usar {@code errors[]}. */
+    /**
+     * {@code Content-Type} não aceito — mesma razão do 405 para não usar {@code errors[]}.
+     *
+     * <p><b>O {@code detail} diz o tipo que <i>este</i> endpoint aceita</b>, e o valor vem do
+     * próprio {@link HttpMediaTypeNotSupportedException} ({@code getSupportedMediaTypes()}) — a
+     * lista que o MVC já calculou ao recusar a requisição. Ela não é adivinhação nem uma segunda
+     * tabela de rotas no tratamento de erro: as escritas deste contrato recebem
+     * {@code application/json} e {@code POST /materiais} recebe {@code multipart/form-data}
+     * (contrato v0.5), e uma mensagem fixa mandaria o cliente de publicação enviar JSON para um
+     * endpoint que só aceita formulário.
+     *
+     * <p>Tipos <b>curinga</b> ({@code *\/*}, {@code application/*+json}) saem da mensagem: eles
+     * aparecem nas rotas que não restringem o consumo (a lista do conversor de mensagens) e não
+     * dizem nada a quem precisa corrigir a requisição. Quando não sobra nenhum tipo concreto, o
+     * texto é o de antes — o {@code application/json} do vocabulário deste contrato.
+     */
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ProblemDetail> tipoNaoSuportado(
             HttpMediaTypeNotSupportedException ex, HttpServletRequest requisicao) {
         return problema(HttpStatus.UNSUPPORTED_MEDIA_TYPE, TIPO_TIPO_NAO_SUPORTADO,
                 "Tipo de conteúdo não suportado",
                 "Este endpoint não aceita o Content-Type enviado. Envie o corpo como "
-                        + MediaType.APPLICATION_JSON_VALUE + ".", requisicao, null);
+                        + tiposAceitos(ex) + ".", requisicao, null);
+    }
+
+    /** Tipos concretos que o endpoint aceita, como texto legível para o {@code detail}. */
+    private static String tiposAceitos(HttpMediaTypeNotSupportedException ex) {
+        String aceitos = ex.getSupportedMediaTypes().stream()
+                .filter(tipo -> !tipo.isWildcardType())
+                .map(MediaType::toString)
+                .collect(Collectors.joining(" ou "));
+        return aceitos.isEmpty() ? MediaType.APPLICATION_JSON_VALUE : aceitos;
     }
 
     // ------------------------------------------------ 413/415 do recebimento de arquivo

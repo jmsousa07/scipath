@@ -57,4 +57,35 @@ public class ArquivosRepositorio {
                 .query(UUID.class)
                 .single();
     }
+
+    /**
+     * Marca a linha como {@code ORFAO} — arquivo gravado <b>sem material</b> (ADR-0005 §2) — e
+     * devolve quantas linhas mudaram.
+     *
+     * <p>É o que a publicação de material (E4.4) chama quando a gravação do material falha depois
+     * de o arquivo já ter sido promovido: o binário existe no armazenamento e nenhum material
+     * aponta para ele. Sem esta marcação o registro continuaria dizendo {@code VALIDADO}, que é o
+     * estado de um arquivo que a publicação pode servir — e o coletor (E4.5) teria de descobrir a
+     * situação só pela ausência de material. A marcação é <b>sempre fora da transação da
+     * publicação</b>, de propósito: é justamente o que precisa sobreviver ao rollback dela.
+     *
+     * <p>{@code PURGADO} é preservado: nesse estado o binário já foi removido depois da retenção
+     * (ADR-0005 §3) e dizer {@code ORFAO} sobre ele seria pedir ao coletor que procurasse um
+     * arquivo que não existe mais. A identidade é a {@code chave_interna} (a coluna que o
+     * armazenamento usa e a que o material não vê), não o nome original — o nome é metadado de
+     * exibição e pode repetir entre arquivos diferentes.
+     *
+     * <p>A condição por chave é uma leitura por índice ({@code UNIQUE file_asset_chave_interna_unica}),
+     * então a marcação não toca linha de outro arquivo nem em caso de nome repetido.
+     *
+     * @param chaveInterna chave gerada pelo sistema que o recebimento registrou (E4.2)
+     * @return 1 quando a linha passou a órfã; 0 quando não há arquivo com essa chave ou ele já está
+     *         {@code PURGADO}
+     */
+    public int marcarOrfao(String chaveInterna) {
+        return jdbc.sql("UPDATE file_asset SET estado_processamento = 'ORFAO'"
+                        + " WHERE chave_interna = :chaveInterna AND estado_processamento <> 'PURGADO'")
+                .param("chaveInterna", chaveInterna)
+                .update();
+    }
 }
