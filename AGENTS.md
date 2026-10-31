@@ -81,6 +81,15 @@ Makefile                           atalhos: up, db:migrate, api:dev, web:dev, te
    é o risco "agente gerar telas bonitas com dados falsos" (DRS §20.1).
 10. **Não declarar o sistema pronto para produção.** Sem hospedagem, backup testado,
     termos de uso, privacidade e canal de denúncia, o MVP não vai ao ar (ADR-0007).
+11. **O id do card é único e imutável.** O id (`E2.6-f2`) identifica **um** card: dois cards
+    nunca dividem o mesmo id, e o id não muda depois de criado. Assunto com duas frentes ganha
+    ids distintos (`E2.6-f2a` e `E2.6-f2b`), nunca o mesmo id em dois cards. O nome do arquivo
+    de evidência **contém o id do card** (`docs/qa/<card>-<data>.log`); id reaproveitado faz uma
+    evidência sobrescrever a outra na integração e a prova de um dos cards desaparece sem
+    ninguém notar — foi o conflito `add/add` de `docs/qa/e2-6-f2-evidencia.sh` (dois documentos
+    distintos com o mesmo nome: `make web:dev` no backend e `db-setup.sh` no QA), resolvido
+    renomeando para `e2-6-f2-webdev-evidencia.sh` e `e2-6-f2-db-setup-evidencia.sh`. Quando o
+    assunto tiver duas frentes, o nome do arquivo carrega também a frente, não só o id.
 
 ## Workspace de cards
 
