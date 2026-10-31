@@ -671,3 +671,20 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   15. Contraste do rótulo-superior azul — card E2.14 (divergência do DS2)
+   O DS2 pinta `.sc-sec__num i` e `.sc-header__word i` com var(--sc-blue)
+   (#3186ff): 3.51:1 sobre branco e 3.33:1 sobre --sc-surface-2. São 11 px
+   (mono, caixa alta), abaixo do limiar de "large text", então a WCAG 2.1 AA
+   1.4.3 pede 4.5:1. A marca continua --sc-blue; o PAPEL de TEXTO usa o
+   blue-800 da paleta do DS2 — 6.49:1 sobre branco e 6.17:1 sobre
+   --sc-surface-2. Registro da decisão: DESIGN_SYSTEM.md §7, item 7, e §2
+   ("cor de marca não é cor de texto por padrão"). Evidência reproduzível:
+   docs/qa/e2-14-contraste.py. Não alterar os arquivos gerados (tokens.css,
+   design-system.css) nem o DS2.
+   --------------------------------------------------------------------------- */
+.sc-sec__num i,
+.sc-header__word i {
+  color: var(--glue-blue-800);
+}
+
