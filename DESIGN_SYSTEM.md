@@ -93,6 +93,10 @@ yellow-100 #fff350                          purple-100 #ea80fc
   com texto — nunca só a cor.
 - As cores "decorativas" do DS2 (aurora, malha, holofote) são **fundo**, jamais transporte de
   significado; e não podem reduzir contraste do conteúdo.
+- As cores de **marca** (`--sc-blue`, `--sc-green`, `--sc-red`, `--sc-yellow`, `--sc-purple`) são
+  acento de superfície, estado e ícone — **não** são cor de texto por padrão. Quando um papel de
+  texto precisa de azul, usa o token da paleta que passa AA (ver §7.7 e §7.8, os casos do
+  rótulo-superior e do botão-texto).
 
 ## 3. Componentes (classes reais do DS2)
 
@@ -167,3 +171,36 @@ Sem rolagem horizontal (`RNF002`). Grade de 12 colunas do template (`glue-grid__
 6. **Primitivos que o contrato não tem** (página/estado): paginação (`.sc-pagination`) e mensagem
    de estado (`.sc-notice`) foram criados na camada de projeto (E1.7). Se o DS2 ganhar os seus, a
    camada de componentes do DS2 passa a mandar e os de `layout.css` saem.
+7. **Contraste do rótulo-superior azul (E2.14 — decidido em 2026-10-31).** O DS2 pinta
+   `.sc-sec__num i` e `.sc-header__word i` com `color:var(--sc-blue)` (`assets/design_system_2.html`
+   :369 e :318). Esse azul sobre branco mede **3.51:1** — abaixo do mínimo AA 1.4.3 (**4.5:1**) para
+   texto de 11 px. Decisão: **saída (a)**. Aquele papel de texto passa a usar **`#2b4fda` =
+   `var(--glue-blue-800)`**, que **já existe na paleta do DS2** (`tokens.css`), medido em **6.49:1**
+   sobre branco e **6.17:1** sobre `--sc-surface-2`. Não é hex inventado nem matiz nova; a **marca**
+   continua `--sc-blue` — muda o papel de TEXTO, não a cor da marca. As outras duas saídas foram
+   descartadas com o número na mão: **(b)** exigiria levar o rótulo a ≥24 px (11 px não é "large
+   text" na acepção da 1.4.3) e isso descaracteriza o papel, que é de 11 px por desenho; **(c)**
+   significa aceitar um rótulo de seção ilegível para baixa visão — ele é texto de leitura, não
+   metadado decorativo. O azul novo só poderia nascer no DS2: `tokens.css`/`design-system.css` são
+   gerados (`check:tokens`) e `check:style` (A) proíbe hex de cor fora deles; por isso o override
+   entra em `frontend/src/styles/layout.css` (camada de projeto, carregada depois de
+   `design-system.css`) usando o token da paleta, com o comentário de divergência no próprio CSS.
+   Medição reproduzível: `python3 docs/qa/e2-14-contraste.py`; laudo em
+   `docs/qa/e2-14-contraste-2026-10-31.log`. Rastreabilidade: RNF008, CA009, achado B do E2.11.
+8. **Contraste dos papéis de texto FORA do `<main>` (E2.16 — corrigido em 2026-10-31).** A verificação
+   do E2.14 mediu o documento INTEIRO e achou dois pares abaixo de 4.5:1 que a bateria do E2.11 não
+   vê, porque ela varre só o `main` (achado na seção 4.5 de `docs/qa/e2-14-verificacao-2026-10-31.log`):
+   **(a)** `.sc-btn--text` (o botão-texto "Verificar de novo" do cabeçalho, 13 px) usa
+   `color:var(--sc-blue)`, o mesmo defeito do item 7 — cor de **marca** como cor de **texto** (§2):
+   **3.51:1** sobre branco. O papel de texto passa a `var(--glue-blue-800)` (#2b4fda): **6.49:1**
+   sobre branco e **6.17:1** sobre `--sc-surface-2`; a marca continua `--sc-blue`.
+   **(b)** `.sc-mono` (papel extraído do DS2, com `color:var(--sc-ink-soft)` = #45474d, pensado para
+   fundo claro) no rodapé escuro (`.sc-footer`, fundo `--glue-grey-1200`) mede **2:1** em 11 px.
+   Dentro do rodapé o papel passa a **herdar a cor do bloco** (`color:inherit`), como o texto ao
+   redor — a razão medida vira a do parágrafo, **8.87:1**.
+   As duas regras vivem em `frontend/src/styles/layout.css` §16 (camada de projeto, depois do
+   `design-system.css`), com o número medido no comentário; nenhum arquivo gerado
+   (`tokens.css`/`design-system.css`) nem o DS2 foi tocado. Medição reproduzível:
+   `bash docs/qa/e2-16-evidencia.sh`; conta em `python3 docs/qa/e2-16-contraste.py`; cor
+   computada nó a nó em `node docs/qa/e2-16-sonda.mjs`; laudo em
+   `docs/qa/e2-16-2026-10-31.log`. Rastreabilidade: RNF008, WCAG 2.1 AA 1.4.3; achado do E2.14.
