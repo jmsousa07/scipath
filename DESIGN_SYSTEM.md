@@ -201,5 +201,6 @@ Sem rolagem horizontal (`RNF002`). Grade de 12 colunas do template (`glue-grid__
    As duas regras vivem em `frontend/src/styles/layout.css` §16 (camada de projeto, depois do
    `design-system.css`), com o número medido no comentário; nenhum arquivo gerado
    (`tokens.css`/`design-system.css`) nem o DS2 foi tocado. Medição reproduzível:
-   `bash docs/qa/e2-16-evidencia.sh`; conta em `python3 docs/qa/e2-16-contraste.py`; laudo em
+   `bash docs/qa/e2-16-evidencia.sh`; conta em `python3 docs/qa/e2-16-contraste.py`; cor
+   computada nó a nó em `node docs/qa/e2-16-sonda.mjs`; laudo em
    `docs/qa/e2-16-2026-10-31.log`. Rastreabilidade: RNF008, WCAG 2.1 AA 1.4.3; achado do E2.14.
