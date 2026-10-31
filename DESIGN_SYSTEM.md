@@ -93,6 +93,9 @@ yellow-100 #fff350                          purple-100 #ea80fc
   com texto — nunca só a cor.
 - As cores "decorativas" do DS2 (aurora, malha, holofote) são **fundo**, jamais transporte de
   significado; e não podem reduzir contraste do conteúdo.
+- As cores de **marca** (`--sc-blue`, `--sc-green`, `--sc-red`, `--sc-yellow`, `--sc-purple`) são
+  acento de superfície, estado e ícone — **não** são cor de texto por padrão. Quando um papel de
+  texto precisa de azul, usa o token da paleta que passa AA (ver §7.7, o caso do rótulo-superior).
 
 ## 3. Componentes (classes reais do DS2)
 
@@ -167,3 +170,19 @@ Sem rolagem horizontal (`RNF002`). Grade de 12 colunas do template (`glue-grid__
 6. **Primitivos que o contrato não tem** (página/estado): paginação (`.sc-pagination`) e mensagem
    de estado (`.sc-notice`) foram criados na camada de projeto (E1.7). Se o DS2 ganhar os seus, a
    camada de componentes do DS2 passa a mandar e os de `layout.css` saem.
+7. **Contraste do rótulo-superior azul (E2.14 — decidido em 2026-10-31).** O DS2 pinta
+   `.sc-sec__num i` e `.sc-header__word i` com `color:var(--sc-blue)` (`assets/design_system_2.html`
+   :369 e :318). Esse azul sobre branco mede **3.51:1** — abaixo do mínimo AA 1.4.3 (**4.5:1**) para
+   texto de 11 px. Decisão: **saída (a)**. Aquele papel de texto passa a usar **`#2b4fda` =
+   `var(--glue-blue-800)`**, que **já existe na paleta do DS2** (`tokens.css`), medido em **6.49:1**
+   sobre branco e **6.17:1** sobre `--sc-surface-2`. Não é hex inventado nem matiz nova; a **marca**
+   continua `--sc-blue` — muda o papel de TEXTO, não a cor da marca. As outras duas saídas foram
+   descartadas com o número na mão: **(b)** exigiria levar o rótulo a ≥24 px (11 px não é "large
+   text" na acepção da 1.4.3) e isso descaracteriza o papel, que é de 11 px por desenho; **(c)**
+   significa aceitar um rótulo de seção ilegível para baixa visão — ele é texto de leitura, não
+   metadado decorativo. O azul novo só poderia nascer no DS2: `tokens.css`/`design-system.css` são
+   gerados (`check:tokens`) e `check:style` (A) proíbe hex de cor fora deles; por isso o override
+   entra em `frontend/src/styles/layout.css` (camada de projeto, carregada depois de
+   `design-system.css`) usando o token da paleta, com o comentário de divergência no próprio CSS.
+   Medição reproduzível: `python3 docs/qa/e2-14-contraste.py`; laudo em
+   `docs/qa/e2-14-contraste-2026-10-31.log`. Rastreabilidade: RNF008, CA009, achado B do E2.11.
