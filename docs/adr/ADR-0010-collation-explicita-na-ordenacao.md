@@ -148,8 +148,10 @@ banco deixa de influenciar a ordem publicada.** No código:
     o ADR e a medição registrada não podem divergir.
 
     Hoje o efeito é **imaterial**: as tabelas de referência têm 13/6/7 linhas e o cliente lê a
-    lista inteira (`size` padrão 100 ≥ total), então `Seq Scan` + `Sort` é mais barato que
-    qualquer índice. **Este ADR não cria índice nenhum**; se algum dia o volume pedir, é decisão
+    lista inteira — ele pede `size=100` explicitamente, o teto por requisição do contrato
+    (`contracts/openapi.yaml`, RNF021; o **padrão** do parâmetro é 20), acima dos 13/6/7 —
+    então `Seq Scan` + `Sort` é mais barato que qualquer índice.
+    **Este ADR não cria índice nenhum**; se algum dia o volume pedir, é decisão
     nova, com medição. Para `titulo` de `material` a metade antiga da afirmação vale: não há
     índice sobre ele (o único de conteúdo é o GIN de busca, V3:59). E vale para o futuro, em
     `nome` ou em `titulo`: **um índice sobre coluna de texto tem de nascer com a mesma collation
