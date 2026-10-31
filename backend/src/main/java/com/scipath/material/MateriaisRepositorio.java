@@ -437,11 +437,21 @@ public class MateriaisRepositorio {
      * por id" nos dois critérios, e {@code DESC} é a direção do índice do V1
      * ({@code material_estado_data_idx} = {@code estado_publicacao, publicado_em DESC, id DESC}),
      * o que permite à consulta padrão ler a ordem direto do índice, sem passo de ordenação.
+     *
+     * <p>{@code m.titulo COLLATE "C"}: a única chave de <i>texto</i> desta listagem (a de
+     * {@code RECENTES} é {@code timestamptz} e {@code uuid}, tipos cuja comparação já é byte a
+     * byte). Sem {@code COLLATE}, "ordem crescente de título" passa a significar a ordem da
+     * collation do banco — a mesma consulta devolve lista diferente numa máquina
+     * {@code en_US.UTF-8} e noutra {@code C.UTF-8}, e o desempate não conserta: ele só age
+     * quando os títulos empatam. "C" é ordem de ponto de código (ADR-0010) e mantém a promessa
+     * do contrato verificável em qualquer clone. Não há índice de título a perder: o único
+     * índice de ordenação da tabela é o de {@code estado_publicacao/publicado_em/id}, que
+     * {@code RECENTES} usa e esta cláusula não toca.
      */
     private static String ordenacaoDe(OrdemMateriais ordem) {
         return switch (ordem) {
             case RECENTES -> " ORDER BY m.publicado_em DESC, m.id DESC\n";
-            case TITULO -> " ORDER BY m.titulo ASC, m.id DESC\n";
+            case TITULO -> " ORDER BY m.titulo COLLATE \"C\" ASC, m.id DESC\n";
         };
     }
 }

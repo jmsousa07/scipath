@@ -179,8 +179,9 @@ class TaxonomiaControllerIntegrationTest {
                 .as("duas chamadas seguidas devolvem a mesma ordem")
                 .isEqualTo(primeira);
 
-        // A base é C.UTF-8, então "ordenado por nome" é ordem de ponto de código: é o que
-        // a asserção natural do AssertJ confere aqui, e o desempate por slug garante que
+        // A ORDEM é a do banco com COLLATE "C" (ADR-0010): ordem de ponto de código, que é o
+        // que a asserção natural do AssertJ confere aqui — e agora por decisão explícita da
+        // consulta, não por acidente do datcollate da máquina. O desempate por slug garante que
         // nome repetido não embaralhe a página.
         for (String caminho : List.of("/api/categorias", "/api/tipos-material", "/api/licencas")) {
             List<String> nomes = nomesDe(buscar(caminho));

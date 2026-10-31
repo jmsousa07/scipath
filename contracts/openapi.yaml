@@ -127,7 +127,9 @@ info:
       documentada no endpoint, para que a navegação não duplique nem perca itens.
     - **Taxonomia.** Categorias, tipos de material e licenças são listas controladas de
       referência (RF018, RN005, RN006): `slug` é a chave estável e `nome` é só rótulo de
-      exibição, que pode mudar sem quebrar dados (ADR-0006). São ordenadas por `nome` e
+      exibição, que pode mudar sem quebrar dados (ADR-0006). São ordenadas por `nome` —
+      ordem de ponto de código (`COLLATE "C"` na consulta, ADR-0010), a mesma em qualquer
+      máquina, e não a ordem da collation do banco — e
       filtráveis por estado ativo. Como listas de referência são curtas (13 categorias,
       6 tipos, 7 licenças no MVP), o cliente pode omitir `page` e `size` e sempre recebe
       `total` no envelope.
@@ -211,7 +213,8 @@ paths:
         Devolve as categorias de referência para popular filtros de busca e o formulário
         de publicação (RF018, RN005). Filtro por estado ativo: sem o parâmetro, devolve
         apenas categorias ativas; com `ativo=false`, devolve também as desativadas.
-        Ordenação estável por `nome` (ordem definida pelo servidor), para que a navegação
+        Ordenação estável por `nome` (ordem definida pelo servidor: ponto de código,
+        `COLLATE "C"` — ADR-0010 —, igual em qualquer collation do banco), para que a navegação
         entre páginas não repita nem perca itens. `slug` é a chave estável; o cliente
         guarda e envia o `slug`, nunca o `nome`.
       operationId: listCategorias
@@ -1329,7 +1332,9 @@ components:
         Critério de ordenação da listagem (§12.2). `recentes` (padrão) ordena por
         `publicadoEm` decrescente com desempate **estável** por `id`; `titulo` ordena por
         `titulo` crescente com o mesmo desempate por `id` — em ambos, a ordem total é
-        determinística, então paginar não duplica nem omite item (RN013). Não existe ordem
+        determinística, então paginar não duplica nem omite item (RN013). O título é
+        comparado por ponto de código (`COLLATE "C"`, ADR-0010): a ordem publicada não
+        muda com a collation do banco. Não existe ordem
         por "relevância" nem por contagem de popularidade (§12.2, §12.4). Valor fora do
         enum → **400**.
       schema:
