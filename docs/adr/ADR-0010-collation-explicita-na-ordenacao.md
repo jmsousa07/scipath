@@ -118,11 +118,43 @@ banco deixa de influenciar a ordem publicada.** No código:
     `isSorted()` por ponto de código e reprova em qualquer locale que não seja byte a byte
     (é literalmente o que aconteceu aqui, e foi assim que o defeito apareceu); um teste de
     ordem para `ordem=titulo` com títulos que espaçam/pontuam deve seguir a mesma forma.
-  - **A ordenação perde o uso de índice com collation `C` em coluna de outra collation.** Não
-    é o caso hoje: não existe índice sobre `nome` de taxonomia nem sobre `titulo` de material.
-    Se um card futuro criar um deles, tem de nascer com a **mesma** collation da cláusula,
-    senão o planejador deixa de reconhecê-lo (mesmo acoplamento já registrado no ADR-0008 para
-    a expressão da busca).
+  - **A ordenação perde o uso de índice com collation `C` em coluna de outra collation.** Isso
+    não é hipótese com os índices que existem hoje — é o que acontece. As três listas de
+    referência têm índice sobre a chave de ordenação: `category_listagem_idx`,
+    `material_type_listagem_idx` e `license_listagem_idx`, todos `(ativo, nome)`, na migração
+    `V1__modelo_mvp.sql` (linhas 82-84). Eles servem a consulta **sem** a cláusula
+    (`ORDER BY nome, slug` → `Limit` → `Incremental Sort` → `Index Scan using … (Index Cond:
+    ativo = true)`) e deixam de servir a **ordem** com ela (`ORDER BY nome COLLATE "C", slug
+    COLLATE "C"` → `Limit` → `Sort` → `Seq Scan … (Filter: ativo)`); o filtro por `ativo`
+    continua sendo servido nos dois casos. Medido em 2026-10-31 (tabela **temporária** de 20.001
+    linhas, índice `(ativo, nome)`, colunas `text` na collation do banco `en_US.UTF-8`,
+    `ANALYZE`) — reproduzível pelo SQL abaixo, que não cria objeto nenhum no schema:
+
+    ```sql
+    CREATE TEMP TABLE t_nome (ativo boolean NOT NULL, nome text NOT NULL, slug text NOT NULL);
+    INSERT INTO t_nome
+    SELECT (g % 20 <> 0), 'nome ' || lpad(g::text, 5, '0'), 'slug-' || lpad(g::text, 5, '0')
+    FROM generate_series(1, 20001) g;
+    CREATE INDEX t_nome_idx ON t_nome (ativo, nome);
+    ANALYZE t_nome;
+    EXPLAIN SELECT slug FROM t_nome WHERE ativo ORDER BY nome, slug LIMIT 100;
+    EXPLAIN SELECT slug FROM t_nome WHERE ativo
+            ORDER BY nome COLLATE "C", slug COLLATE "C" LIMIT 100;
+    ```
+
+    Para reproduzir, cole o bloco acima em `psql -U scipath -d scipath` — o banco precisa estar
+    na collation que se quer medir (aqui, `en_US.UTF-8`). O script de evidência
+    `docs/qa/e1-13-f2-evidencia.sh` extrai **este** bloco do próprio ADR e o executa, de modo que
+    o ADR e a medição registrada não podem divergir.
+
+    Hoje o efeito é **imaterial**: as tabelas de referência têm 13/6/7 linhas e o cliente lê a
+    lista inteira (`size` padrão 100 ≥ total), então `Seq Scan` + `Sort` é mais barato que
+    qualquer índice. **Este ADR não cria índice nenhum**; se algum dia o volume pedir, é decisão
+    nova, com medição. Para `titulo` de `material` a metade antiga da afirmação vale: não há
+    índice sobre ele (o único de conteúdo é o GIN de busca, V3:59). E vale para o futuro, em
+    `nome` ou em `titulo`: **um índice sobre coluna de texto tem de nascer com a mesma collation
+    da cláusula**, senão o planejador deixa de reconhecê-lo (mesmo acoplamento já registrado no
+    ADR-0008 para a expressão da busca).
 - **Contrato:** as descrições de ordenação em `contracts/openapi.yaml` ganham a palavra
   "ponto de código" — é **esclarecimento**, não mudança incompatível (o contrato nunca
   prometeu ordem alfabética sensível a acento; prometia "ordenada por nome"), então **não**
