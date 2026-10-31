@@ -78,6 +78,30 @@ class MateriaisControllerIntegrationTest {
             new Semeado("pub-07", "Zulu compressao de dados", T0.minus(7, ChronoUnit.HOURS),
                     T0.minus(5, ChronoUnit.HOURS), CATEGORIA_OUTRA, TIPO_OUTRO));
 
+    /**
+     * Títulos que <b>separam</b> a collation do banco da ordem de ponto de código (ADR-0010) — e é
+     * a única razão de existirem. Os títulos de {@link #PUBLICADOS} não servem para isso: todos
+     * diferem na primeira letra, onde {@code en_US.UTF-8} e {@code C} concordam, então ordem de
+     * ponto de código e ordem da collation são a mesma lista e o teste passa mesmo sem o
+     * {@code COLLATE "C"} (defeito de cobertura do E1.13-f1).
+     *
+     * <p>Estes exercitam as duas divergências reais:
+     * <ul>
+     *   <li><b>espaço/pontuação:</b> a collation {@code en_US.UTF-8} ignora espaço no primeiro
+     *       nível e põe {@code "CC0 1.0 (dominio publico)"} antes de {@code "CC BY 4.0"}; a ordem
+     *       de ponto de código compara {@code " "} (0x20) com {@code "0"} (0x30) e põe
+     *       {@code "CC BY 4.0"} primeiro.</li>
+     *   <li><b>caixa:</b> {@code en_US.UTF-8} ordena maiúscula e minúscula no mesmo nível, então
+     *       {@code "eclipse..."} sobe na frente de {@code "Eta..."}; em ponto de código toda
+     *       maiúscula (0x41–0x5A) vem antes de qualquer minúscula (0x61–0x7A).</li>
+     * </ul>
+     */
+    private static final List<Semeado> TITULOS_SENSIVEIS_A_COLLATION = List.of(
+            new Semeado("col-01", "CC BY 4.0", T0.minus(11, ChronoUnit.HOURS), null, CATEGORIA, TIPO),
+            new Semeado("col-02", "CC0 1.0 (dominio publico)", T0.minus(12, ChronoUnit.HOURS), null,
+                    CATEGORIA, TIPO),
+            new Semeado("col-03", "eclipse de teste", T0.minus(13, ChronoUnit.HOURS), null, CATEGORIA, TIPO));
+
     @Autowired
     private TestRestTemplate rest;
 
@@ -193,6 +217,70 @@ class MateriaisControllerIntegrationTest {
         assertThat(paginado).as("páginas 0..3 de tamanho 2").hasSize(7).doesNotHaveDuplicates().isEqualTo(esperado);
 
         System.out.println("[E2.2] ordem titulo -> " + titulosDe(completa));
+    }
+
+    @Test
+    @DisplayName("ordem=titulo é ordem de PONTO DE CÓDIGO: espaço/pontuação e caixa decidem, não a collation do banco")
+    void ordemPorTituloSeguePontoDeCodigoENaoACollationDoBanco() {
+        // Semeia, além dos sete comuns, os títulos que a collation do banco reordenaria. Fica
+        // dentro deste teste (e não em PUBLICADOS) para não deslocar as contagens exatas dos
+        // outros testes da classe, que contam sete materiais publicados.
+        UUID perfil = jdbc.queryForObject("SELECT id FROM profile WHERE slug = ?", UUID.class, PREFIXO + "ana");
+        for (Semeado material : TITULOS_SENSIVEIS_A_COLLATION) {
+            inserirMaterial(perfil, material, "PUBLICADO");
+        }
+
+        List<String> esperado = new ArrayList<>();
+        PUBLICADOS.forEach(material -> esperado.add(material.titulo()));
+        TITULOS_SENSIVEIS_A_COLLATION.forEach(material -> esperado.add(material.titulo()));
+        esperado.sort(Comparator.naturalOrder()); // String.compareTo = ponto de código
+
+        JsonNode completa = buscar("/api/materiais?ordem=titulo&size=100");
+        List<String> titulos = titulosDe(completa);
+
+        assertThat(titulos)
+                .as("ordem=titulo é a de ponto de código (COLLATE \"C\", ADR-0010), não a da collation do banco")
+                .isEqualTo(esperado);
+        assertThat(completa.get("total").asInt()).isEqualTo(esperado.size());
+        assertThat(titulos)
+                .as("espaço (0x20) antes de '0' (0x30): en_US.UTF-8 inverteria os dois")
+                .containsSubsequence("CC BY 4.0", "CC0 1.0 (dominio publico)");
+        assertThat(titulos)
+                .as("maiúscula (0x41–0x5A) antes de minúscula (0x61–0x7A): en_US.UTF-8 inverteria os dois")
+                .containsSubsequence("Eta busca binaria", "eclipse de teste");
+
+        // Mesma lista página a página: o COLLATE não pode custar o determinismo da ordem (RN013).
+        List<String> paginado = new ArrayList<>();
+        for (int pagina = 0; pagina < 3; pagina++) {
+            paginado.addAll(slugsDe(buscar("/api/materiais?ordem=titulo&size=4&page=" + pagina)));
+        }
+        assertThat(paginado).as("páginas 0..2 de tamanho 4").hasSize(esperado.size()).doesNotHaveDuplicates();
+        assertThat(titulosDe(completa)).as("a fatia tem de ser a mesma lista").isEqualTo(esperado);
+
+        // Poder de mutação declarado, não presumido: a consulta SEM collate explícito, no banco
+        // desta execução, tem mesmo de dar lista diferente — senão este teste não distingue a
+        // linha do COLLATE de lugar nenhum. Em banco C.UTF-8/C as duas ordens coincidem (é o
+        // caso da VPS) e a checagem se cala de propósito, em vez de reprovar por ambiente.
+        String datcollate = jdbc.queryForObject(
+                "SELECT datcollate FROM pg_database WHERE datname = current_database()", String.class);
+        System.out.println("[E2.2] datcollate do banco de teste -> " + datcollate);
+        if (datcollate != null && !datcollate.strip().toUpperCase(java.util.Locale.ROOT).startsWith("C")) {
+            List<String> semCollate = jdbc.queryForList("""
+                    SELECT m.titulo FROM material m
+                    JOIN profile p ON p.id = m.profile_id
+                    JOIN account a ON a.id = p.account_id
+                    WHERE m.slug LIKE ? AND m.estado_publicacao = 'PUBLICADO' AND a.estado = 'ATIVO'
+                    ORDER BY m.titulo ASC, m.id DESC
+                    """, String.class, PREFIXO + "%");
+            assertThat(semCollate)
+                    .as("com datcollate=%s a ordem sem COLLATE \"C\" difere da de ponto de código — "
+                            + "é isso que dá poder de mutação a este teste; se coincidirem, o teste "
+                            + "não está exercitando a cláusula", datcollate)
+                    .isNotEqualTo(titulos);
+            System.out.println("[E2.2] ordem sem COLLATE (collation do banco) -> " + semCollate);
+        }
+
+        System.out.println("[E2.2] ordem titulo (ponto de código) -> " + titulos);
     }
 
     // ---------------------------------------------------------------------- filtros
