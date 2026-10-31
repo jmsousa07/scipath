@@ -688,3 +688,33 @@
   color: var(--glue-blue-800);
 }
 
+/* ---------------------------------------------------------------------------
+   16. Contraste AA dos papéis de texto FORA do <main> — card E2.16
+   Achado da verificação do E2.14 (docs/qa/e2-14-verificacao-2026-10-31.log §4.5),
+   que mediu o documento INTEIRO: cabeçalho e rodapé ficam fora da varredura da
+   bateria do E2.11 (`document.querySelector('main')`) e dois pares de texto
+   ficavam abaixo de 4.5:1 (WCAG 2.1 AA 1.4.3) nas seis combinações.
+
+   a) BOTÃO-TEXTO do cabeçalho (`.sc-btn--text`, 13 px): o DS2 o pinta com
+      var(--sc-blue) (#3186ff) — 3.51:1 sobre branco. É o MESMO defeito do item 15:
+      cor de MARCA usada como cor de TEXTO (DESIGN_SYSTEM.md §2). O papel de texto
+      passa ao blue-800 da própria paleta do DS2 — 6.49:1 sobre branco e 6.17:1
+      sobre --sc-surface-2.
+   b) `.sc-mono` no rodapé escuro (11 px): o papel traz cor própria
+      (var(--sc-ink-soft) = #45474d, pensada para fundo claro) e não acompanha o
+      texto do rodapé — 2:1 sobre o fundo --glue-grey-1200. Aqui ele passa a herdar
+      a cor do bloco em que está (`color:inherit`), como o texto ao redor: a razão
+      medida vira a do parágrafo, 8.87:1 (branco .68 composto sobre #121317).
+
+   A marca continua --sc-blue; nenhum hex novo entra no projeto e nenhum arquivo
+   gerado é tocado (tokens.css, design-system.css) — a regra vence por ordem de
+   camada. Registro: DESIGN_SYSTEM.md §7, item 8; conta e medição reproduzíveis em
+   docs/qa/e2-16-contraste.py e docs/qa/e2-16-evidencia.sh.
+   --------------------------------------------------------------------------- */
+.sc-btn--text {
+  color: var(--glue-blue-800);
+}
+
+.sc-footer .sc-mono {
+  color: inherit;
+}

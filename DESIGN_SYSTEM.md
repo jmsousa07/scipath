@@ -95,7 +95,8 @@ yellow-100 #fff350                          purple-100 #ea80fc
   significado; e não podem reduzir contraste do conteúdo.
 - As cores de **marca** (`--sc-blue`, `--sc-green`, `--sc-red`, `--sc-yellow`, `--sc-purple`) são
   acento de superfície, estado e ícone — **não** são cor de texto por padrão. Quando um papel de
-  texto precisa de azul, usa o token da paleta que passa AA (ver §7.7, o caso do rótulo-superior).
+  texto precisa de azul, usa o token da paleta que passa AA (ver §7.7 e §7.8, os casos do
+  rótulo-superior e do botão-texto).
 
 ## 3. Componentes (classes reais do DS2)
 
@@ -186,3 +187,19 @@ Sem rolagem horizontal (`RNF002`). Grade de 12 colunas do template (`glue-grid__
    `design-system.css`) usando o token da paleta, com o comentário de divergência no próprio CSS.
    Medição reproduzível: `python3 docs/qa/e2-14-contraste.py`; laudo em
    `docs/qa/e2-14-contraste-2026-10-31.log`. Rastreabilidade: RNF008, CA009, achado B do E2.11.
+8. **Contraste dos papéis de texto FORA do `<main>` (E2.16 — corrigido em 2026-10-31).** A verificação
+   do E2.14 mediu o documento INTEIRO e achou dois pares abaixo de 4.5:1 que a bateria do E2.11 não
+   vê, porque ela varre só o `main` (achado na seção 4.5 de `docs/qa/e2-14-verificacao-2026-10-31.log`):
+   **(a)** `.sc-btn--text` (o botão-texto "Verificar de novo" do cabeçalho, 13 px) usa
+   `color:var(--sc-blue)`, o mesmo defeito do item 7 — cor de **marca** como cor de **texto** (§2):
+   **3.51:1** sobre branco. O papel de texto passa a `var(--glue-blue-800)` (#2b4fda): **6.49:1**
+   sobre branco e **6.17:1** sobre `--sc-surface-2`; a marca continua `--sc-blue`.
+   **(b)** `.sc-mono` (papel extraído do DS2, com `color:var(--sc-ink-soft)` = #45474d, pensado para
+   fundo claro) no rodapé escuro (`.sc-footer`, fundo `--glue-grey-1200`) mede **2:1** em 11 px.
+   Dentro do rodapé o papel passa a **herdar a cor do bloco** (`color:inherit`), como o texto ao
+   redor — a razão medida vira a do parágrafo, **8.87:1**.
+   As duas regras vivem em `frontend/src/styles/layout.css` §16 (camada de projeto, depois do
+   `design-system.css`), com o número medido no comentário; nenhum arquivo gerado
+   (`tokens.css`/`design-system.css`) nem o DS2 foi tocado. Medição reproduzível:
+   `bash docs/qa/e2-16-evidencia.sh`; conta em `python3 docs/qa/e2-16-contraste.py`; laudo em
+   `docs/qa/e2-16-2026-10-31.log`. Rastreabilidade: RNF008, WCAG 2.1 AA 1.4.3; achado do E2.14.
