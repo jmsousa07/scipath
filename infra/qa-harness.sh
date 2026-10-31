@@ -93,12 +93,26 @@ secao "1. CONTRATO (E1.1) — make contract:check"
 h2 "1.1 Validação do OpenAPI com Spectral"
 executar "contract-check" make -C "$WORKTREE" contract:check
 c_contract=$?
-warnings=$(grep -ci "warning" "${ultimo_log:-/dev/null}" || true)
-echo "-- linhas de 'warning' na saída: ${warnings:-0}"
-if [[ $c_contract -eq 0 && "${warnings:-0}" -eq 0 ]]; then
-  veredito "E1.1 contrato sem erros e sem warnings" "ATENDE" "make contract:check exit 0; 0 warnings"
+
+# A contagem vem do RELATÓRIO do Spectral, não de linhas de texto. O Node imprime um
+# DeprecationWarning (`punycode`) em toda execução; o antigo `grep -ci warning` contava
+# essas linhas como achados do contrato e reprovava um repositório limpo. Aqui o mesmo
+# Spectral roda com `--format json` e conta-se por severidade (0=error, 1=warning).
+# `grep -ci` sobre o texto não serviria nem para o defeito real: `make contract:check`
+# não usa `--fail-severity=warn` e nem LISTA os warnings — só diz "no results with a
+# severity of 'error'". O JSON é a única fonte que enxerga um `warn`.
+spectral_json="$TMP/spectral.json"
+npx --yes @stoplight/spectral-cli@6 lint "$WORKTREE/contracts/openapi.yaml" \
+  --ruleset "$WORKTREE/.spectral.yaml" --format json >"$spectral_json" 2>/dev/null
+c_spectral=$?
+sev=$(grep -oE '"severity":[[:space:]]*[0-9]+' "$spectral_json" | sed -E 's/[^0-9]//g')
+erros=$(printf '%s\n' "$sev" | grep -cx '0' || true)
+warns=$(printf '%s\n' "$sev" | grep -cx '1' || true)
+echo "-- achados do Spectral (json): erros=$erros warnings=$warns  [spectral exit=$c_spectral]"
+if [[ $c_contract -eq 0 && $c_spectral -eq 0 && "${erros:-0}" -eq 0 && "${warns:-0}" -eq 0 ]]; then
+  veredito "E1.1 contrato sem erros e sem warnings" "ATENDE" "make contract:check exit 0; spectral 0 erros, 0 warnings"
 else
-  veredito "E1.1 contrato sem erros e sem warnings" "NAO ATENDE" "exit=$c_contract; warnings=$warnings"
+  veredito "E1.1 contrato sem erros e sem warnings" "NAO ATENDE" "exit=$c_contract; spectral erros=$erros warnings=$warns"
 fi
 
 # ============================================================================
@@ -277,9 +291,22 @@ fi
 secao "7. SEGREDOS NO REPOSITÓRIO (E1.5 critério 2, RNF012)"
 
 h2 "7.1 Valor real da senha do .env em qualquer arquivo versionado"
-ocorrencias=$(grep -rIl --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target \
-  --exclude='*.log' -- "$SPRING_DATASOURCE_PASSWORD" "$WORKTREE" 2>/dev/null | wc -l)
-echo "-- arquivos com o valor da senha (esperado 0): $ocorrencias"
+# A busca é no que é VERSIONADO, não na árvore de arquivos. `git grep` só olha arquivos
+# rastreados, então o `.env` — não rastreado, no .gitignore — fica fora por construção:
+# a busca antiga (`grep -rIl` pela árvore) reprovava toda máquina que tem `.env`, que é
+# requisito. Cobre os dois casos reais de vazamento: o commit (HEAD) e os arquivos
+# rastreados no disco (inclui o que está em stage ou modificado).
+if [[ -z "${SPRING_DATASOURCE_PASSWORD:-}" ]]; then
+  ocorrencias=-1
+  echo "-- ATENÇÃO: SPRING_DATASOURCE_PASSWORD vazia em $ENV_FILE — nada a procurar"
+else
+  ocorrencias=$(
+    { git -C "$WORKTREE" grep -F -I -l -e "$SPRING_DATASOURCE_PASSWORD" HEAD 2>/dev/null
+      git -C "$WORKTREE" grep -F -I -l -e "$SPRING_DATASOURCE_PASSWORD" 2>/dev/null
+    } | sort -u | wc -l
+  )
+fi
+echo "-- arquivos VERSIONADOS com o valor da senha (esperado 0): $ocorrencias"
 
 h2 "7.2 Padrões de segredo (chave privada, token, senha literais)"
 echo "Escopo: TODO o repositório versionado, menos os lugares onde um literal com forma de"
