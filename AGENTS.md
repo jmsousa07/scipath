@@ -82,6 +82,26 @@ Makefile                           atalhos: up, db:migrate, api:dev, web:dev, te
 10. **Não declarar o sistema pronto para produção.** Sem hospedagem, backup testado,
     termos de uso, privacidade e canal de denúncia, o MVP não vai ao ar (ADR-0007).
 
+## Workspace de cards
+
+1. **Regra.** Todo card que toca arquivos do monorepo nasce com workspace de repositório —
+   `worktree` com branch própria apontando para o checkout do repo —, nunca `scratch`.
+   `scratch` serve só para investigação que **não** abre o repo.
+2. **Motivo.** Sem o worktree o worker não enxerga `Makefile`, `infra/db-setup.sh` e os demais
+   arquivos do repo. O erro não aparece na criação: aparece **um worker depois**, como run
+   desperdiçada (RAM, tempo, um turno da fila serial) ou como card fechado por engano,
+   declarando que não há defeito.
+3. **Ação do gerente.** Card que nasceu com o workspace errado é corrigido **antes** de
+   promover — o `promoted` de `t_748bc02e` (`E2.6-f3`) aconteceu com o workspace ainda vazio.
+4. **Checagem de despacho.** Card com `workspace_kind=scratch` cujo corpo cita caminho de
+   arquivo do repo (ex.: `Makefile`, `infra/...`) é erro de criação: corrija o workspace antes
+   de despachar.
+
+O caminho é o do checkout principal **da máquina que executa** (`$HOME/scipath` na VPS;
+na cópia pessoal, o caminho do §1 de `docs/rodar-em-outra-maquina.md`). `kanban_create` não
+oferece escolha de worktree: quem cria passa `--workspace` explicitamente, e o esquecimento
+não dá erro na hora.
+
 ## Higiene de recursos (máquina única: 2 vCPU, 954 MB)
 
 Medido em 2026-10-16: RAM 954 MB · 2 vCPU · swap 4 GB **já com ~700 MB em uso sem worker
