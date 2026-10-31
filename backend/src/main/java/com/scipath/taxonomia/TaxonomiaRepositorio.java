@@ -13,11 +13,19 @@ import org.springframework.stereotype.Repository;
  *
  * <p>Duas regras que valem para as três leituras:
  * <ul>
- *   <li><b>Ordenação explícita e estável:</b> {@code ORDER BY nome, slug}. O nome é a
- *       ordem publicada no contrato; o slug entra só como desempate, porque
+ *   <li><b>Ordenação explícita e estável:</b> {@code ORDER BY nome COLLATE "C", slug COLLATE
+ *       "C"}. O nome é a ordem publicada no contrato; o slug entra só como desempate, porque
  *       {@code nome} não é único no banco e sem desempate o PostgreSQL não promete
  *       ordem entre páginas — o cliente veria item repetido ou sumido ao paginar
  *       (RNF021, RN009).</li>
+ *   <li><b>{@code COLLATE "C"} em cada chave de texto:</b> sem ele a ordem sai da collation
+ *       do <i>banco</i>, herdada do {@code template1} no {@code CREATE DATABASE} — e a lista
+ *       publicada muda de máquina para máquina ("CC0 1.0 (…)" antes ou depois de "CC BY 4.0"
+ *       conforme o {@code datcollate} seja {@code C.UTF-8} ou {@code en_US.UTF-8}). "C" é
+ *       ordem de ponto de código, idêntica em qualquer configuração regional do servidor
+ *       (ADR-0010).
+ *       Vale para as três leituras, inclusive no desempate: collation herdada no {@code slug}
+ *       reintroduziria a dependência na página em que dois nomes empatam.</li>
  *   <li><b>{@code LIMIT}/{@code OFFSET} sempre com {@code total} separado:</b> a contagem
  *       ignora a página, é o que o envelope publica como {@code total}.</li>
  * </ul>
@@ -30,7 +38,7 @@ import org.springframework.stereotype.Repository;
 public class TaxonomiaRepositorio {
 
     /** Ordem publicada no contrato ("ordenada por nome"), com desempate determinístico. */
-    private static final String ORDEM = " ORDER BY nome, slug";
+    private static final String ORDEM = " ORDER BY nome COLLATE \"C\", slug COLLATE \"C\"";
 
     private static final RowMapper<CategoriaResposta> MAPEADOR_CATEGORIA = (rs, linha) ->
             new CategoriaResposta(

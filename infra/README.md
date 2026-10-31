@@ -134,3 +134,35 @@ outra, e o achado do E1.8 (`permission denied for table category` depois de
 Consequência prática: quem quer o banco de teste num estado conhecido roda
 `infra/db-test-setup.sh`; depois disso `make test` e `make db:migrate:test` são
 intercambiáveis na ordem, sem deixar o banco meio-migrado "inutilizável" para a suíte.
+
+## Collation do banco não decide a ordem publicada (card E1.13, ADR-0010)
+
+Os dois bancos nascem com a collation do `template1` da máquina: `db-setup.sh` e
+`db-test-setup.sh` **não** declaram `LC_COLLATE`. Isso é **deliberado**, não pendência — a
+`datcollate` do banco é livre porque a ordem das listagens é fixada **no SQL**, não herdada:
+as consultas que ordenam texto usam `COLLATE "C"` (ordem de ponto de código), na taxonomia
+(`ORDER BY nome COLLATE "C", slug COLLATE "C"`) e na listagem `ordem=titulo`
+(`ORDER BY m.titulo COLLATE "C" ASC, m.id DESC`).
+
+Medido em 2026-10-31 num clone com `LANG=en_US.UTF-8` (`datcollate` `en_US.UTF-8`): sem a
+cláusula, `make test` reprovava em
+`TaxonomiaControllerIntegrationTest.ordenacaoPorNomeEEstavelEntreChamadasEPaginas` — sob
+`en_US.UTF-8` a collation ignora espaço e pontuação, e `"CC0 1.0 (…)"` subia na frente de
+`"CC BY 4.0"`. O mesmo clone numa máquina `C.UTF-8` passava: a suíte dependia do locale do
+servidor, não do código. Com a cláusula, `make test` é verde nas duas collations (evidência
+em `docs/qa/e1-13-evidencia.sh`).
+
+Não é preciso recriar nada para "consertar" o locale. Quem **quiser** um banco `C.UTF-8`
+(por exemplo para reproduzir a VPS ao pé da letra) cria com collation explícita:
+
+```bash
+sudo -u postgres psql -c "CREATE DATABASE scipath_test TEMPLATE template0 \
+  LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8' OWNER scipath_test;"
+```
+
+e replica os `GRANT` de `db-test-setup.sh` (a partir do passo 4). Não é exigência do produto:
+o resultado das listagens publicadas é o mesmo nos dois casos — é justamente o que o
+ADR-0010 fixou. Um `ORDER BY` novo sobre coluna de texto deve declarar a mesma collation,
+senão a dependência volta em silêncio (o `ORDER BY` de data/uuid não precisa: `timestamptz` e
+`uuid` já comparam byte a byte).
+
