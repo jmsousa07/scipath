@@ -1,0 +1,75 @@
+@import "tailwindcss";
+@import "../tokens.css";
+@import "./fonts.css";
+
+/* arquivos varridos em busca de classes utilitárias */
+@source "./";
+@source "../components";
+
+/* ============================================================================
+   Fundação — espelha o canvas global do design system (fundo branco, tinta
+   quase preta), sem resets dos templates que ele neutraliza.
+   ============================================================================ */
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  background: var(--sc-surface);
+}
+
+body {
+  margin: 0;
+  color: var(--sc-ink);
+  font-family: var(--font-primary);
+  font-weight: 400;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  margin: 0;
+  color: var(--sc-ink);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+img,
+video,
+svg {
+  max-width: 100%;
+}
+
+::selection {
+  background: var(--sc-blue-tint);
+}
+
+:focus-visible {
+  outline: 2px solid var(--sc-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,203 @@
+/* ============================================================================
+   SciPath — tokens do design system (contrato visual: assets/design_system_2.html)
+   Camada 1: variáveis CSS. Nenhum hex solto em componente: sempre var(--*).
+   Este arquivo é a única fonte de cor, raio, tipografia, sombra e movimento.
+   A camada Tailwind (bloco @theme, no fim) só apelida os mesmos valores.
+   ============================================================================ */
+
+:root {
+  /* --- paleta Glue (Google Research) — os mesmos hex dos tokens do template --- */
+  --glue-grey-0:#fff;      --glue-grey-10:#f8f9fc;   --glue-grey-20:#eff2f7;
+  --glue-grey-50:#e6eaf0;  --glue-grey-100:#e1e6ec;  --glue-grey-200:#cdd4dc;
+  --glue-grey-300:#b2bbc5; --glue-grey-400:#bdc1c6;  --glue-grey-500:#9aa0a6;
+  --glue-grey-600:#80868b; --glue-grey-700:#5f6368;  --glue-grey-800:#45474d;
+  --glue-grey-900:#2f3034; --glue-grey-1000:#212226; --glue-grey-1100:#18191d;
+  --glue-grey-1200:#121317;
+  --glue-blue-50:#bbe2ff;  --glue-blue-100:#9dd2ff;  --glue-blue-300:#4fa0ff;
+  --glue-blue-500:#3186ff; --glue-blue-600:#3279f9;  --glue-blue-700:#336ef3;
+  --glue-blue-800:#2b4fda; --glue-blue-900:#27329b;
+  --glue-green-100:#9be69a;--glue-green-300:#42c868; --glue-green-500:#00af57;
+  --glue-green-700:#009954;--glue-green-900:#00694e;
+  --glue-yellow-100:#fff350;
+  --glue-red-50:#ffdeec;   --glue-red-100:#ffacc2;   --glue-red-300:#ff5a59;
+  --glue-red-500:#fc413d;  --glue-red-700:#de2d29;   --glue-red-900:#990d0e;
+  --glue-purple-100:#ea80fc; --glue-purple-900:#681da8;
+
+  /* --- tokens SciPath (camada nova; contrato estável) --- */
+  --sc-blue:#3186ff;        /* primary   — nó de conhecimento */
+  --sc-red:#fc413d;         /* accent    — pré-requisito / alerta */
+  --sc-yellow:#fbbc04;      /* accent 2  — curadoria / destaque */
+  --sc-green:#00af57;       /* feedback  — concluído */
+  --sc-purple:#681da8;      /* decorative— trilhas */
+  --sc-ink:var(--glue-grey-1200);
+  --sc-ink-soft:var(--glue-grey-800);
+  --sc-ink-muted:var(--glue-grey-700);
+  --sc-blue-tint:rgba(49,134,255,.18); /* seleção de texto — --sc-blue com alfa */
+  --sc-line:#dfe3e8;
+  --sc-line-strong:#c4cad2;
+  --sc-surface:var(--glue-grey-0);
+  --sc-surface-2:var(--glue-grey-10);
+  --sc-surface-3:var(--glue-grey-20);
+
+  /* --- raios --- */
+  --sc-radius-s:8px; --sc-radius:14px; --sc-radius-l:24px; --sc-radius-pill:999px;
+
+  /* --- tipografia (famílias carregadas locais em app/fonts.css) --- */
+  --font-primary:'Google Sans Flex','Google Sans','Google Sans Text',Roboto,Arial,Helvetica,sans-serif;
+  --font-display:'Google Sans Display','Google Sans Flex','Google Sans',Roboto,Arial,sans-serif;
+  --font-text:'Google Sans Text','Google Sans Flex',Roboto,Arial,sans-serif;
+  --font-mono:'Roboto Mono','Geist Mono','Google Sans Flex',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --font-fallback:Arial,Helvetica,sans-serif;
+
+  /* --- escala tipográfica (papéis da tabela "Escala completa" do design system) --- */
+  --fs-h1:clamp(2.75rem,5.4vw,4rem);   --lh-h1:1.04; --ls-h1:-.035em;
+  --fs-h2:clamp(2.25rem,4.4vw,3.25rem);--lh-h2:1.06; --ls-h2:-.03em;
+  --fs-h3:2rem;                        --lh-h3:1.12; --ls-h3:-.025em;
+  --fs-h4:1.625rem;                    --lh-h4:1.16; --ls-h4:-.02em;
+  --fs-h5:1.25rem;                     --lh-h5:1.3;  --ls-h5:-.01em;
+  --fs-h6:1.0625rem;                   --lh-h6:1.35; --ls-h6:0;
+  --fs-body-lg:1.125rem;               --lh-body-lg:1.65; --ls-body-lg:0;
+  --fs-body:1rem;                      --lh-body:1.55;    --ls-body:0;
+  --fs-body-sm:.875rem;                --lh-body-sm:1.55; --ls-body-sm:.005em;
+  --fs-caption:.78125rem;              --lh-caption:1.45; --ls-caption:.01em;
+  --fs-label:.6875rem;                 --lh-label:1.2;    --ls-label:.16em;
+  --fs-helper:.75rem;                  --lh-helper:1.5;   --ls-helper:.01em;
+  --fs-code:.78125rem;                 --lh-code:1.6;     --ls-code:0;
+
+  /* --- motion (o easing do research.google é a assinatura do sistema) --- */
+  --ease-google:cubic-bezier(.058,.919,.184,.999);
+  --ease-out-soft:cubic-bezier(.18,.9,.22,1);
+  --ease-io:cubic-bezier(.4,0,.2,1);
+  --dur-fast:.15s; --dur-base:.25s; --dur-slow:.8s;
+
+  /* --- sombras / glow --- */
+  --sc-shadow-s:0 1px 2px rgba(18,19,23,.06), 0 1px 3px rgba(18,19,23,.05);
+  --sc-shadow:0 8px 24px -12px rgba(18,19,23,.18), 0 2px 6px rgba(18,19,23,.05);
+  --sc-shadow-l:0 30px 70px -30px rgba(18,19,23,.28), 0 8px 20px -12px rgba(18,19,23,.12);
+  --sc-glow-blue:0 0 0 1px rgba(49,134,255,.28), 0 12px 40px -14px rgba(49,134,255,.55);
+  --sc-glow-red:0 0 0 1px rgba(252,65,61,.26), 0 12px 40px -14px rgba(252,65,61,.45);
+}
+
+/* ============================================================================
+   Camada Tailwind 4 — apelidos dos mesmos tokens.
+   `inline` para que o valor seja emitido como var(--*) no ponto de uso.
+   ============================================================================ */
+@theme inline {
+  /* fontes → font-primary / font-display / font-text / font-mono */
+  --font-primary:var(--font-primary);
+  --font-display:var(--font-display);
+  --font-text:var(--font-text);
+  --font-mono:var(--font-mono);
+
+  /* cores → bg-sc-blue, text-glue-grey-700, border-sc-line … */
+  --color-glue-grey-0:var(--glue-grey-0);
+  --color-glue-grey-10:var(--glue-grey-10);
+  --color-glue-grey-20:var(--glue-grey-20);
+  --color-glue-grey-50:var(--glue-grey-50);
+  --color-glue-grey-100:var(--glue-grey-100);
+  --color-glue-grey-200:var(--glue-grey-200);
+  --color-glue-grey-300:var(--glue-grey-300);
+  --color-glue-grey-400:var(--glue-grey-400);
+  --color-glue-grey-500:var(--glue-grey-500);
+  --color-glue-grey-600:var(--glue-grey-600);
+  --color-glue-grey-700:var(--glue-grey-700);
+  --color-glue-grey-800:var(--glue-grey-800);
+  --color-glue-grey-900:var(--glue-grey-900);
+  --color-glue-grey-1000:var(--glue-grey-1000);
+  --color-glue-grey-1100:var(--glue-grey-1100);
+  --color-glue-grey-1200:var(--glue-grey-1200);
+  --color-glue-blue-50:var(--glue-blue-50);
+  --color-glue-blue-100:var(--glue-blue-100);
+  --color-glue-blue-300:var(--glue-blue-300);
+  --color-glue-blue-500:var(--glue-blue-500);
+  --color-glue-blue-600:var(--glue-blue-600);
+  --color-glue-blue-700:var(--glue-blue-700);
+  --color-glue-blue-800:var(--glue-blue-800);
+  --color-glue-blue-900:var(--glue-blue-900);
+  --color-glue-green-100:var(--glue-green-100);
+  --color-glue-green-300:var(--glue-green-300);
+  --color-glue-green-500:var(--glue-green-500);
+  --color-glue-green-700:var(--glue-green-700);
+  --color-glue-green-900:var(--glue-green-900);
+  --color-glue-yellow-100:var(--glue-yellow-100);
+  --color-glue-red-50:var(--glue-red-50);
+  --color-glue-red-100:var(--glue-red-100);
+  --color-glue-red-300:var(--glue-red-300);
+  --color-glue-red-500:var(--glue-red-500);
+  --color-glue-red-700:var(--glue-red-700);
+  --color-glue-red-900:var(--glue-red-900);
+  --color-glue-purple-100:var(--glue-purple-100);
+  --color-glue-purple-900:var(--glue-purple-900);
+  --color-sc-blue:var(--sc-blue);
+  --color-sc-red:var(--sc-red);
+  --color-sc-yellow:var(--sc-yellow);
+  --color-sc-green:var(--sc-green);
+  --color-sc-purple:var(--sc-purple);
+  --color-sc-ink:var(--sc-ink);
+  --color-sc-ink-soft:var(--sc-ink-soft);
+  --color-sc-ink-muted:var(--sc-ink-muted);
+  --color-sc-line:var(--sc-line);
+  --color-sc-line-strong:var(--sc-line-strong);
+  --color-sc-surface:var(--sc-surface);
+  --color-sc-surface-2:var(--sc-surface-2);
+  --color-sc-surface-3:var(--sc-surface-3);
+
+  /* raios → rounded-sc, rounded-sc-l, rounded-sc-pill … */
+  --radius-sc-s:var(--sc-radius-s);
+  --radius-sc:var(--sc-radius);
+  --radius-sc-l:var(--sc-radius-l);
+  --radius-sc-pill:var(--sc-radius-pill);
+
+  /* escala tipográfica → text-h1, text-body, text-label … */
+  --text-h1:var(--fs-h1);
+  --text-h1--line-height:var(--lh-h1);
+  --text-h1--letter-spacing:var(--ls-h1);
+  --text-h2:var(--fs-h2);
+  --text-h2--line-height:var(--lh-h2);
+  --text-h2--letter-spacing:var(--ls-h2);
+  --text-h3:var(--fs-h3);
+  --text-h3--line-height:var(--lh-h3);
+  --text-h3--letter-spacing:var(--ls-h3);
+  --text-h4:var(--fs-h4);
+  --text-h4--line-height:var(--lh-h4);
+  --text-h4--letter-spacing:var(--ls-h4);
+  --text-h5:var(--fs-h5);
+  --text-h5--line-height:var(--lh-h5);
+  --text-h5--letter-spacing:var(--ls-h5);
+  --text-h6:var(--fs-h6);
+  --text-h6--line-height:var(--lh-h6);
+  --text-h6--letter-spacing:var(--ls-h6);
+  --text-body-lg:var(--fs-body-lg);
+  --text-body-lg--line-height:var(--lh-body-lg);
+  --text-body-lg--letter-spacing:var(--ls-body-lg);
+  --text-body:var(--fs-body);
+  --text-body--line-height:var(--lh-body);
+  --text-body--letter-spacing:var(--ls-body);
+  --text-body-sm:var(--fs-body-sm);
+  --text-body-sm--line-height:var(--lh-body-sm);
+  --text-body-sm--letter-spacing:var(--ls-body-sm);
+  --text-caption:var(--fs-caption);
+  --text-caption--line-height:var(--lh-caption);
+  --text-caption--letter-spacing:var(--ls-caption);
+  --text-label:var(--fs-label);
+  --text-label--line-height:var(--lh-label);
+  --text-label--letter-spacing:var(--ls-label);
+  --text-helper:var(--fs-helper);
+  --text-helper--line-height:var(--lh-helper);
+  --text-helper--letter-spacing:var(--ls-helper);
+  --text-code:var(--fs-code);
+  --text-code--line-height:var(--lh-code);
+  --text-code--letter-spacing:var(--ls-code);
+
+  /* sombras → shadow-sc, shadow-sc-l, shadow-glow-blue … */
+  --shadow-sc-s:var(--sc-shadow-s);
+  --shadow-sc:var(--sc-shadow);
+  --shadow-sc-l:var(--sc-shadow-l);
+  --shadow-glow-blue:var(--sc-glow-blue);
+  --shadow-glow-red:var(--sc-glow-red);
+
+  /* easings → ease-google, ease-out-soft, ease-io */
+  --ease-google:var(--ease-google);
+  --ease-out-soft:var(--ease-out-soft);
+  --ease-io:var(--ease-io);
+}

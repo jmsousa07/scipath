@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SciPath">
+  <!--
+    Ícone do produto: três nós ligados (o grafo de conhecimento).
+    Um asset SVG autônomo (favicon) não herda `var(--sc-blue)` do documento,
+    então o valor é o mesmo hex de `--sc-blue` em tokens.css. É o único lugar
+    do projeto onde o literal é inevitável.
+  -->
+  <rect width="64" height="64" rx="14" fill="#121317" />
+  <g stroke="#3186ff" stroke-width="3.4" stroke-linecap="round">
+    <path d="M20 20 44 32" />
+    <path d="M20 20 18 45" />
+    <path d="M44 32 18 45" />
+  </g>
+  <g fill="#3186ff">
+    <circle cx="20" cy="20" r="6" />
+    <circle cx="44" cy="32" r="6" />
+  </g>
+  <circle cx="18" cy="45" r="6" fill="none" stroke="#3186ff" stroke-width="3.4" />
+</svg>
