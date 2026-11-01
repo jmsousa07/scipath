@@ -17,9 +17,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * código sem nunca rodar. É o modo de falha mais silencioso desta entrega, e por isso ele é
  * declarado aqui, num arquivo com nome próprio, em vez de depender de alguém lembrar.
  *
- * <p>A única tarefa agendada do MVP é {@code ColetorDeOrfaosAgendado}, e ela se desliga por
- * configuração ({@code scipath.coleta.agendado}) — a suíte de testes desliga, para não depender de
- * relógio.
+ * <p>As rotinas agendadas do MVP são {@code ColetorDeOrfaosAgendado} e
+ * {@code ExpurgoDeRetencaoAgendado}; cada uma pode ser desligada por configuração
+ * ({@code scipath.coleta.agendado} e {@code scipath.expurgo.agendado}) — a suíte de testes desliga
+ * ambas para não depender de relógio.
  */
 @Configuration
 @EnableScheduling

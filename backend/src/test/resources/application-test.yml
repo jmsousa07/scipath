@@ -103,3 +103,10 @@ scipath:
     agendamento: "0 30 3 * * *"
     agendado: false
     ao-iniciar: false
+
+  # A rotina E5.5 é chamada explicitamente pelos testes; nenhum cron real pode interferir.
+  expurgo:
+    janela: 7d
+    agendamento: "0 45 3 * * *"
+    agendado: false
+    ao-iniciar: false

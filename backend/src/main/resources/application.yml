@@ -111,3 +111,12 @@ scipath:
     agendamento: "${SCIPATH_COLETA_AGENDAMENTO:0 30 3 * * *}"
     agendado: ${SCIPATH_COLETA_AGENDADO:true}
     ao-iniciar: ${SCIPATH_COLETA_AO_INICIAR:false}
+
+  # Expurgo do binário de material excluído após a janela de retenção (E5.5, ADR-0005 §3).
+  # Os metadados permanecem; apenas o StorageService remove o conteúdo e file_asset recebe PURGADO.
+  # O cron tem seis campos e a configuração é validada na subida por PropriedadesDeExpurgo.
+  expurgo:
+    janela: ${SCIPATH_EXPURGO_JANELA:7d}
+    agendamento: "${SCIPATH_EXPURGO_AGENDAMENTO:0 45 3 * * *}"
+    agendado: ${SCIPATH_EXPURGO_AGENDADO:true}
+    ao-iniciar: ${SCIPATH_EXPURGO_AO_INICIAR:false}
