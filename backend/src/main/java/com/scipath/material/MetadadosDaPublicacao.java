@@ -17,8 +17,13 @@ import java.util.UUID;
  * aceitar um item desativado permitiria publicar material com categoria que ninguém consegue
  * filtrar (o filtro da descoberta casa por {@code slug} sem olhar {@code ativo}).
  *
+ * <p><b>O mesmo formato serve aos dois atos que escrevem metadados</b> — publicar (RF012) e editar
+ * (RF016, E5.3): os campos editáveis são os mesmos cinco, com os mesmos limites e as mesmas
+ * recusas, então quem os carrega é um só. A diferença entre os atos fica no que <i>cerca</i> este
+ * record (a declaração de direito e o estado inicial são só da publicação), não no conteúdo dele.
+ *
  * <p>Record de dentro do servidor: nenhum destes campos é publicado — o 201 devolve apenas slug,
- * estado e URL (RF012).
+ * estado e URL (RF012), e o 200 da edição é o {@code MaterialProprio} relido do banco.
  *
  * @param titulo     título do material, já validado (RN004)
  * @param descricao  descrição do material, já validada (RN004)
