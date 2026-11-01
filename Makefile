@@ -175,7 +175,7 @@ test:            ## testes do backend (reproduzível de shell limpo; datasource 
 lint:            ## lint + typecheck (f0.3)
 	@test -f frontend/package.json || { echo "frontend/ ainda não existe (card f0.3)"; exit 1; }
 	@test -x frontend/node_modules/.bin/eslint || { echo "PRECONDIÇÃO de ambiente: frontend/node_modules ausente ou vazio neste checkout — ISTO NÃO É DEFEITO DE CÓDIGO; rode 'npm ci' em frontend/ (instalação de dependência é card de dependência, AGENTS.md; a suíte de QA instala por conta própria)"; exit 1; }
-	@cd frontend && npm run lint && npm run typecheck
+	@cd frontend && npm run typegen && npm run lint && npm run typecheck
 
 e2e:             ## Playwright (f0.4) — NÃO faz parte do gate do MVP: ver ADR-0009
 	@# Decisão registrada no ADR-0009: a camada ponta a ponta do MVP é o harness de QA
