@@ -19,7 +19,7 @@ andamento` (botão desabilitado, sem envio duplo) · `falha recuperável` (mensa
 preservados — `RNF004`) · `sucesso` · `tentativa duplicada` · `arquivo acima do limite ou formato
 inválido`.
 
-## Rotas (proposta — fixar antes da Etapa 2)
+## Rotas (fixadas na Etapa 2; a rota de edição foi corrigida no card E5.6)
 
 Decisão de arquitetura do §14.3: a rota é definida **uma vez** e não se reinventa por tela.
 Slugs estáveis e canônicos (`RNF025`).
@@ -38,7 +38,11 @@ Slugs estáveis e canônicos (`RNF025`).
 | Editar perfil | `/painel/perfil` | não |
 | Publicar material | `/painel/publicar` | não |
 | Materiais próprios | `/painel/materiais` | não |
-| Editar material | `/painel/materiais/[id]/editar` | não |
+| Editar material | `/painel/materiais/[slug]/editar` | não |
+
+**A rota de edição é por `[slug]`, não por `[id]`** (correção do card E5.6): o `slug` é o
+identificador canônico e estável do material (`RNF025`) e é o que a lista do dono já tem em
+mãos. Um `id` interno obrigaria o contrato a publicá-lo — e ele não o publica, de propósito.
 
 Rotas privadas **não** são indexadas (§12.3). Rotas públicas entregam conteúdo real no HTML.
 
@@ -173,14 +177,36 @@ ressalva era esta troca (200 + `noindex`) que aqui deixa de existir.
 - **Sucesso:** confirmação + link para a página pública (`CA005`).
 
 ### 12. Materiais próprios — `/painel/materiais`
-- Lista os materiais do usuário com estado (`PUBLICADO`, `RETIRADO`, `EXCLUIDO`) e ações de editar,
-  retirar e excluir (`CA008`).
-- **Autorização no servidor** (`RN003`, `RNF010`): esconder o botão não é controle.
+- Lista os materiais do usuário com estado (`PUBLICADO`, `RETIRADO`, `EXCLUIDO`) e **as ações de
+  cada estado** (`CA008`, `RF015`, `RF017`): `PUBLICADO` → editar, retirar, excluir; `RETIRADO` →
+  editar, repor no público, excluir; `EXCLUIDO` → **nenhuma** (estado terminal, `ADR-0011` §2).
+  A derivação da ação a partir do estado é de apresentação; quem julga é o servidor.
+- Paginada (`atualizadoEm` decrescente, `id` crescente — a ordem do contrato), com título, tipo,
+  categoria, licença explicada, estado e as duas datas; link para a página pública **só** quando
+  `PUBLICADO` (em `RETIRADO`/`EXCLUIDO` ela responde 404 — link que leva a 404 é promessa falsa).
+- **Vazio orienta o primeiro passo** (`RF015`): sem material, a tela leva a publicar — ou, com a
+  conta pendente de verificação, ao estado da conta, porque publicar exige e-mail confirmado.
+- **Excluir pede confirmação explícita** (`RF017`, `ADR-0011` §7): o diálogo diz que **não há como
+  desfazer** e que o arquivo deixa de estar disponível em 7 dias. Retirar e repor são reversíveis
+  e não pedem diálogo. A confirmação é ato da interface — um campo `confirmacao` no corpo não
+  confirmaria nada, já que o cliente sempre pode enviá-lo.
+- **Autorização no servidor** (`RN003`, `RNF010`): esconder o botão não é controle. Material
+  inexistente, de outra conta ou já `EXCLUIDO` respondem o **mesmo 404** indistinguível
+  (`ADR-0011` §3).
+- **Entregue no card E5.6**, com as leituras no servidor (`GET /perfil/atual/materiais` e
+  `…/{slug}`, cookie de sessão reenviada) e as escritas pelo cliente com `X-CSRF-Token`. A rota
+  existia neste documento desde a Etapa 1 e **não existia** no produto: a área do usuário (`§9`)
+  dizia que a listagem "ainda não existe nesta versão". Isso deixou de ser verdade no E5.6 — o
+  card da listagem entrou no §9 e a frase saiu.
 
-### 13. Editar material — `/painel/materiais/[id]/editar`
+### 13. Editar material — `/painel/materiais/[slug]/editar`
 - Atualiza metadados do material **próprio**; propriedade verificada no servidor (`CA007`).
 - Publicação só pode ser retirada/republicada pelo dono; alteração de `profile_id` no payload é
   ignorada e recusada (`RN001`).
+- O identificador é o `slug` — é a chave canônica (`RNF025`) e é o que a lista do §12 entrega.
+  Fora do formulário, e por isso imutáveis por esta rota: `slug`, autoria, `estado`, o arquivo e
+  `declaracaoDireito` (ADR-0011 §4). O endereço da edição é montado por `rotaEditarMaterial`
+  (`lib/rotas.ts`).
 
 ## Acessibilidade e SEO (transversal, entra no aceite de toda página)
 

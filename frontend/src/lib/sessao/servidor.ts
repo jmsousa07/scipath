@@ -72,6 +72,27 @@ export type LeituraDaSessao =
   | { tipo: 'falha' };
 
 /**
+ * Cabeçalho `Cookie` a partir dos pares do jar da requisição — `Nome=valor; Nome2=valor2`,
+ * como o cabeçalho HTTP o escreve. Uma função, dois consumidores: a consulta de sessão e a
+ * leitura dos materiais próprios (`lib/api/client.ts`, card E5.6). Duas cópias do `join`
+ * divergiriam no dia em que alguém precisasse tratar um caso (cookie repetida, valor com
+ * `;`), e o defeito apareceria só numa das superfícies.
+ */
+function cabecalhoDe(pares: readonly { name: string; value: string }[]): string {
+  return pares.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
+}
+
+/**
+ * O cabeçalho `Cookie` da requisição CORRENTE, para quem precisa reenviá-lo à API: é o
+ * que `GET /perfil/atual/materiais` exige (sem ele, 401). Exposto porque a página de
+ * `/painel/materiais` (card E5.6) lê a lista no servidor, e a cookie de sessão é
+ * `HttpOnly` — quem a tem em mãos é esta camada, não o cliente de API.
+ */
+export async function cabecalhoDeCookies(): Promise<string> {
+  return cabecalhoDe((await cookies()).getAll());
+}
+
+/**
  * Lê o estado da sessão desta requisição.
  *
  * Devolve `anonimo` sem chamar a API quando a cookie de sessão não veio: não há o que
@@ -84,10 +105,7 @@ export async function lerSessaoNoServidor(): Promise<LeituraDaSessao> {
   const jar = await cookies();
   if (!jar.get(COOKIE_SESSAO)) return { tipo: 'anonimo' };
 
-  const cabecalhoDeCookie = jar
-    .getAll()
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
-    .join('; ');
+  const cabecalhoDeCookie = cabecalhoDe(jar.getAll());
 
   let resposta: Response;
   try {
