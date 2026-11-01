@@ -28,6 +28,8 @@ doctor:          ## confere ferramentas e banco
 	@java -version 2>&1 | head -1 || echo "JDK: AUSENTE"
 	@mvn -v 2>&1 | head -1 || echo "Maven: AUSENTE"
 	@node -v || echo "Node: AUSENTE"
+	@command -v node >/dev/null 2>&1 || { echo "Node: AUSENTE — instale a faixa declarada em frontend/package.json (engines.node)"; exit 1; }
+	@node infra/check-node-version.mjs
 	@echo "== banco =="
 	@pg_isready -h 127.0.0.1 -p 5432 || true
 	@if [ -n "$(ENV_FILE)" ]; then echo ".env: presente ($(ENV_FILE))"; else echo ".env: AUSENTE (rode infra/db-setup.sh)"; fi
