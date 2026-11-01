@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "typegen": "next typegen",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
