@@ -274,23 +274,50 @@ echo "Aqui mede-se, NESTA execução, o dono de 'category' e, tabela a tabela, q
 echo "public a role da suíte não alcança. Só a medição que prova a condição registra o achado"
 echo "(passo 4.4.2); o resultado medido é impresso nos três desfechos — nunca se declara achado"
 echo "que não ocorreu, e medição indisponível não vira 'não ocorreu'."
-medir() { # $1=SQL ; deixa o resultado em MED_RES e o exit do psql em MED_RC
-  MED_RES="$(psqlq -d scipath_test -tAc "$1" 2>"$TMP/4.4.1-psql.err")"
+# A observação crua de cada consulta fica no SEU PRÓPRIO arquivo: um único `2>` compartilhado
+# faria a consulta seguinte TRUNCAR o stderr da anterior, e uma medição que FALHOU seria
+# relatada como "voltou sem resultado" (revisão do QA, rodada 3: falha seguida de sucesso).
+# >>> E5.10-f1-medicao >>>
+MED_LABELS=(); MED_LABEL_RC=(); MED_LABEL_RES=()
+medir() { # $1=SQL  $2=rótulo  → MED_RES (resultado) e MED_RC (exit do psql);
+          # stderr desta consulta em $TMP/4.4.1-psql-<rótulo>.err — nunca compartilhado
+  local rotulo="${2:?medir() exige o rótulo da medição}"
+  MED_RES="$(psqlq -d scipath_test -tAc "$1" 2>"$TMP/4.4.1-psql-$rotulo.err")"
   MED_RC=$?
+  MED_LABELS+=("$rotulo"); MED_LABEL_RC+=("$MED_RC"); MED_LABEL_RES+=("$MED_RES")
 }
+observacoes_cruas() { # observação de CADA medição, por rótulo — nada é sobrescrito, e
+                      # 'falhou' NUNCA é relatado como 'voltou sem resultado'
+  local i rot f
+  [[ ${#MED_LABELS[@]} -eq 0 ]] && return 0
+  for i in "${!MED_LABELS[@]}"; do
+    rot="${MED_LABELS[$i]}"; f="$TMP/4.4.1-psql-$rot.err"
+    if [[ -s "$f" ]]; then
+      echo "     [$rot] erro do psql (stderr):"
+      sed 's/^/       /' "$f"
+    elif [[ "${MED_LABEL_RC[$i]}" -ne 0 ]]; then
+      echo "     [$rot] rc=${MED_LABEL_RC[$i]} e stderr vazio — a consulta FALHOU sem mensagem"
+    elif [[ -z "${MED_LABEL_RES[$i]}" ]]; then
+      echo "     [$rot] rc=0 e resultado VAZIO — a consulta passou mas não devolveu valor"
+    else
+      echo "     [$rot] medição DISPONÍVEL: resultado='${MED_LABEL_RES[$i]}' (stderr vazio)"
+    fi
+  done
+}
+# <<< E5.10-f1-medicao <<<
 psqlp -d scipath_test -c "\dt"
 # (1) dono da tabela 'category' — a prova direta do achado do E1.8
-medir "select pg_get_userbyid(c.relowner) from pg_class c where c.relnamespace = 'public'::regnamespace and c.relname = 'category' and c.relkind = 'r'"
+medir "select pg_get_userbyid(c.relowner) from pg_class c where c.relnamespace = 'public'::regnamespace and c.relname = 'category' and c.relkind = 'r'" categoria
 rc_cat=$MED_RC; dono_categoria="$MED_RES"
 # (2) a suíte (role scipath_test) enxerga 'category'?
-medir "select has_table_privilege('scipath_test', 'category', 'SELECT')"
+medir "select has_table_privilege('scipath_test', 'category', 'SELECT')" priv-categoria
 rc_priv=$MED_RC; priv_categoria="$MED_RES"
 # (3) correlação POR TABELA: objetos de public cujo dono não é a role da suíte E que a suíte
 #     não alcança. Estado misto cai aqui — a lista não é um nome agregado.
-medir "select coalesce(string_agg(c.relname, ', ' order by c.relname), '') from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'S', 'v') and c.relname <> 'flyway_schema_history' and not pg_has_role('scipath_test', pg_get_userbyid(c.relowner), 'USAGE') and not has_table_privilege('scipath_test', c.oid, 'SELECT')"
+medir "select coalesce(string_agg(c.relname, ', ' order by c.relname), '') from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'S', 'v') and c.relname <> 'flyway_schema_history' and not pg_has_role('scipath_test', pg_get_userbyid(c.relowner), 'USAGE') and not has_table_privilege('scipath_test', c.oid, 'SELECT')" tabelas-sem-acesso
 rc_list=$MED_RC; tabelas_sem_acesso="$MED_RES"
 # (4) informativo: a role de dev atua como a role da suíte neste banco? (card E1.5-f1)
-medir "select coalesce((select string_agg(c, ', ') from pg_db_role_setting s join pg_database d ON d.oid = s.setdatabase join pg_roles r ON r.oid = s.setrole, unnest(s.setconfig) c where d.datname = 'scipath_test' and r.rolname = 'scipath'), '<nenhuma>')"
+medir "select coalesce((select string_agg(c, ', ') from pg_db_role_setting s join pg_database d ON d.oid = s.setdatabase join pg_roles r ON r.oid = s.setrole, unnest(s.setconfig) c where d.datname = 'scipath_test' and r.rolname = 'scipath'), '<nenhuma>')" set-role
 rc_role=$MED_RC; set_role_dev="$MED_RES"
 
 medicao_ok="nao"
@@ -305,8 +332,8 @@ echo "-- tabelas de public sem a role da suite E sem SELECT da suite: ${tabelas_
 echo "-- 'SET role' automático da role de dev NESTE banco (card E1.5-f1): ${set_role_dev:-<nenhuma>}"
 echo "-- medição desta execução disponível: $medicao_ok  (rc: category=$rc_cat priv=$rc_priv lista=$rc_list)"
 if [[ "$medicao_ok" != "sim" ]]; then
-  echo "-- OBSERVAÇÃO CRUA da medição indisponível (stderr do psql em $TMP/4.4.1-psql.err):"
-  if [[ -s "$TMP/4.4.1-psql.err" ]]; then sed 's/^/     /' "$TMP/4.4.1-psql.err"; else echo "     (stderr vazio — a query voltou sem resultado)"; fi
+  echo "-- OBSERVAÇÃO CRUA da medição indisponível — stderr POR consulta (nenhuma sobrescreve a outra):"
+  observacoes_cruas
 fi
 
 h2 "4.4.2 Veredito do ACHADO do E1.8 — pela medição desta execução, não por expectativa"

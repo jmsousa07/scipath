@@ -158,6 +158,11 @@ sintéticas):
 Medição ausente não é prova de ausência: é indisponibilidade, e o instrumento a nomeia como tal.
 Um instrumento que afirma o que não mediu é defeito do instrumento, não achado do produto.
 
+O stderr de **cada** consulta do §4.4.1 é gravado em arquivo próprio (`4.4.1-psql-<rótulo>.err`)
+e a observação crua é impressa por rótulo: um arquivo compartilhado faria a consulta seguinte
+truncar o erro da anterior, e uma medição que **falhou** seria relatada como "voltou sem
+resultado" — que é justamente o defeito de instrumento que o card E5.10-f1 fecha.
+
 ## O dono do objeto decide DDL: uma role só dona o banco de teste (card E1.5-f1)
 
 O `ALTER DEFAULT PRIVILEGES` do E1.12 fechou o acesso DML, e com isso o achado do E1.8 parou de
