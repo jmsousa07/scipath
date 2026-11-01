@@ -40,6 +40,38 @@ veredito() { V_CRIT+=("$1"); V_RES+=("$2"); V_NOTA+=("${3:-}"); }
 declare -a ACHADOS=()
 achado() { ACHADOS+=("$1"); }
 
+# ------------------------------------------------------- E5.10-f1: decisão do ACHADO do E1.8
+# Único lugar onde se decide se o harness DECLARA o achado de permissão do E1.8. Fica em
+# função justamente para que a evidência (docs/qa/e5-10-f1-evidencia.sh) extraia e exercite
+# EXATAMENTE esta regra — sem uma segunda cópia que possa divergir do instrumento.
+# Três estados, nunca dois: a ausência de medição não é prova da ausência do achado.
+# >>> E5.10-f1-decisao >>>
+medicao_disponivel() { # $1=exit do psql  $2=resultado  -> 'sim' (houve medição) | 'nao'
+  local rc="$1" res="$2"
+  if [[ "$rc" -ne 0 || -z "$res" ]]; then echo "nao"; else echo "sim"; fi
+}
+estado_achado_e18() { # -> REPRODUZIDO | NAO_REPRODUZIDO | INDISPONIVEL
+  # $1 = medicao_disponivel · $2 = dono da tabela 'category' · $3 = has_table_privilege
+  # da role da suíte em 'category' · $4 = tabelas de public que a suíte NÃO alcança
+  local medicao_ok="$1" dono_categoria="$2" priv_categoria="$3" tabelas_sem_acesso="$4"
+  if [[ "$medicao_ok" != "sim" ]]; then
+    echo "INDISPONIVEL"; return
+  fi
+  # Correlação POR TABELA: a condição é um objeto concreto fora do alcance da suíte. A lista
+  # vem de pg_class x dono x privilégio, um a um — estado MISTO (parte das tabelas com a role
+  # da suíte, parte não) é declarado, não suprimido por um nome que "aparece no meio".
+  if [[ -n "$tabelas_sem_acesso" ]]; then
+    echo "REPRODUZIDO"; return
+  fi
+  # Prova direta pedida no card: se 'category' é de outra role E a suíte não a lê, o achado é o
+  # do E1.8 ('permission denied for table category'), mesmo que a lista acima venha vazia.
+  if [[ "$dono_categoria" != "scipath_test" && "$priv_categoria" = "f" ]]; then
+    echo "REPRODUZIDO"; return
+  fi
+  echo "NAO_REPRODUZIDO"
+}
+# <<< E5.10-f1-decisao <<<
+
 # ---------------------------------------------------------------- utilidades
 secao() {
   printf '\n\n================================================================================\n%s\n================================================================================\n' "$*"
@@ -238,31 +270,69 @@ echo "(SPRING_DATASOURCE_USERNAME). O ACHADO do E1.8 — 'as tabelas saem com do
 echo "suíte leva permission denied' — era impresso INCONDICIONALMENTE: o script declarava a"
 echo "armadilha mesmo quando a medição dizia o contrário. Ela deixou de se reproduzir no E1.12"
 echo "(DML) e no E1.5-f1 (DDL) — infra/README.md, 'Quem é o dono do banco/esquema de teste'."
-echo "Aqui mede-se, NESTA execução, o dono deixado pelo plugin e se a role da suíte alcança as"
-echo "tabelas. Só a medição que prova a condição registra o achado (passo 4.4.2); o resultado"
-echo "medido é impresso nos dois casos — nunca se declara achado que não ocorreu."
+echo "Aqui mede-se, NESTA execução, o dono de 'category' e, tabela a tabela, quais objetos de"
+echo "public a role da suíte não alcança. Só a medição que prova a condição registra o achado"
+echo "(passo 4.4.2); o resultado medido é impresso nos três desfechos — nunca se declara achado"
+echo "que não ocorreu, e medição indisponível não vira 'não ocorreu'."
+medir() { # $1=SQL ; deixa o resultado em MED_RES e o exit do psql em MED_RC
+  MED_RES="$(psqlq -d scipath_test -tAc "$1" 2>"$TMP/4.4.1-psql.err")"
+  MED_RC=$?
+}
 psqlp -d scipath_test -c "\dt"
-dono_plugin=$(psqlq -d scipath_test -tAc "select coalesce(string_agg(distinct pg_get_userbyid(relowner), ', '), '<nenhum>') from pg_class where relnamespace = 'public'::regnamespace and relkind in ('r', 'S', 'v') and relname <> 'flyway_schema_history'")
-priv_suite=$(psqlq -d scipath_test -tAc "select has_table_privilege('scipath_test', 'category', 'SELECT')")
-set_role_dev=$(psqlq -d scipath_test -tAc "select coalesce((select string_agg(c, ', ') from pg_db_role_setting s join pg_database d ON d.oid = s.setdatabase join pg_roles r ON r.oid = s.setrole, unnest(s.setconfig) c where d.datname = 'scipath_test' and r.rolname = 'scipath'), '<nenhuma>')")
-echo "-- dono(s) dos objetos de public em scipath_test: ${dono_plugin:-<sem medicao>}   [role da suite: scipath_test]"
-echo "-- has_table_privilege('scipath_test','category','SELECT'): ${priv_suite:-<sem medicao>}"
+# (1) dono da tabela 'category' — a prova direta do achado do E1.8
+medir "select pg_get_userbyid(c.relowner) from pg_class c where c.relnamespace = 'public'::regnamespace and c.relname = 'category' and c.relkind = 'r'"
+rc_cat=$MED_RC; dono_categoria="$MED_RES"
+# (2) a suíte (role scipath_test) enxerga 'category'?
+medir "select has_table_privilege('scipath_test', 'category', 'SELECT')"
+rc_priv=$MED_RC; priv_categoria="$MED_RES"
+# (3) correlação POR TABELA: objetos de public cujo dono não é a role da suíte E que a suíte
+#     não alcança. Estado misto cai aqui — a lista não é um nome agregado.
+medir "select coalesce(string_agg(c.relname, ', ' order by c.relname), '') from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'S', 'v') and c.relname <> 'flyway_schema_history' and not pg_has_role('scipath_test', pg_get_userbyid(c.relowner), 'USAGE') and not has_table_privilege('scipath_test', c.oid, 'SELECT')"
+rc_list=$MED_RC; tabelas_sem_acesso="$MED_RES"
+# (4) informativo: a role de dev atua como a role da suíte neste banco? (card E1.5-f1)
+medir "select coalesce((select string_agg(c, ', ') from pg_db_role_setting s join pg_database d ON d.oid = s.setdatabase join pg_roles r ON r.oid = s.setrole, unnest(s.setconfig) c where d.datname = 'scipath_test' and r.rolname = 'scipath'), '<nenhuma>')"
+rc_role=$MED_RC; set_role_dev="$MED_RES"
+
+medicao_ok="nao"
+if [[ "$(medicao_disponivel "$rc_cat" "$dono_categoria")" = "sim" \
+   && "$(medicao_disponivel "$rc_priv" "$priv_categoria")" = "sim" \
+   && "$rc_list" -eq 0 ]]; then
+  medicao_ok="sim"
+fi
+echo "-- dono da tabela category em scipath_test: ${dono_categoria:-<sem medicao>}   [role da suite: scipath_test]"
+echo "-- has_table_privilege('scipath_test','category','SELECT'): ${priv_categoria:-<sem medicao>}"
+echo "-- tabelas de public sem a role da suite E sem SELECT da suite: ${tabelas_sem_acesso:-<nenhuma>}"
 echo "-- 'SET role' automático da role de dev NESTE banco (card E1.5-f1): ${set_role_dev:-<nenhuma>}"
+echo "-- medição desta execução disponível: $medicao_ok  (rc: category=$rc_cat priv=$rc_priv lista=$rc_list)"
+if [[ "$medicao_ok" != "sim" ]]; then
+  echo "-- OBSERVAÇÃO CRUA da medição indisponível (stderr do psql em $TMP/4.4.1-psql.err):"
+  if [[ -s "$TMP/4.4.1-psql.err" ]]; then sed 's/^/     /' "$TMP/4.4.1-psql.err"; else echo "     (stderr vazio — a query voltou sem resultado)"; fi
+fi
 
 h2 "4.4.2 Veredito do ACHADO do E1.8 — pela medição desta execução, não por expectativa"
-if [[ -n "$dono_plugin" && "$dono_plugin" != "<nenhum>" && "$dono_plugin" != *"scipath_test"* && "$priv_suite" = "f" ]]; then
-  achado "Migrar scipath_test pelo plugin do Maven (role de dev) deixa as tabelas com dono '$dono_plugin'; a suíte (role 'scipath_test') não alcança as tabelas (has_table_privilege='$priv_suite') e 'make test' falha com 'permission denied for table'. MEDIDO nesta execução no passo 4.4.1. Reprodução: rode 'make db:migrate:test' e, em seguida, a suíte em shell limpo (env -i)."
-  echo "RESULTADO MEDIDO: ACHADO REPRODUZIDO — a medição do passo 4.4.1 prova a condição"
-  echo "  (dono '${dono_plugin}' sem a role da suíte e has_table_privilege='${priv_suite}')."
-  echo "  Registrado em ACHADOS no fim deste log."
-else
-  echo "RESULTADO MEDIDO: ACHADO NÃO REPRODUZIDO nesta execução — a condição do E1.8"
-  echo "  (objetos fora do dono da suíte E suíte sem acesso a eles) NÃO foi medida:"
-  echo "    dono=${dono_plugin:-<sem medicao>} · has_table_privilege('scipath_test','category','SELECT')=${priv_suite:-<sem medicao>}"
-  echo "  Sem a medição provando a condição, o achado NÃO é declarado em ACHADOS — só o"
-  echo "  resultado observado. Causa registrada: neste banco a role de dev atua como a role de"
-  echo "  teste (infra/README.md §'Quem é o dono do banco/esquema de teste', cards E1.12/E1.5-f1)."
-fi
+estado_e18="$(estado_achado_e18 "$medicao_ok" "$dono_categoria" "$priv_categoria" "$tabelas_sem_acesso")"
+case "$estado_e18" in
+  REPRODUZIDO)
+    achado "Migrar scipath_test pelo plugin do Maven (role de dev) deixa objetos fora do alcance da suíte: dono de 'category'='${dono_categoria}', has_table_privilege('scipath_test','category','SELECT')='${priv_categoria}', tabelas sem acesso='${tabelas_sem_acesso:-<nenhuma>}'. 'make test' falha com 'permission denied for table'. MEDIDO nesta execução no passo 4.4.1. Reprodução: rode 'make db:migrate:test' e, em seguida, a suíte em shell limpo (env -i)."
+    echo "RESULTADO MEDIDO: ACHADO REPRODUZIDO — a medição do passo 4.4.1 prova a condição."
+    echo "  dono de category='${dono_categoria}' · has_table_privilege='${priv_categoria}' · sem acesso='${tabelas_sem_acesso:-<nenhuma>}'"
+    echo "  Registrado em ACHADOS no fim deste log."
+    ;;
+  NAO_REPRODUZIDO)
+    echo "RESULTADO MEDIDO: ACHADO NÃO REPRODUZIDO nesta execução — a medição FOI feita e a"
+    echo "  condição do E1.8 (objeto fora do dono da suíte E suíte sem acesso a ele) NÃO ocorreu:"
+    echo "    dono de category=${dono_categoria} · has_table_privilege('scipath_test','category','SELECT')=${priv_categoria} · tabelas sem acesso=<nenhuma>"
+    echo "  Sem a condição provada, o achado NÃO é declarado em ACHADOS — só o resultado observado."
+    echo "  Coerente com o arranjo medido no passo 4.4.1 (infra/README.md §'Quem é o dono do"
+    echo "  banco/esquema de teste', cards E1.12/E1.5-f1)."
+    ;;
+  *)
+    echo "RESULTADO MEDIDO: MEDIÇÃO INDISPONÍVEL — as consultas do passo 4.4.1 não devolveram"
+    echo "  resultado utilizável (rc: category=$rc_cat priv=$rc_priv lista=$rc_list), então NÃO há"
+    echo "  prova nem da condição nem da sua ausência. O achado NÃO é declarado e NADA se afirma"
+    echo "  sobre a causa; a observação crua está impressa no passo 4.4.1."
+    ;;
+esac
 
 h2 "4.5 Devolver scipath_test ao estado que a suíte espera"
 echo "O estado em que a suíte roda é scipath_test recriado do zero: o Flyway da própria"
