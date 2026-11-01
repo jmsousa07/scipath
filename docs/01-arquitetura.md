@@ -57,9 +57,12 @@ file_asset       id, material_id (1:1 no MVP), chave_interna (única), nome_orig
                  tipo_detectado, tamanho_bytes, checksum, estado_processamento, enviado_em
 ```
 
-**Estados de publicação** (`material.estado_publicacao`): `RASCUNHO` (opcional no MVP),
-`PUBLICADO`, `RETIRADO`. Somente `PUBLICADO` é elegível a busca, listagem e acesso a arquivo
-(RN002, RN013). Se rascunho for omitido, o material nasce direto em `PUBLICADO`.
+**Estados de publicação** (`material.estado_publicacao`): `PUBLICADO`, `RETIRADO`, `EXCLUIDO` —
+sem rascunho: o V1 fixa o enum em três valores (card E1.2) e o material nasce direto em
+`PUBLICADO` (RF019). Somente `PUBLICADO` é elegível a busca, listagem e acesso a arquivo (RN002,
+RN013). `RETIRADO` é reversível (o dono republica); `EXCLUIDO` é **terminal** no MVP — não há
+restauração —, com exclusão lógica, `material.excluido_em` gravado no ato e binário purgado 7 dias
+depois pela rotina de retenção (ADR-0005 §3, ADR-0011 §6).
 
 **Invariantes do §11.3 → como ficam garantidas:**
 
@@ -76,6 +79,21 @@ file_asset       id, material_id (1:1 no MVP), chave_interna (única), nome_orig
 
 Não criar no MVP: autoria múltipla, colaboração, relações entre materiais, coleções, trilhas —
 registrados como futuro (RN do §11.2 + ADR-0002).
+
+### 2.1 Fronteira do gerenciamento (Etapa 5 do §18; ADR-0011)
+
+O dono administra o próprio material em **`/perfil/atual/materiais`** — o material é do perfil da
+sessão (RN001), e o caminho fica fora de `/materiais/{slug}` para não colidir com o slug público
+(nenhum material fica inalcançável). Cinco rotas: listar (`GET`), ler em qualquer estado (`GET
+…/{slug}`), editar metadados (`PUT`), retirar/republicar (`PATCH` com `estado`), excluir (`DELETE`,
+lógica). A leitura mostra os **três** estados — a lista do dono não é o público (RF015, RN013); as
+ações valem só em `PUBLICADO`/`RETIRADO`.
+
+Uma regra de recusa para as três ações: material inexistente, **de outra conta** ou `EXCLUIDO`
+responde **404 com o mesmo corpo** do 404 público, para o código de status não virar oráculo de
+existência de material retirado/excluído alheio (RN002, CA007, CA008). O estado é a única fonte da
+elegibilidade (RF019): retirar e excluir mudam listagem, busca, detalhe, arquivo e perfil do autor
+no mesmo instante.
 
 ## 3. Busca, ordenação e indexação (§12)
 
@@ -115,8 +133,8 @@ e ela é segura e observável, como o RN012 exige.
   esforço, e um processo interrompido pode deixar a linha em `VALIDADO` sem material nenhum.
 - **Nunca apaga arquivo de material vivo:** o guarda consulta o vínculo antes de tocar no
   armazenamento e vale para **qualquer** estado — `PUBLICADO`, `RETIRADO` (republicável) e
-  `EXCLUIDO` dentro da janela de retenção. A purga de `EXCLUIDO` (7 dias) e a anonimização de
-  metadados (90 dias) são da Etapa 5 (RF017), **não** desta rotina.
+  `EXCLUIDO` dentro da janela de retenção. Quem purga o `EXCLUIDO` depois da janela é a **rotina de
+  retenção** (§4.2), **não** esta rotina: as duas nunca disputam o mesmo arquivo.
 - **Ordem das duas remoções:** binário **e depois** registro. Se o processo morrer no meio, o banco
   ainda descreve o arquivo (sem material) e a execução seguinte termina o serviço. A ordem inversa
   deixaria um binário que nenhum registro conhece — lixo permanente, exatamente o que o RN012
@@ -135,6 +153,27 @@ e ela é segura e observável, como o RN012 exige.
   depender de relógio.
 - **Execução manual (verificação):** `make coleta:orfaos` sobe a aplicação **sem servidor web**,
   roda **uma** passada e sai — nenhuma porta é aberta e nada fica no ar.
+
+### 4.2 Rotina de retenção do material excluído (RN012; ADR-0005 §3; ADR-0011 §6)
+
+A exclusão lógica (Etapa 5) grava `material.excluido_em` e **não** toca no binário: quem o remove é a
+rotina de retenção, **7 dias** depois, por ser operação destrutiva e irreversível que precisa de
+janela de segurança (card E5.5).
+
+- **O que ela purga:** binário de material em `EXCLUIDO` com `excluido_em` anterior a agora − 7 dias
+  (`scipath.expurgo.janela`), marcando o `file_asset` como **`PURGADO`**. Os metadados **permanecem**.
+- **O que ela nunca toca:** material `PUBLICADO`, `RETIRADO` ou `EXCLUIDO` dentro da janela —
+  inclusive o arquivo. Órfão de publicação é do coletor do §4.1.
+- **Idempotente e retomável:** remover um binário já ausente é sucesso, não falha; a segunda execução
+  examina zero candidatos.
+- **Observável:** cada execução tem identificador e escreve, com o prefixo `[expurgo-retencao]`, uma
+  linha por arquivo purgado e o resumo `execucao=<id> examinados=<n> purgados=<n> falhas=<n>
+  janela=<prazo>`.
+- **Disparo declarado:** `scipath.expurgo.agendamento` (cron de 6 campos, diário por padrão),
+  conferido na subida; desligado no perfil de teste. Execução manual: `make expurgo:retencao`.
+- **Anonimização dos metadados (90 dias) — aberta:** o prazo é do ADR-0005 §3, a **operação** não
+  está definida (quais campos e se o vínculo com a conta é removido). É decisão de política de
+  privacidade do dono (RNF015), registrada no §8 e no ADR-0011 §9 — até lá, nada apaga metadado.
 
 ## 5. Páginas e estados (§15)
 
@@ -189,3 +228,4 @@ configuração/ambiente e **nunca** entram no repositório (RNF012).
 | Painel administrativo mínimo vs seed/migração | §2 (gestão de categorias/licenças) | ADR-0004 |
 | Hospedagem, backup e restauração | §7 | ADR-0006 (Etapa 0) |
 | Quem recebe denúncia de conteúdo e como | §5 (transparência), lançamento | ADR-0006 |
+| **Anonimização dos metadados de material `EXCLUIDO` após 90 dias** (ADR-0005 §3, RF017, RNF015) | §4.2 (rotina de retenção) | **precisa de decisão do dono:** quais campos são anonimizados (`titulo`, `descricao`, `file_asset.nome_original_seguro`) e se o vínculo com a conta (`material.profile_id`) é removido — política de privacidade. Até a decisão, a retenção purga o binário aos 7 dias e **não** toca metadados (ADR-0011 §9; card E5.5, fora de escopo) |
