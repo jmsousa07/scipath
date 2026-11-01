@@ -10,14 +10,18 @@ import jakarta.validation.constraints.Size;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Gerenciamento do material próprio — a leitura da tag {@code gerenciamento} do contrato v0.6
- * (RF015): {@code GET /api/perfil/atual/materiais}, a lista dos materiais da conta autenticada, e
- * {@code GET /api/perfil/atual/materiais/{slug}}, a leitura de um deles em qualquer estado.
+ * Gerenciamento do material próprio — a tag {@code gerenciamento} do contrato v0.6 (RF015, RF016):
+ * {@code GET /api/perfil/atual/materiais}, a lista dos materiais da conta autenticada,
+ * {@code GET /api/perfil/atual/materiais/{slug}}, a leitura de um deles em qualquer estado, e
+ * {@code PUT /api/perfil/atual/materiais/{slug}}, a edição dos metadados do próprio material
+ * (E5.3). As duas leituras não exigem {@code X-CSRF-Token}; a escrita exige.
  *
  * <p><b>Por que um controller separado do {@link MateriaisController}.</b> Aquele é do
  * <b>público</b> (descoberta, detalhe e publicação sob {@code /materiais}); este é do <b>dono</b>,
@@ -106,5 +110,46 @@ public class MateriaisPropriosController {
                     message = "deve ter no máximo " + COMPRIMENTO_MAXIMO_SLUG + " caracteres")
             String slug) {
         return proprios.ler(sessao.perfilId(), slug);
+    }
+
+    /**
+     * Edita os metadados de um material do dono (RF016, contrato v0.6, tag {@code gerenciamento}) —
+     * o {@code PUT} do ADR-0011 §4. Substitui o conjunto editável inteiro: os cinco campos do
+     * schema {@code EdicaoDeMaterial} são obrigatórios, porque a tela os apresenta todos
+     * preenchidos.
+     *
+     * <p><b>A identidade é declarada, não verificada aqui</b> — como nas duas leituras desta
+     * superfície. O método recebe {@link SessaoAutenticada} concreto, então o interceptor responde
+     * <b>401</b> antes de qualquer regra de negócio; e como é um método de escrita, o mesmo
+     * interceptor exige o cabeçalho {@code X-CSRF-Token} e responde <b>403</b> quando ele falta
+     * (a autenticação precede a checagem de CSRF). Nenhum identificador de conta, de perfil ou de
+     * autor aparece nos parâmetros: não há requisição, bem formada ou não, que peça a edição do
+     * material de outra pessoa (RN001, CA007).
+     *
+     * <p><b>A validação do corpo não é de anotação.</b> O contrato separa 400 (campo obrigatório
+     * ausente) de 422 (campo presente com valor inválido, ou taxonomia inexistente/inativa), e a
+     * segunda parte depende de consulta ao banco (RF018) — por isso o controller repassa o corpo
+     * cru ({@link EdicaoDeMaterialRequisicao}) e quem decide é
+     * {@link MateriaisPropriosService#editar}, com a mesma regra da publicação. Campo que o schema
+     * não publica ({@code autorSlug}, {@code contaId}, {@code estado}) é <b>ignorado</b>, como o
+     * contrato v0.6 diz: não há campo para eles no corpo, e não existe caminho de código que os leia.
+     *
+     * <p>O 200 devolve o {@link MaterialProprioResposta} atualizado — o mesmo schema da leitura —,
+     * para a tela confirmar sem uma segunda chamada.
+     *
+     * @return 200 com o material atualizado; 400 campo ausente; 422 campo inválido; 401 sem sessão;
+     *         403 sem CSRF; 404 material inexistente, de outra conta ou {@code EXCLUIDO}
+     */
+    @PutMapping("/perfil/atual/materiais/{slug}")
+    public MaterialProprioResposta editar(
+            @IdentidadeAutenticada SessaoAutenticada sessao,
+            @PathVariable("slug")
+            @Pattern(regexp = FORMATO_SLUG,
+                    message = "deve ser um slug (minúsculas, dígitos e hífen), como introducao-a-algoritmos-de-ordenacao")
+            @Size(max = COMPRIMENTO_MAXIMO_SLUG,
+                    message = "deve ter no máximo " + COMPRIMENTO_MAXIMO_SLUG + " caracteres")
+            String slug,
+            @RequestBody EdicaoDeMaterialRequisicao requisicao) {
+        return proprios.editar(sessao.perfilId(), slug, requisicao);
     }
 }
