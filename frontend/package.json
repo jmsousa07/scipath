@@ -25,7 +25,9 @@
     "check:materiais": "node scripts/check-materiais.mjs",
     "check:materiais-erros": "node --import ./scripts/ts-registrar.mjs scripts/check-materiais-erros.mjs",
     "check:materiais-api": "node --import ./scripts/ts-registrar.mjs scripts/check-materiais-api.mjs",
-    "verify": "npm run check:tokens && npm run check:style && npm run check:layout && npm run typecheck && npm run lint && npm run check:erros-sessao && npm run check:perfil-erros && npm run check:publicar-erros && npm run check:materiais-erros && npm run build && npm run check:states"
+    "check:editar-erros": "node --import ./scripts/ts-registrar.mjs scripts/check-editar-erros.mjs",
+    "check:editar-html": "node scripts/check-editar-html.mjs",
+    "verify": "npm run check:tokens && npm run check:style && npm run check:layout && npm run typecheck && npm run lint && npm run check:erros-sessao && npm run check:perfil-erros && npm run check:publicar-erros && npm run check:materiais-erros && npm run check:editar-erros && npm run build && npm run check:editar-html && npm run check:states"
   },
   "dependencies": {
     "next": "16.4.2",
