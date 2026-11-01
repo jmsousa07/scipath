@@ -14,6 +14,13 @@ descritivo; o número é a ordem.
   A dobra de acento é `translate()` explícito, e a MESMA expressão está em
   `MateriaisRepositorio` (lado da consulta): se um lado mudar sem o outro, o índice deixa de
   ser usado, sem erro nenhum. Por isso o card exige `EXPLAIN` como evidência.
+- `V4__sessao.sql` — sessões revogáveis persistidas no PostgreSQL (card E3.3, ADR-0003 (e)).
+- `V5__material_excluido_em.sql` — marco temporal da exclusão lógica (card E5.4, ADR-0005 §3 e
+  ADR-0011 §6): `material.excluido_em` é preenchido pelo `DELETE` e ancora a retenção de 7 dias
+  antes da purga do binário. Reversão em banco de desenvolvimento/teste: remover a coluna e a
+  linha da versão `5` em `flyway_schema_history`; não aplicar em banco com dados reais sem backup.
+  Procedimento: `ALTER TABLE material DROP COLUMN excluido_em;` e, em seguida, remover a versão `5`
+  do histórico Flyway para permitir reaplicar a migração.
 
 ## Como aplicar
 

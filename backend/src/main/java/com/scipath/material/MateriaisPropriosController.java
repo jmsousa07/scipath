@@ -7,8 +7,11 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -151,5 +154,33 @@ public class MateriaisPropriosController {
             String slug,
             @RequestBody EdicaoDeMaterialRequisicao requisicao) {
         return proprios.editar(sessao.perfilId(), slug, requisicao);
+    }
+
+    /** Retira ou repõe no público um material próprio (RF017, RF019). */
+    @PatchMapping("/perfil/atual/materiais/{slug}")
+    public MaterialProprioResposta transicionar(
+            @IdentidadeAutenticada SessaoAutenticada sessao,
+            @PathVariable("slug")
+            @Pattern(regexp = FORMATO_SLUG,
+                    message = "deve ser um slug (minúsculas, dígitos e hífen)")
+            @Size(max = COMPRIMENTO_MAXIMO_SLUG,
+                    message = "deve ter no máximo " + COMPRIMENTO_MAXIMO_SLUG + " caracteres")
+            String slug,
+            @RequestBody TransicaoDeMaterialRequisicao requisicao) {
+        return proprios.transicionar(sessao.perfilId(), slug, requisicao);
+    }
+
+    /** Exclusão lógica terminal; o binário fica para a rotina de retenção (ADR-0005 §3). */
+    @DeleteMapping("/perfil/atual/materiais/{slug}")
+    public ResponseEntity<Void> excluir(
+            @IdentidadeAutenticada SessaoAutenticada sessao,
+            @PathVariable("slug")
+            @Pattern(regexp = FORMATO_SLUG,
+                    message = "deve ser um slug (minúsculas, dígitos e hífen)")
+            @Size(max = COMPRIMENTO_MAXIMO_SLUG,
+                    message = "deve ter no máximo " + COMPRIMENTO_MAXIMO_SLUG + " caracteres")
+            String slug) {
+        proprios.excluir(sessao.perfilId(), slug);
+        return ResponseEntity.noContent().build();
     }
 }
