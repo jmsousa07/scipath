@@ -6,15 +6,20 @@
  * Por que um script Node e não o navegador: a prova do card de implementação é
  * `next build` + lint + typecheck (AGENTS.md — navegador é ferramenta do card de QA). O
  * mapeamento, esse, é lógica pura justamente para poder ser exercitado aqui: o script
- * importa `src/lib/sessao/erros.ts` DIRETO (o Node 26 remove os tipos) e alimenta cada
- * caso com o `ProblemDetail` que o contrato publica (`components/schemas/ProblemDetail`
- * e as respostas de `/contas` e `/sessoes`).
+ * importa `src/lib/sessao/erros.ts` DIRETO e alimenta cada caso com o `ProblemDetail` que
+ * o contrato publica (`components/schemas/ProblemDetail` e as respostas de `/contas` e
+ * `/sessoes`). Quem remove os tipos é `scripts/ts-loader.mjs`, registrado por
+ * `scripts/ts-registrar.mjs` — o type stripping NATIVO não serve: o Node 22 do pacote
+ * Ubuntu é compilado sem suporte a TypeScript (`process.features.typescript === false`),
+ * então importar `.ts` cru dá `ERR_UNKNOWN_FILE_EXTENSION` e, com
+ * `--experimental-strip-types`, `ERR_NO_TYPESCRIPT` (card E1.6-f1).
  *
  * O que este script NÃO prova: que o servidor responde aquilo (isso é do backend e do
  * QA) e que a tela PINTA o estado (isso é do navegador). Prova que, dado o que o
  * contrato diz, a decisão do cliente é a certa.
  *
- * Uso: node scripts/check-erros-sessao.mjs
+ * Uso: node --import ./scripts/ts-registrar.mjs scripts/check-erros-sessao.mjs
+ *      (é o que `npm run check:erros-sessao` faz)
  */
 import { DESFECHO_DUPLICADO, desfechoDeCamposInvalidos, mapearFalhaDeEnvio } from '../src/lib/sessao/erros.ts';
 import { caminhoInterno } from '../src/lib/sessao/destino.ts';

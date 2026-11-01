@@ -7,17 +7,21 @@
  * Por que um script Node e não o navegador: a prova do card de implementação é `next build` +
  * lint + typecheck (AGENTS.md — navegador é ferramenta do card de QA). O mapeamento, esse, é
  * lógica pura de propósito: este script importa `src/lib/sessao/erros.ts` e
- * `src/lib/sessao/validacao.ts` DIRETO (o Node 26 remove os tipos) e alimenta cada caso com o
+ * `src/lib/sessao/validacao.ts` DIRETO e alimenta cada caso com o
  * `ProblemDetail` que o contrato publica — inclusive o 409 que o backend do E3.5 devolve de
  * verdade (`type`, `detail` e `errors[0].campo = slug`, conforme
  * `EdicaoPerfilIntegrationTest.slugDuplicado409ESlugInvalido422`).
+ *
+ * Os tipos são removidos por `scripts/ts-loader.mjs`, registrado por `scripts/ts-registrar.mjs`
+ * (o type stripping nativo do Node não serve — ver card E1.6-f1).
  *
  * O que este script NÃO prova: que o servidor responde aquilo (isso é do backend e do card de
  * QA) e que a tela PINTA o estado (isso é do navegador). Prova que, dado o que o contrato e o
  * backend dizem, a decisão do cliente é a certa — e que o caminho antigo do 409 (mensagem de
  * cadastro) não vaza para a edição de perfil.
  *
- * Uso: node scripts/check-perfil-erros.mjs
+ * Uso: node --import ./scripts/ts-registrar.mjs scripts/check-perfil-erros.mjs
+ *      (é o que `npm run check:perfil-erros` faz)
  */
 import { mapearFalhaDeEnvio, desfechoDeCamposInvalidos } from '../src/lib/sessao/erros.ts';
 import {

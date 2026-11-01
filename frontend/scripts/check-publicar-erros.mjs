@@ -8,7 +8,10 @@
  * Por que um script Node e não o navegador: a prova do card de implementação é `next build` +
  * lint + typecheck + HTML entregue (AGENTS.md — navegador é ferramenta do card de QA). O
  * mapeamento é lógica pura de propósito: este script importa `src/lib/sessao/erros.ts` e
- * `src/lib/sessao/validacao.ts` DIRETO (o Node 26 remove os tipos) e alimenta cada caso.
+ * `src/lib/sessao/validacao.ts` DIRETO e alimenta cada caso.
+ *
+ * Os tipos são removidos por `scripts/ts-loader.mjs`, registrado por `scripts/ts-registrar.mjs`
+ * (o type stripping nativo do Node não serve — ver card E1.6-f1).
  *
  * O que este script NÃO prova: que o servidor responde aquilo (isso é do backend e do card de
  * QA) e que a tela PINTA o estado (isso é do navegador, no card de QA). Prova que, dado o que o
@@ -16,7 +19,8 @@
  * mensagem genérica de "formato não aceito do pedido", nem o 403 de conta não confirmada cai num
  * "acesso negado" cru.
  *
- * Uso: node scripts/check-publicar-erros.mjs
+ * Uso: node --import ./scripts/ts-registrar.mjs scripts/check-publicar-erros.mjs
+ *      (é o que `npm run check:publicar-erros` faz)
  */
 import { mapearFalhaDeEnvio, desfechoDeArquivoInvalido } from '../src/lib/sessao/erros.ts';
 import {
