@@ -75,6 +75,13 @@ class LoginSessaoIntegrationTest {
 
     private static final String URL_DO_LOGIN = "/api/sessoes";
     private static final String URL_DO_ESTADO = "/api/sessoes/atual";
+
+    /**
+     * A rota de logout é a do contrato, e só ela: `delete` em `/sessoes/atual` (v0.5). A rota
+     * antiga (`DELETE /sessoes`, que só o código conhecia) não existe mais — ver
+     * {@link #logoutSoExisteNaRotaDoContrato()}.
+     */
+    private static final String URL_DO_LOGOUT = "/api/sessoes/atual";
     private static final String URL_DO_CADASTRO = "/api/contas";
     private static final String ROTA_PRIVADA = "/api/teste/privado/perfis/";
 
@@ -288,7 +295,7 @@ class LoginSessaoIntegrationTest {
         criarConta(email, "Sessao Cinco");
         Sessao sessao = logar(email, SENHA);
 
-        ResponseEntity<String> saida = autenticado(HttpMethod.DELETE, URL_DO_LOGIN, null, sessao);
+        ResponseEntity<String> saida = autenticado(HttpMethod.DELETE, URL_DO_LOGOUT, null, sessao);
         assertThat(saida.getStatusCode().value()).isEqualTo(204);
         assertThat(saida.getBody()).as("204 não tem corpo").isNull();
         System.out.println("[E3.3] 204 logout -> Set-Cookie "
@@ -309,12 +316,48 @@ class LoginSessaoIntegrationTest {
         // Idempotente: sair de novo, com a mesma cookie, continua 204. E sem sessão nenhuma
         // também: o cliente manda o token CSRF que ele tem (o visitante recebe um na primeira
         // leitura do app) e o servidor não tem o que revogar.
-        assertThat(autenticado(HttpMethod.DELETE, URL_DO_LOGIN, null, sessao).getStatusCode().value()).isEqualTo(204);
+        ResponseEntity<String> segundaSaida = autenticado(HttpMethod.DELETE, URL_DO_LOGOUT, null, sessao);
+        assertThat(segundaSaida.getStatusCode().value()).isEqualTo(204);
         String csrfDeVisitante = csrfDeVisitante();
-        assertThat(chamar(HttpMethod.DELETE, URL_DO_LOGIN, null, null, csrfDeVisitante, csrfDeVisitante)
-                .getStatusCode().value())
+        ResponseEntity<String> saidaSemSessao = chamar(HttpMethod.DELETE, URL_DO_LOGOUT, null, null, csrfDeVisitante,
+                csrfDeVisitante);
+        assertThat(saidaSemSessao.getStatusCode().value())
                 .as("sem sessão nenhuma também é 204 — logout não vira estado de erro em tela (§15.3)")
                 .isEqualTo(204);
+        System.out.println("[F1] idempotência em " + URL_DO_LOGOUT + ": 2º DELETE com a cookie já revogada -> "
+                + segundaSaida.getStatusCode().value() + "; DELETE sem sessão nenhuma -> "
+                + saidaSemSessao.getStatusCode().value() + " (204 nos dois, sem corpo: "
+                + (segundaSaida.getBody() == null) + "/" + (saidaSemSessao.getBody() == null) + ")");
+    }
+
+    @Test
+    @DisplayName("o logout existe só na rota que o contrato publica: DELETE /sessoes/atual, nunca DELETE /sessoes")
+    void logoutSoExisteNaRotaDoContrato() throws Exception {
+        String email = PREFIXO + "quatorze" + DOMINIO;
+        criarConta(email, "Sessao Quatorze");
+        Sessao sessao = logar(email, SENHA);
+
+        // A rota do contrato responde o logout (contrato v0.5, path /sessoes/atual, delete).
+        ResponseEntity<String> naRotaDoContrato = autenticado(HttpMethod.DELETE, URL_DO_ESTADO, null, sessao);
+        assertThat(naRotaDoContrato.getStatusCode().value())
+                .as("DELETE na rota publicada pelo contrato: é por aqui que o logout acontece")
+                .isEqualTo(204);
+        System.out.println("[F1] 204 logout em " + URL_DO_ESTADO);
+
+        // A rota antiga (que só o código conhecia) não existe mais: 405 no método, com o
+        // código de erro do contrato. Se alguém reintroduzir @DeleteMapping("/sessoes"), este
+        // caso reprova — é o que discrimina a divergência, não só o 204 acima.
+        Sessao outraSessao = logar(email, SENHA);
+        ResponseEntity<String> naRotaAntiga = autenticado(HttpMethod.DELETE, URL_DO_LOGIN, null, outraSessao);
+        assertThat(naRotaAntiga.getStatusCode().value())
+                .as("DELETE /api/sessoes não é mais rota: só POST existe ali")
+                .isEqualTo(405);
+        assertThat(JSON.readTree(naRotaAntiga.getBody()).get("type").asText())
+                .isEqualTo("urn:scipath:erro:metodo_nao_permitido");
+        System.out.println("[F1] 405 DELETE " + URL_DO_LOGIN + " -> " + naRotaAntiga.getBody());
+
+        // E a sessão que tentou o caminho velho continua viva: o 405 não revogou nada.
+        assertThat(rotaPrivada(outraSessao, "sessao-quatorze").getStatusCode().value()).isEqualTo(200);
     }
 
     // ------------------------------------------------------------- autorização
@@ -477,10 +520,10 @@ class LoginSessaoIntegrationTest {
                 credenciais(email, SENHA), null, csrf, null);
         assertThat(loginSemCabecalho.getStatusCode().value()).isEqualTo(403);
 
-        ResponseEntity<String> logoutSemCabecalho = chamar(HttpMethod.DELETE, URL_DO_LOGIN, null, sessao, csrf, null);
+        ResponseEntity<String> logoutSemCabecalho = chamar(HttpMethod.DELETE, URL_DO_LOGOUT, null, sessao, csrf, null);
         assertThat(logoutSemCabecalho.getStatusCode().value()).isEqualTo(403);
 
-        ResponseEntity<String> cabecalhoQueNaoCasa = chamar(HttpMethod.DELETE, URL_DO_LOGIN, null, sessao, csrf,
+        ResponseEntity<String> cabecalhoQueNaoCasa = chamar(HttpMethod.DELETE, URL_DO_LOGOUT, null, sessao, csrf,
                 "outro-valor-qualquer");
         assertThat(cabecalhoQueNaoCasa.getStatusCode().value()).isEqualTo(403);
 

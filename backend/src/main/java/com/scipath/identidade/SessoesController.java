@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Sessão de identidade — {@code POST /sessoes}, {@code GET /sessoes/atual} e
- * {@code DELETE /sessoes} do contrato v0.4 (RF009, CA004).
+ * {@code DELETE /sessoes/atual} do contrato v0.5 (RF009, CA004).
  *
  * <p>Os três endpoints são finos de propósito: conferir credenciais é
  * {@link AutenticacaoService}, abrir/resolver/revogar é {@link SessaoService} e escrever
@@ -69,7 +69,7 @@ public class SessoesController {
                 .orElseGet(() -> new SessaoAtualResposta(false, null, null));
     }
 
-    @DeleteMapping("/sessoes")
+    @DeleteMapping("/sessoes/atual")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void encerrar(HttpServletRequest requisicao, HttpServletResponse resposta) {
         sessoes.encerrar(CookiesDeSessao.ler(requisicao, CookiesDeSessao.COOKIE_DE_SESSAO).orElse(null));
