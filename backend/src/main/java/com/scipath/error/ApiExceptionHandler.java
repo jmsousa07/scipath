@@ -445,12 +445,29 @@ public class ApiExceptionHandler {
         return campoObrigatorioAusente(ex.campo(), requisicao);
     }
 
-    /** Resposta do 400 de campo ausente — a mesma para a parte que não veio e para a vazia. */
+    /**
+     * Resposta do 400 de campo ausente — a mesma para a parte que não veio e para a vazia.
+     *
+     * <p><b>O lugar do campo é decidido aqui, não na exceção.</b> O mesmo 400 nasce de dois corpos
+     * diferentes: o {@code multipart/form-data} da publicação ({@code POST /materiais}) e o JSON da
+     * edição do material próprio ({@code PUT /perfil/atual/materiais/{slug}}, E5.3). O que muda
+     * entre eles é só a frase do {@code detail} — {@code type}, {@code title}, status e
+     * {@code errors[]} são idênticos —, e quem sabe qual é o corpo é este tratamento, que já recebe
+     * a requisição. Consequência prática: o texto do 400 de formulário continua <b>o mesmo</b> que
+     * a evidência do E4.4 registrou, sem que a exceção precise de duas mensagens.
+     */
     private ResponseEntity<ProblemDetail> campoObrigatorioAusente(String campo, HttpServletRequest requisicao) {
         String nomeDoCampo = nomeDoParametro(campo);
+        String lugar = eFormulario(requisicao) ? "no formulário" : "no corpo da requisição";
         List<ErroDeCampo> erros = List.of(new ErroDeCampo(nomeDoCampo, "é obrigatório"));
         return problema(HttpStatus.BAD_REQUEST, TIPO_VALIDACAO, "Requisição inválida",
-                "Falta o campo obrigatório '" + nomeDoCampo + "' no formulário.", requisicao, erros);
+                "Falta o campo obrigatório '" + nomeDoCampo + "' " + lugar + ".", requisicao, erros);
+    }
+
+    /** O corpo é {@code multipart/form-data}? Só o formulário tem partes; o resto é corpo JSON. */
+    private static boolean eFormulario(HttpServletRequest requisicao) {
+        String tipoDeConteudo = requisicao.getContentType();
+        return tipoDeConteudo != null && tipoDeConteudo.startsWith(MediaType.MULTIPART_FORM_DATA_VALUE);
     }
 
     /** 413 com o {@code detail} do contrato, calculado a partir do limite em bytes. */

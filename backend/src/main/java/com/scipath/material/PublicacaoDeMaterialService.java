@@ -12,8 +12,6 @@ import com.scipath.identidade.SessaoAutenticada;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Optional;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -67,18 +65,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class PublicacaoDeMaterialService {
 
-    /** Teto do título no contrato ({@code PublicacaoMaterial.titulo.maxLength}). */
-    static final int TITULO_MAXIMO = 200;
-
-    /** Teto da descrição no contrato ({@code PublicacaoMaterial.descricao.maxLength}). */
-    static final int DESCRICAO_MAXIMA = 2000;
-
-    /** Formato de slug do contrato, o mesmo de {@code FiltroCategoria} e de {@code SlugRecurso}. */
-    static final String FORMATO_SLUG = "^[a-z0-9]+(-[a-z0-9]+)*$";
-
-    /** Formato do slug de licença: o do contrato admite ponto ({@code cc-by-4.0}). */
-    static final String FORMATO_SLUG_DE_LICENCA = "^[a-z0-9]+(-[a-z0-9.]+)*$";
-
     /**
      * Detalhe do 403 para conta sem e-mail confirmado — <b>o texto do contrato</b> (exemplo
      * {@code emailNaoVerificado} de {@code ErroAcessoNegado}). Diz o que falta, para a tela
@@ -91,17 +77,17 @@ public class PublicacaoDeMaterialService {
     private final RecepcaoDeArquivoService recepcao;
     private final StorageService armazenamento;
     private final ArquivosRepositorio arquivos;
-    private final PublicacaoDeMaterialRepositorio repositorio;
     private final GravacaoDeMaterialService gravacao;
+    private final ValidadorDeMetadadosDeMaterial validador;
 
     public PublicacaoDeMaterialService(RecepcaoDeArquivoService recepcao, StorageService armazenamento,
-            ArquivosRepositorio arquivos, PublicacaoDeMaterialRepositorio repositorio,
-            GravacaoDeMaterialService gravacao) {
+            ArquivosRepositorio arquivos, GravacaoDeMaterialService gravacao,
+            ValidadorDeMetadadosDeMaterial validador) {
         this.recepcao = recepcao;
         this.armazenamento = armazenamento;
         this.arquivos = arquivos;
-        this.repositorio = repositorio;
         this.gravacao = gravacao;
+        this.validador = validador;
     }
 
     /**
@@ -161,56 +147,21 @@ public class PublicacaoDeMaterialService {
     // ------------------------------------------------------------------ metadados
 
     /**
-     * Valida os campos do RF012 e resolve a taxonomia em identificadores (RF018).
+     * Valida os campos do RF012: os cinco metadados (que são os mesmos da edição, e por isso vivem
+     * em {@link ValidadorDeMetadadosDeMaterial}) e as duas regras que são <b>só da publicação</b> —
+     * a declaração de direito e o estado inicial.
      *
-     * <p>A ordem dentro daqui é a mesma em todo o resto do projeto: <b>presença</b> primeiro (o
-     * campo que não veio é 400), depois <b>valor</b> (o campo que veio errado é 422). Sem separar as
-     * duas, um formulário sem {@code titulo} sairia como 422 e o cliente trataria como erro de
-     * campo preenchível — que é exatamente o erro que o contrato v0.5 separou em dois códigos.
+     * <p>A ordem continua a do projeto: <b>presença</b> antes de <b>valor</b> — um pedido sem
+     * {@code titulo} é 400 (o servidor não o leu como veio), e um {@code titulo} em branco é 422.
+     * Depois dos metadados vêm as duas regras do ato de publicar, que a edição não tem: o direito
+     * declarado (RF012) e o estado de nascimento (RF019).
      */
     private MetadadosDaPublicacao validar(PublicacaoDeMaterialRequisicao requisicao) {
-        String titulo = exigirTexto(requisicao.titulo(), "titulo", TITULO_MAXIMO);
-        String descricao = exigirTexto(requisicao.descricao(), "descricao", DESCRICAO_MAXIMA);
+        MetadadosDaPublicacao metadados = validador.validar(requisicao.titulo(), requisicao.descricao(),
+                requisicao.categoriaSlug(), requisicao.tipoSlug(), requisicao.licencaSlug());
         exigirDeclaracaoDeDireito(requisicao.declaracaoDireito());
         exigirEstadoInicial(requisicao.estado());
-
-        String categoriaSlug = exigirSlug(requisicao.categoriaSlug(), "categoriaSlug", FORMATO_SLUG,
-                "deve ser um slug de categoria (minúsculas, dígitos e hífen), como computacao-e-tecnologia");
-        String tipoSlug = exigirSlug(requisicao.tipoSlug(), "tipoSlug", FORMATO_SLUG,
-                "deve ser um slug de tipo de material (minúsculas, dígitos e hífen), como nota-de-aula");
-        String licencaSlug = exigirSlug(requisicao.licencaSlug(), "licencaSlug", FORMATO_SLUG_DE_LICENCA,
-                "deve ser um slug de licença (minúsculas, dígitos, hífen e ponto), como cc-by-4.0");
-
-        return new MetadadosDaPublicacao(titulo, descricao,
-                exigirIdAtivo(repositorio.categoriaAtiva(categoriaSlug), "categoriaSlug",
-                        "categoria inexistente ou inativa"),
-                exigirIdAtivo(repositorio.tipoAtivo(tipoSlug), "tipoSlug",
-                        "tipo de material inexistente ou inativo"),
-                exigirIdAtivo(repositorio.licencaAtiva(licencaSlug), "licencaSlug",
-                        "licença inexistente ou inativa"));
-    }
-
-    /**
-     * Texto obrigatório, já normalizado nas pontas.
-     *
-     * <p>Ausente (<b>null</b>) é <b>400</b>: a parte não veio no formulário e o servidor não
-     * conseguiu ler o pedido como veio. Presente e em branco é <b>422</b>: o campo veio com valor
-     * inválido — e é o que o formulário precisa para apontar o campo. Espaço nas pontas é ruído do
-     * campo, não conteúdo: o valor é gravado sem ele.
-     */
-    private static String exigirTexto(String valor, String campo, int tamanhoMaximo) {
-        if (valor == null) {
-            throw new CampoObrigatorioAusenteException(campo);
-        }
-        String normalizado = valor.strip();
-        if (normalizado.isEmpty()) {
-            throw new ValidacaoDeCampoException(campo, "não pode ficar em branco");
-        }
-        if (normalizado.length() > tamanhoMaximo) {
-            throw new ValidacaoDeCampoException(campo,
-                    "deve ter " + tamanhoMaximo + " caracteres ou menos");
-        }
-        return normalizado;
+        return metadados;
     }
 
     /**
@@ -226,6 +177,9 @@ public class PublicacaoDeMaterialService {
      *
      * <p>Valor que não é booleano é 422 com o mesmo campo e o motivo do formato — aceitar "sim" ou
      * "1" em silêncio seria inventar um vocabulário que o contrato não tem.
+     *
+     * <p><b>Não é validado na edição</b> (RF016, ADR-0011 §4): a declaração pertence ao ato de
+     * publicar e não é re-perguntada — a autoria do registro não muda porque o título mudou.
      */
     private static void exigirDeclaracaoDeDireito(String declaracao) {
         if (declaracao == null || declaracao.isBlank()) {
@@ -261,29 +215,6 @@ public class PublicacaoDeMaterialService {
                     "o estado do material é definido pelo servidor: a publicação nasce "
                             + EstadoPublicacao.INICIAL);
         }
-    }
-
-    /** Slug obrigatório, no formato do contrato — presença é 400, formato é 422. */
-    private static String exigirSlug(String valor, String campo, String formato, String motivoDoFormato) {
-        if (valor == null) {
-            throw new CampoObrigatorioAusenteException(campo);
-        }
-        String normalizado = valor.strip();
-        if (!normalizado.matches(formato)) {
-            throw new ValidacaoDeCampoException(campo, motivoDoFormato);
-        }
-        return normalizado;
-    }
-
-    /**
-     * O identificador interno do item de referência, ou <b>422</b> no campo (RF018).
-     *
-     * <p>Inexistente e inativo caem no mesmo erro, e de propósito: para quem publica, os dois
-     * significam "esta escolha não está disponível" — e a leitura pública da taxonomia já mostra
-     * apenas os itens ativos.
-     */
-    private static UUID exigirIdAtivo(Optional<UUID> id, String campo, String motivo) {
-        return id.orElseThrow(() -> new ValidacaoDeCampoException(campo, motivo));
     }
 
     // ------------------------------------------------------------------ falha depois do movimento
