@@ -232,21 +232,47 @@ else
   veredito "E1.2 reversão exercitada e reversível" "NAO ATENDE" "restantes=$restantes remigrate=$c_remig"
 fi
 
-h2 "4.5 Devolver scipath_test ao estado que a suíte espera (achado do harness)"
-echo "As migrações dos passos 3.1/4.4 foram aplicadas pelo PLUGIN do Maven, que usa a"
-echo "role de DESENVOLVIMENTO (SPRING_DATASOURCE_USERNAME). As tabelas saem com dono"
-echo "'scipath'; a suíte conecta como a role 'scipath_test' (trust, sem senha) e leva"
-echo "'permission denied for table'. O estado em que a suíte roda é scipath_test VAZIO:"
-echo "o Flyway da própria aplicação aplica V1+V2 como 'scipath_test' e vira dono."
-echo "Por isso o banco é recriado aqui — antes de 'make test'."
+h2 "4.4.1 Medição do dono que a migração do PLUGIN deixou (decide o ACHADO)"
+echo "Os passos 3.1/4.4 migram pelo PLUGIN do Maven, que usa a role de DESENVOLVIMENTO"
+echo "(SPRING_DATASOURCE_USERNAME). O ACHADO do E1.8 — 'as tabelas saem com dono scipath e a"
+echo "suíte leva permission denied' — era impresso INCONDICIONALMENTE: o script declarava a"
+echo "armadilha mesmo quando a medição dizia o contrário. Ela deixou de se reproduzir no E1.12"
+echo "(DML) e no E1.5-f1 (DDL) — infra/README.md, 'Quem é o dono do banco/esquema de teste'."
+echo "Aqui mede-se, NESTA execução, o dono deixado pelo plugin e se a role da suíte alcança as"
+echo "tabelas. Só a medição que prova a condição registra o achado (passo 4.4.2); o resultado"
+echo "medido é impresso nos dois casos — nunca se declara achado que não ocorreu."
+psqlp -d scipath_test -c "\dt"
+dono_plugin=$(psqlq -d scipath_test -tAc "select coalesce(string_agg(distinct pg_get_userbyid(relowner), ', '), '<nenhum>') from pg_class where relnamespace = 'public'::regnamespace and relkind in ('r', 'S', 'v') and relname <> 'flyway_schema_history'")
+priv_suite=$(psqlq -d scipath_test -tAc "select has_table_privilege('scipath_test', 'category', 'SELECT')")
+set_role_dev=$(psqlq -d scipath_test -tAc "select coalesce((select string_agg(c, ', ') from pg_db_role_setting s join pg_database d ON d.oid = s.setdatabase join pg_roles r ON r.oid = s.setrole, unnest(s.setconfig) c where d.datname = 'scipath_test' and r.rolname = 'scipath'), '<nenhuma>')")
+echo "-- dono(s) dos objetos de public em scipath_test: ${dono_plugin:-<sem medicao>}   [role da suite: scipath_test]"
+echo "-- has_table_privilege('scipath_test','category','SELECT'): ${priv_suite:-<sem medicao>}"
+echo "-- 'SET role' automático da role de dev NESTE banco (card E1.5-f1): ${set_role_dev:-<nenhuma>}"
+
+h2 "4.4.2 Veredito do ACHADO do E1.8 — pela medição desta execução, não por expectativa"
+if [[ -n "$dono_plugin" && "$dono_plugin" != "<nenhum>" && "$dono_plugin" != *"scipath_test"* && "$priv_suite" = "f" ]]; then
+  achado "Migrar scipath_test pelo plugin do Maven (role de dev) deixa as tabelas com dono '$dono_plugin'; a suíte (role 'scipath_test') não alcança as tabelas (has_table_privilege='$priv_suite') e 'make test' falha com 'permission denied for table'. MEDIDO nesta execução no passo 4.4.1. Reprodução: rode 'make db:migrate:test' e, em seguida, a suíte em shell limpo (env -i)."
+  echo "RESULTADO MEDIDO: ACHADO REPRODUZIDO — a medição do passo 4.4.1 prova a condição"
+  echo "  (dono '${dono_plugin}' sem a role da suíte e has_table_privilege='${priv_suite}')."
+  echo "  Registrado em ACHADOS no fim deste log."
+else
+  echo "RESULTADO MEDIDO: ACHADO NÃO REPRODUZIDO nesta execução — a condição do E1.8"
+  echo "  (objetos fora do dono da suíte E suíte sem acesso a eles) NÃO foi medida:"
+  echo "    dono=${dono_plugin:-<sem medicao>} · has_table_privilege('scipath_test','category','SELECT')=${priv_suite:-<sem medicao>}"
+  echo "  Sem a medição provando a condição, o achado NÃO é declarado em ACHADOS — só o"
+  echo "  resultado observado. Causa registrada: neste banco a role de dev atua como a role de"
+  echo "  teste (infra/README.md §'Quem é o dono do banco/esquema de teste', cards E1.12/E1.5-f1)."
+fi
+
+h2 "4.5 Devolver scipath_test ao estado que a suíte espera"
+echo "O estado em que a suíte roda é scipath_test recriado do zero: o Flyway da própria"
+echo "aplicação aplica as migrações como 'scipath_test' e vira dono. Por isso o banco é"
+echo "recriado aqui — antes de 'make test'."
 executar "db-test-setup-2" bash "$WORKTREE/infra/db-test-setup.sh"
 estado_suite=$?
+echo "-- db-test-setup-2 exit=$estado_suite (a recriação exige sudo; se falhar, a suíte roda"
+echo "   sobre o banco que já existe, como nos passos anteriores)"
 psqlp -d scipath_test -c "\dt"
-
-# Este é um ACHADO da bateria: o banco de teste não é neutro entre as duas formas de
-# migrar. Registrado aqui e no relatório final — não é defeito do harness, é uma
-# armadilha do ambiente que qualquer script do E1.2/E1.3 reproduz.
-achado "Migrar scipath_test pelo plugin do Maven (role de dev 'scipath') deixa as tabelas com dono 'scipath'; a suíte (role 'scipath_test') recebe 'permission denied for table' e 'make test' falha por BUILD FAILURE. Reproduzível: rode 'make db:migrate:test' e em seguida 'env -i PATH=/usr/bin:/bin HOME=\$HOME make test'."
 
 # ============================================================================
 secao "5. SUÍTE EM SHELL LIMPO (E1.5 critério 1) — env -i"

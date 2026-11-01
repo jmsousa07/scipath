@@ -141,6 +141,13 @@ Consequência prática: quem quer o banco de teste num estado conhecido roda
 `infra/db-test-setup.sh`; depois disso `make test` e `make db:migrate:test` são
 intercambiáveis na ordem, sem deixar o banco meio-migrado "inutilizável" para a suíte.
 
+**O harness não declara mais esse achado de memória (card E5.10-f1).** `infra/qa-harness.sh`
+§4.4.1 mede, em cada execução, o dono que a migração do plugin deixou em `scipath_test` e se a
+role da suíte alcança as tabelas; §4.4.2 só registra o ACHADO do E1.8 quando **essa medição**
+prova a condição (objetos sem a role da suíte **e** suíte sem acesso a eles). Sem a prova, o
+harness imprime o resultado medido e não declara achado: um instrumento que afirma o que não
+mediu é defeito do instrumento, não achado do produto.
+
 ## O dono do objeto decide DDL: uma role só dona o banco de teste (card E1.5-f1)
 
 O `ALTER DEFAULT PRIVILEGES` do E1.12 fechou o acesso DML, e com isso o achado do E1.8 parou de
