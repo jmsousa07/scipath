@@ -1,6 +1,7 @@
 package com.scipath.material;
 
 import com.scipath.taxonomia.ResultadoPaginado;
+import com.scipath.conta.EstadoConta;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -283,5 +284,66 @@ public class MateriaisPropriosRepositorio {
                 .param("perfil", perfilId)
                 .query(MAPEADOR)
                 .optional();
+    }
+
+    /** Lê e bloqueia o material vivo e a conta durante a decisão; o perfil não é exposto na resposta. */
+    public Optional<EstadoDoMaterialProprio> bloquearParaAcao(String slug) {
+        return jdbc.sql("""
+                SELECT m.profile_id, m.estado_publicacao, a.estado AS estado_conta
+                  FROM material m
+                  JOIN profile p ON p.id = m.profile_id
+                  JOIN account a ON a.id = p.account_id
+                 WHERE m.slug = :slug
+                   AND m.estado_publicacao IN ('PUBLICADO', 'RETIRADO')
+                 FOR UPDATE OF m, a
+                """)
+                .param("slug", slug)
+                .query((rs, linha) -> new EstadoDoMaterialProprio(
+                        rs.getObject("profile_id", UUID.class),
+                        EstadoPublicacao.valueOf(rs.getString("estado_publicacao")),
+                        EstadoConta.valueOf(rs.getString("estado_conta"))))
+                .optional();
+    }
+
+    /** Transiciona a linha bloqueada; a resposta vem da linha gravada pela mesma instrução. */
+    public Optional<MaterialDoDono> atualizarEstado(UUID perfilId, String slug,
+            EstadoPublicacao origem, EstadoPublicacao destino) {
+        String consulta = """
+                WITH alterado AS (
+                    UPDATE material m
+                       SET estado_publicacao = :destino,
+                           atualizado_em = now()
+                     WHERE m.slug = :slug
+                       AND m.profile_id = :perfil
+                       AND m.estado_publicacao = :origem
+                       AND m.estado_publicacao <> :destino
+                    RETURNING m.*
+                )
+                SELECT
+                """ + CAMPOS + " FROM alterado m\n" + JUNCOES;
+        return jdbc.sql(consulta)
+                .param("destino", destino.name())
+                .param("origem", origem.name())
+                .param("slug", slug)
+                .param("perfil", perfilId)
+                .query(MAPEADOR)
+                .optional();
+    }
+
+    /** Marca exclusão lógica e sua data de retenção; não apaga o arquivo nesta rota. */
+    public boolean excluirLogicamente(UUID perfilId, String slug) {
+        int alteradas = jdbc.sql("""
+                UPDATE material
+                   SET estado_publicacao = 'EXCLUIDO',
+                       excluido_em = now(),
+                       atualizado_em = now()
+                 WHERE slug = :slug
+                   AND profile_id = :perfil
+                   AND estado_publicacao IN ('PUBLICADO', 'RETIRADO')
+                """)
+                .param("slug", slug)
+                .param("perfil", perfilId)
+                .update();
+        return alteradas == 1;
     }
 }

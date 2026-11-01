@@ -1,7 +1,11 @@
 package com.scipath.material;
 
 import com.scipath.arquivo.DisponibilidadeDeArquivo;
+import com.scipath.conta.EstadoConta;
+import com.scipath.error.AcessoNegadoException;
+import com.scipath.error.CampoObrigatorioAusenteException;
 import com.scipath.error.NaoEncontradoException;
+import com.scipath.error.ValidacaoDeCampoException;
 import com.scipath.taxonomia.Pagina;
 import com.scipath.taxonomia.ResultadoPaginado;
 import java.util.List;
@@ -133,6 +137,66 @@ public class MateriaisPropriosService {
 
         return resposta(repositorio.atualizarMetadados(perfilId, slug, metadados)
                 .orElseThrow(() -> new NaoEncontradoException(null)));
+    }
+
+    /**
+     * Retira ou repõe um material próprio. O estado é validado pela máquina do domínio, e a
+     * propriedade continua a fazer parte da própria escrita.
+     */
+    @Transactional
+    public MaterialProprioResposta transicionar(UUID perfilId, String slug,
+            TransicaoDeMaterialRequisicao requisicao) {
+        if (requisicao == null || requisicao.estado() == null) {
+            throw new CampoObrigatorioAusenteException("estado");
+        }
+
+        EstadoPublicacao destino;
+        try {
+            destino = EstadoPublicacao.valueOf(requisicao.estado());
+        } catch (IllegalArgumentException invalido) {
+            throw estadoRecusado();
+        }
+        if (destino == EstadoPublicacao.EXCLUIDO) {
+            throw estadoRecusado();
+        }
+
+        EstadoDoMaterialProprio atual = repositorio.bloquearParaAcao(slug)
+                .orElseThrow(() -> new NaoEncontradoException(null));
+        if (!atual.perfilId().equals(perfilId)) {
+            // A decisão final precisa sair da escrita: retirar a condição de posse do UPDATE
+            // faria esta chamada devolver a linha alheia, e os testes a detectam.
+            return resposta(repositorio.atualizarEstado(perfilId, slug, atual.estadoPublicacao(), destino)
+                    .orElseThrow(() -> new NaoEncontradoException(null)));
+        }
+        if (atual.estadoPublicacao() == destino) {
+            // Repetir o estado é 200 sem escrita: nem atualizado_em deve ser tocado.
+            return resposta(repositorio.buscarDoPerfil(perfilId, slug)
+                    .orElseThrow(() -> new NaoEncontradoException(null)));
+        }
+        if (!atual.estadoPublicacao().podeTransicionarPara(destino)) {
+            throw estadoRecusado();
+        }
+        if (atual.estadoPublicacao() == EstadoPublicacao.RETIRADO
+                && destino == EstadoPublicacao.PUBLICADO
+                && atual.estadoConta() == EstadoConta.PENDENTE_VERIFICACAO) {
+            throw new AcessoNegadoException("Confirme seu e-mail para republicar o material.");
+        }
+
+        return resposta(repositorio.atualizarEstado(perfilId, slug, atual.estadoPublicacao(), destino)
+                .orElseThrow(() -> new NaoEncontradoException(null)));
+    }
+
+    /** Exclusão lógica terminal; o binário não é removido nesta operação. */
+    @Transactional
+    public void excluir(UUID perfilId, String slug) {
+        if (!repositorio.excluirLogicamente(perfilId, slug)) {
+            throw new NaoEncontradoException(null);
+        }
+    }
+
+    private static ValidacaoDeCampoException estadoRecusado() {
+        return new ValidacaoDeCampoException("estado",
+                "deve ser PUBLICADO ou RETIRADO; use DELETE para excluir o material");
     }
 
     /**
