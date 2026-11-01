@@ -373,3 +373,63 @@ export function validarPublicacao(
 
   return erros;
 }
+
+/* ---------------------------------------------------------------------------
+   Edição dos metadados de um material próprio (RF016) — card E5.7.
+
+   Os limites são os que o contrato PUBLICA no schema `EdicaoDeMaterial`
+   (`contracts/openapi.yaml` v0.6.0): `titulo` 1–200, `descricao` 1–2000, e
+   `categoriaSlug`/`tipoSlug`/`licencaSlug` são os `slug` estáveis da taxonomia
+   (RF018). São os MESMOS números da publicação — os dois schemas descrevem os
+   mesmos quatro limites, e repeti-los com valores próprios seria criar, no
+   cliente, uma segunda versão da regra.
+
+   O que NÃO se valida aqui, e é o desenho do `EdicaoDeMaterial`: `slug` (não é
+   campo — a URL canônica não muda, RNF025), autoria e propriedade (vêm da
+   sessão, RN001), `estado` (é o `PATCH`) e o arquivo (trocar o binário não é
+   deste fluxo). Não há campo de arquivo, então o estado `arquivo…inválido` do
+   §15.3 não existe nesta tela — e a tela diz isso em vez de deixar a pessoa
+   procurar o campo.
+
+   O servidor valida de novo — esta função antecipa o erro, não substitui a
+   autoridade dele.
+   --------------------------------------------------------------------------- */
+
+/** Regras de `EdicaoDeMaterial` (RF016) — os cinco campos como o formulário os tem. */
+export function validarEdicaoDeMaterial(valores: {
+  titulo: string;
+  descricao: string;
+  categoriaSlug: string;
+  tipoSlug: string;
+  licencaSlug: string;
+}): ErrosDeCampo {
+  const erros: ErrosDeCampo = {};
+
+  const titulo = valores.titulo.trim();
+  if (titulo === '') {
+    erros.titulo = 'Informe o título do material — ele aparece na busca e no topo da página pública, e não pode ficar em branco.';
+  } else if (titulo.length > TITULO_MAXIMO) {
+    erros.titulo = `O título não pode passar de ${TITULO_MAXIMO} caracteres (o atual tem ${titulo.length}).`;
+  }
+
+  const descricao = valores.descricao.trim();
+  if (descricao === '') {
+    erros.descricao =
+      'Escreva a descrição do material: ela é o que o visitante lê antes de decidir abrir o arquivo, e o material não fica sem ela.';
+  } else if (descricao.length > DESCRICAO_MAXIMA) {
+    erros.descricao = `A descrição não pode passar de ${DESCRICAO_MAXIMA} caracteres (a atual tem ${descricao.length}).`;
+  }
+
+  if (valores.categoriaSlug === '') {
+    erros.categoriaSlug = 'Escolha a categoria do material. A lista é a da plataforma — não há categoria digitada à mão.';
+  }
+  if (valores.tipoSlug === '') {
+    erros.tipoSlug = 'Escolha o tipo do material (nota de aula, slides, artigo…).';
+  }
+  if (valores.licencaSlug === '') {
+    erros.licencaSlug =
+      'Escolha a licença de reutilização. Nenhuma é atribuída automaticamente: é você quem diz o que pode ser feito com o material.';
+  }
+
+  return erros;
+}
