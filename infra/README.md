@@ -141,6 +141,28 @@ Consequência prática: quem quer o banco de teste num estado conhecido roda
 `infra/db-test-setup.sh`; depois disso `make test` e `make db:migrate:test` são
 intercambiáveis na ordem, sem deixar o banco meio-migrado "inutilizável" para a suíte.
 
+**O harness não declara mais esse achado de memória (card E5.10-f1).** `infra/qa-harness.sh`
+§4.4.1 mede, em cada execução, o dono da tabela `category` e — **tabela a tabela** — quais
+objetos de `public` ficaram fora do alcance da role da suíte (correlação por objeto no
+catálogo, nunca um nome agregado: um estado **misto**, em que parte das tabelas tem a role da
+suíte e parte não, é declarado, não suprimido). §4.4.2 tem **três** desfechos, e a decisão mora
+numa função única (`estado_achado_e18`, extraída pela evidência e exercitada com entradas
+sintéticas):
+
+| Desfecho | Quando | O que o harness faz |
+|---|---|---|
+| `REPRODUZIDO` | a medição prova a condição (objeto fora do dono da suíte **e** suíte sem acesso a ele) | registra o ACHADO do E1.8 |
+| `NAO_REPRODUZIDO` | a medição **foi feita** e a condição não ocorreu | imprime o resultado observado, sem achado |
+| `MEDIÇÃO INDISPONÍVEL` | alguma consulta falhou ou voltou vazia | imprime a observação crua do psql, não declara achado e **não** afirma causa |
+
+Medição ausente não é prova de ausência: é indisponibilidade, e o instrumento a nomeia como tal.
+Um instrumento que afirma o que não mediu é defeito do instrumento, não achado do produto.
+
+O stderr de **cada** consulta do §4.4.1 é gravado em arquivo próprio (`4.4.1-psql-<rótulo>.err`)
+e a observação crua é impressa por rótulo: um arquivo compartilhado faria a consulta seguinte
+truncar o erro da anterior, e uma medição que **falhou** seria relatada como "voltou sem
+resultado" — que é justamente o defeito de instrumento que o card E5.10-f1 fecha.
+
 ## O dono do objeto decide DDL: uma role só dona o banco de teste (card E1.5-f1)
 
 O `ALTER DEFAULT PRIVILEGES` do E1.12 fechou o acesso DML, e com isso o achado do E1.8 parou de
