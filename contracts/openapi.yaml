@@ -2,10 +2,67 @@ openapi: 3.1.0
 
 info:
   title: SciPath API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     Fronteira entre backend e frontend do SciPath. Este arquivo é a fonte de verdade:
     mudança de API começa aqui, no mesmo card da implementação (AGENTS.md, DRS §14.3).
+
+    v0.6.0 — gerenciamento do material próprio (card E5.1). Abre a Etapa 5 do DRS (§18): listar e
+    ler os próprios (`GET /perfil/atual/materiais`, `GET /perfil/atual/materiais/{slug}`), editar
+    metadados (`PUT`), retirar ou repor no público (`PATCH`) e excluir (`DELETE`), tudo sob a tag
+    `gerenciamento`. Até a v0.5 existia o **efeito** da retirada — material `RETIRADO` fora da
+    descoberta — e não o **ato**: `PUT`/`PATCH`/`DELETE /materiais/{slug}` respondiam 405, e era o
+    que deixava CA007 e CA008 parcialmente NÃO VERIFICADOS no aceite do MVP. As decisões de
+    fronteira, com o porquê, estão em `docs/adr/ADR-0011-gerenciamento-material-proprio.md`:
+
+    - **A superfície é `/perfil/atual/materiais`, não `/materiais/proprios`.** O material é do perfil
+      da sessão (RN001) e `/perfil/atual` já existe desde a v0.4. O literal `proprios` colidiria com
+      `GET /materiais/{slug}`: um material cujo slug fosse `proprios` ficaria inalcançável
+      publicamente, porque a rota privada capturaria o endereço dele (RNF025).
+    - **A visão do dono mostra os três estados** — `PUBLICADO`, `RETIRADO` e `EXCLUIDO` (RF015,
+      PAGE_BLUEPRINTS §12). O RF017 tira o material das listagens **públicas**; esconder do dono o
+      que ele acabou de excluir é que seria desonesto. As **ações**, porém, valem em `PUBLICADO` e
+      `RETIRADO`: `EXCLUIDO` é terminal no MVP, e a leitura o mostra sem oferecer ato nenhum.
+    - **Uma regra só de recusa nas rotas de ação**: material inexistente, **de outra conta** ou já
+      `EXCLUIDO` responde **404 com o mesmo corpo do 404 público** — é literalmente o mesmo
+      componente de resposta, não uma cópia que pode divergir. Um 403 confirmaria a existência de
+      material alheio retirado ou excluído e faria do código de status um oráculo de enumeração,
+      exatamente o que o CA008 evita no caminho público (RN002). A assimetria é deliberada: a
+      **leitura** mostra o histórico do dono; a **ação** exige material vivo.
+    - **Editar é metadado, e o que fica de fora é decisão.** `EdicaoDeMaterial` tem cinco campos —
+      título, descrição, categoria, tipo de material e licença, com os mesmos limites de
+      `PublicacaoMaterial`. Fora do schema: `slug` (é a URL canônica, RNF025), autoria/propriedade
+      (vem da sessão, RN001), `estado` (é o `PATCH`), o arquivo (trocá-lo é outra operação, sem
+      requisito no MVP) e `declaracaoDireito` (pertence ao ato de publicar, RF012). `publicadoEm`
+      **nunca** muda, inclusive na republicação: se republicar reescrevesse a data, retirar e
+      publicar de novo viraria manobra para subir ao topo da listagem pública, que ordena por
+      `publicado_em`.
+    - **O estado muda por `PATCH` de um campo**, validado pela mesma máquina de estados que o
+      domínio já usa (fonte única — o contrato não inventa uma segunda regra). Pedir o estado em que
+      o material já está responde **200 sem escrita** (idempotente, para repetir o ato não virar
+      erro de tela); `EXCLUIDO` no corpo responde **422** com mensagem que aponta o `DELETE`
+      (exclusão não entra por valor de estado — RF019); e repor no público com conta
+      `PENDENTE_VERIFICACAO` responde **403** com mensagem acionável, porque repor é publicar
+      (ADR-0003 (b)) — editar, retirar e excluir **não** exigem verificação. Excluir (`DELETE`,
+      **204** sem corpo) é exclusão **lógica**: metadados retidos e binário purgado 7 dias depois
+      pela rotina de retenção (ADR-0005 §3). A confirmação que o RF017 pede é ato da interface, não
+      parâmetro deste contrato: um campo `confirmacao` no corpo não confirmaria nada, já que o
+      cliente sempre pode enviá-lo.
+
+    **A v0.5.0 permanece íntegra**: nenhuma rota, campo ou resposta que as Etapas 2–4 usam mudou de
+    forma ou de significado. O que esta versão acrescenta é superfície — cinco rotas, quatro schemas,
+    uma tag, uma resposta de erro nova e um exemplo novo numa resposta de erro que já existia (a
+    transição de estado recusada e a republicação por conta não verificada, as duas situações que só
+    acontecem aqui). **Nenhuma classe de erro nova**: as duas situações são a mesma
+    `urn:scipath:erro:validacao_campo` (422) e a mesma `urn:scipath:erro:acesso_negado` (403) que já
+    estavam no vocabulário e já eram emitidas pelo backend. A única redação da v0.5 que muda é a
+    lista de onde o 403 pode aparecer, no schema `ProblemDetail` — muda por acréscimo, e o formato
+    do erro não muda.
+
+    A rota do logout **permanece `DELETE /sessoes/atual`**, como publicada na v0.4.0: esta versão não
+    a altera, e a divergência entre o que o frontend chamava e o que o contrato publica é defeito de
+    **código**, não decisão nova de fronteira (a correção é de código, card F1). Se a correção pedir
+    contrato diferente, ela volta aqui primeiro (AGENTS.md regra 1).
 
     v0.5.0 — publicação de material e acesso ao arquivo (card E4.1). Abre a Etapa 4 do DRS (§8.3):
     publicar material próprio (`POST /materiais`, `multipart/form-data` com os metadados e o arquivo
@@ -165,6 +222,13 @@ tags:
       Publicação de material próprio e acesso ao arquivo publicado (RF012–RF014, RF019).
       Publicar exige sessão e conta `ATIVO` (ADR-0003 (b)); baixar o arquivo de material
       público não exige sessão.
+  - name: gerenciamento
+    description: |-
+      Gerenciamento do material próprio (RF015–RF017, RF019; DRS §18 Etapa 5): listar e ler os
+      materiais da conta da sessão em qualquer dos três estados, editar metadados, retirar ou
+      repor no público e excluir. Toda a superfície exige sessão e vive em
+      `/perfil/atual/materiais` — o material é do perfil da sessão (RN001) —, fora de
+      `/materiais/{slug}` para não colidir com o slug público.
 
 paths:
   /health:
@@ -1058,6 +1122,481 @@ paths:
         '500':
           $ref: '#/components/responses/ErroInesperado'
 
+  /perfil/atual/materiais:
+    get:
+      tags: [gerenciamento]
+      summary: Lista os materiais próprios
+      description: |-
+        Lista paginada dos materiais da conta autenticada (RF015, DRS §7.4) — a visão do **dono**,
+        que não é a do público: os três estados aparecem (`PUBLICADO`, `RETIRADO` e `EXCLUIDO`),
+        porque esconder do dono o que ele acabou de excluir seria desonesto (ADR-0011 §2).
+
+        **A propriedade vem da sessão, nunca do caminho** (RN001, CA007): não existe identificador de
+        conta ou de perfil nesta rota, nem parâmetro que peça material de outra pessoa — a lista de A
+        nunca contém material de B, e não há como pedir a de B.
+
+        **Ordenação estável** por `atualizadoEm` decrescente, com desempate por `id` crescente: a
+        ordem total é determinística, então paginar não repete nem omite item (RN013, RNF021). É a
+        ordem da tela de gerenciamento ("o que mexi por último, primeiro"). Não há filtro nem
+        ordenação alternativa no MVP — filtro vira contrato novo se o uso pedir.
+
+        Conjunto vazio é **200 com `items: []`**, nunca erro (RNF004): é o estado normal de quem
+        ainda não publicou, e é dele que a tela tira o primeiro passo.
+
+        `size` acima de 100 é **400** (RNF021): o teto é **recusado**, nunca truncado em silêncio —
+        uma lista que devolve menos do que foi pedido, sem dizer, faz o cliente acreditar que viu
+        tudo. `page` negativo ou `size` menor que 1 seguem a mesma regra.
+
+        Sem sessão → **401**. Nenhuma escrita acontece aqui, então não há `X-CSRF-Token` a exigir.
+        Nenhum campo privado no corpo (RNF013): sem e-mail, sem hash, sem token, sem identificador de
+        conta e sem `autor` — a autoria é sempre o dono, e é por isso que `MaterialProprio` não tem
+        esse campo.
+      operationId: listarMateriaisProprios
+      security:
+        - SessaoCookie: []
+      parameters:
+        - $ref: '#/components/parameters/NumeroPagina'
+        - $ref: '#/components/parameters/TamanhoPagina'
+      responses:
+        '200':
+          description: Página dos materiais do dono, na ordenação `atualizadoEm` DESC, `id` ASC.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaMateriaisProprios'
+              examples:
+                comMateriais:
+                  summary: Os três estados na mesma página — o dono vê o que excluiu
+                  value:
+                    items:
+                      - slug: introducao-a-algoritmos-de-ordenacao
+                        titulo: Introdução a algoritmos de ordenação
+                        descricao: Nota de aula sobre ordenação por comparação, com análise de complexidade e exemplos em pseudocódigo.
+                        estado: PUBLICADO
+                        categoria:
+                          slug: computacao-e-tecnologia
+                          nome: Computação e Tecnologia
+                        tipo:
+                          slug: nota-de-aula
+                          nome: Nota de aula
+                        licenca:
+                          slug: cc-by-4.0
+                          nome: CC BY 4.0
+                          descricaoCurta: Você pode reutilizar e adaptar o material, inclusive comercialmente, dando crédito ao autor.
+                        arquivo:
+                          nomeOriginal: introducao-a-algoritmos-de-ordenacao.pdf
+                          tamanhoBytes: 348160
+                          disponivel: true
+                        publicadoEm: '2026-10-14T15:10:00Z'
+                        atualizadoEm: '2026-10-20T18:20:00Z'
+                      - slug: resumo-de-grafos
+                        titulo: Resumo de grafos
+                        descricao: Resumo de percurso em largura e em profundidade, com exercícios resolvidos.
+                        estado: RETIRADO
+                        categoria:
+                          slug: computacao-e-tecnologia
+                          nome: Computação e Tecnologia
+                        tipo:
+                          slug: slides
+                          nome: Slides
+                        licenca:
+                          slug: todos-os-direitos-reservados
+                          nome: Todos os direitos reservados
+                          descricaoCurta: O material continua protegido. Ler e baixar é permitido; reutilizar não é.
+                        arquivo:
+                          nomeOriginal: resumo-de-grafos.pdf
+                          tamanhoBytes: 204800
+                          disponivel: true
+                        publicadoEm: '2026-09-02T12:00:00Z'
+                        atualizadoEm: '2026-10-10T18:20:00Z'
+                      - slug: lista-de-exercicios-de-calculo
+                        titulo: Lista de exercícios de cálculo
+                        descricao: Lista de exercícios de limites e derivadas, com gabarito comentado.
+                        estado: EXCLUIDO
+                        categoria:
+                          slug: matematica-e-estatistica
+                          nome: Matemática e Estatística
+                        tipo:
+                          slug: guia-de-estudo
+                          nome: Guia de estudo
+                        licenca:
+                          slug: cc-by-sa-4.0
+                          nome: CC BY-SA 4.0
+                          descricaoCurta: Você pode reutilizar e adaptar o material, dando crédito e mantendo a mesma licença.
+                        arquivo:
+                          nomeOriginal: lista-de-exercicios-de-calculo.pdf
+                          tamanhoBytes: 512000
+                          disponivel: false
+                        publicadoEm: '2026-08-11T10:00:00Z'
+                        atualizadoEm: '2026-09-30T08:30:00Z'
+                    page: 0
+                    size: 20
+                    total: 3
+                semMateriais:
+                  summary: Dono sem material — 200 com lista vazia
+                  value:
+                    items: []
+                    page: 0
+                    size: 20
+                    total: 0
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '401':
+          $ref: '#/components/responses/ErroNaoAutenticado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
+  /perfil/atual/materiais/{slug}:
+    get:
+      tags: [gerenciamento]
+      summary: Lê um material próprio, em qualquer estado
+      description: |-
+        Detalhe de um material da conta autenticada (RF015) — é a leitura que **pré-preenche a
+        edição** e que enxerga o material `RETIRADO`, para o qual o detalhe público responde 404
+        (RN002).
+
+        **A leitura vale nos três estados**, inclusive `EXCLUIDO`: o dono não perde o registro do que
+        excluiu, e a lista dele mostra o mesmo (ADR-0011 §2). Quem exige material vivo são as rotas
+        de **ação** — `PUT`, `PATCH` e `DELETE`.
+
+        **Material de outra conta ou inexistente responde o mesmo 404**, indistinguível do 404
+        público — mesmo status e mesmo corpo (RN002, CA007): a leitura do dono não vira oráculo de
+        existência de material alheio. `slug` fora do formato de slug é **400** (o endereço está
+        malformado; não é o recurso que falta).
+
+        Nenhum dado privado (RNF013): é o mesmo `MaterialProprio` da lista, e ele não carrega e-mail,
+        hash, token, identificador de conta, vínculo de perfil nem chave de armazenamento ou caminho
+        interno (RNF014).
+
+        Este é o estado do **dono**, não o público: material `RETIRADO` e `EXCLUIDO` aparecem aqui e
+        não aparecem em `/materiais/{slug}`.
+      operationId: getMaterialProprio
+      security:
+        - SessaoCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SlugRecurso'
+      responses:
+        '200':
+          description: Material do dono, em qualquer dos três estados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialProprio'
+              examples:
+                retirado:
+                  summary: Material retirado — invisível no público, visível para o dono
+                  value:
+                    slug: resumo-de-grafos
+                    titulo: Resumo de grafos
+                    descricao: Resumo de percurso em largura e em profundidade, com exercícios resolvidos.
+                    estado: RETIRADO
+                    categoria:
+                      slug: computacao-e-tecnologia
+                      nome: Computação e Tecnologia
+                    tipo:
+                      slug: slides
+                      nome: Slides
+                    licenca:
+                      slug: todos-os-direitos-reservados
+                      nome: Todos os direitos reservados
+                      descricaoCurta: O material continua protegido. Ler e baixar é permitido; reutilizar não é.
+                    arquivo:
+                      nomeOriginal: resumo-de-grafos.pdf
+                      tamanhoBytes: 204800
+                      disponivel: true
+                    publicadoEm: '2026-09-02T12:00:00Z'
+                    atualizadoEm: '2026-10-10T18:20:00Z'
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '401':
+          $ref: '#/components/responses/ErroNaoAutenticado'
+        '404':
+          $ref: '#/components/responses/ErroNaoEncontrado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+    put:
+      tags: [gerenciamento]
+      summary: Edita os metadados de um material próprio
+      description: |-
+        Substitui o conjunto editável dos metadados do material próprio (RF016, DRS §8.3.5): título,
+        descrição, categoria, tipo de material e licença — os cinco campos de `EdicaoDeMaterial`, com
+        os mesmos limites e as mesmas recusas da publicação.
+
+        **O que não se edita aqui, e por quê** (ADR-0011 §4): `slug` é a URL canônica pública
+        (RNF025) e trocá-lo quebraria link e indexação; autoria e propriedade vêm da sessão (RN001),
+        e `autorSlug`, `contaId` ou `perfilId` no corpo são **ignorados** — não há campo para eles;
+        `estado` é o `PATCH`; o arquivo é o da publicação (trocar o binário mexe em validação,
+        armazenamento, órfãos e retenção — operação sem requisito no MVP); e `declaracaoDireito`
+        pertence ao ato de publicar (RF012) e não é re-perguntada aqui.
+
+        **Propriedade verificada no servidor** (RF016, RN013, CA007, RNF010): material inexistente,
+        de outra conta ou já `EXCLUIDO` responde **404 com o mesmo corpo do 404 público**, e
+        **nenhuma escrita acontece** — esconder o botão na tela não é controle. `PUBLICADO` e
+        `RETIRADO` são editáveis; `EXCLUIDO` é terminal no MVP (ADR-0011 §6).
+
+        **Editar não exige conta `ATIVO`** (ADR-0003 (b)): quem está em `PENDENTE_VERIFICACAO` edita
+        o que já publicou — a verificação é exigida para **pôr** material no público (publicar e
+        republicar), não para mantê-lo lá.
+
+        Quando o material está `PUBLICADO`, a alteração aparece no detalhe público
+        (`GET /materiais/{slug}`) — é o RF016 pedindo que a página pública reflita a mudança.
+        `atualizadoEm` sobe com a escrita; **`publicadoEm` não muda**, e a republicação também não o
+        reescreve (senão retirar e publicar de novo seria manobra para subir ao topo da listagem
+        pública, que ordena por `publicado_em`).
+
+        Campo obrigatório ausente no corpo → **400** (o servidor não conseguiu ler o pedido como
+        veio); campo presente com valor inválido, ou taxonomia inexistente ou inativa → **422** no
+        campo (`errors[]`), o mesmo vocabulário da publicação (RF018; o exemplo
+        `categoriaInexistente` de `ErroValidacaoCampo` é exatamente este caso).
+
+        A escrita exige `X-CSRF-Token`: sem sessão a resposta é **401**, e o **403** de CSRF aparece
+        quando há sessão (a autenticação precede a checagem de CSRF). A resposta é o
+        `MaterialProprio` atualizado — o mesmo schema da leitura —, para a tela confirmar sem uma
+        segunda chamada.
+      operationId: editarMaterialProprio
+      security:
+        - SessaoCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCsrf'
+        - $ref: '#/components/parameters/SlugRecurso'
+      requestBody:
+        required: true
+        description: |-
+          O conjunto editável inteiro: os cinco campos são obrigatórios, como na publicação, porque
+          a tela os apresenta todos preenchidos.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EdicaoDeMaterial'
+            examples:
+              edicaoValida:
+                summary: Edição dos cinco campos editáveis
+                value:
+                  titulo: Introdução a algoritmos de ordenação (revisada)
+                  descricao: Nota de aula sobre ordenação por comparação, com análise de complexidade, exemplos em pseudocódigo e exercícios resolvidos.
+                  categoriaSlug: computacao-e-tecnologia
+                  tipoSlug: nota-de-aula
+                  licencaSlug: cc-by-4.0
+      responses:
+        '200':
+          description: Metadados atualizados; `publicadoEm` preservado, `atualizadoEm` novo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialProprio'
+              examples:
+                materialEditado:
+                  summary: Material após a edição
+                  value:
+                    slug: introducao-a-algoritmos-de-ordenacao
+                    titulo: Introdução a algoritmos de ordenação (revisada)
+                    descricao: Nota de aula sobre ordenação por comparação, com análise de complexidade, exemplos em pseudocódigo e exercícios resolvidos.
+                    estado: PUBLICADO
+                    categoria:
+                      slug: computacao-e-tecnologia
+                      nome: Computação e Tecnologia
+                    tipo:
+                      slug: nota-de-aula
+                      nome: Nota de aula
+                    licenca:
+                      slug: cc-by-4.0
+                      nome: CC BY 4.0
+                      descricaoCurta: Você pode reutilizar e adaptar o material, inclusive comercialmente, dando crédito ao autor.
+                    arquivo:
+                      nomeOriginal: introducao-a-algoritmos-de-ordenacao.pdf
+                      tamanhoBytes: 348160
+                      disponivel: true
+                    publicadoEm: '2026-10-14T15:10:00Z'
+                    atualizadoEm: '2026-10-20T18:20:00Z'
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '401':
+          $ref: '#/components/responses/ErroNaoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErroAcessoNegado'
+        '404':
+          $ref: '#/components/responses/ErroNaoEncontrado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '415':
+          $ref: '#/components/responses/ErroTipoNaoSuportado'
+        '422':
+          $ref: '#/components/responses/ErroValidacaoCampo'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+    patch:
+      tags: [gerenciamento]
+      summary: Retira do público ou repõe um material próprio
+      description: |-
+        Muda o estado de publicação do material próprio (RF017, RF019). O corpo é
+        `TransicaoDeMaterial`: um campo, `estado`, com `RETIRADO` ou `PUBLICADO` — a transição é a
+        que a máquina de estados do domínio já declara (fonte única; o contrato não inventa uma
+        segunda regra, ADR-0011 §5).
+
+        **Retirar tem efeito imediato no público** (RF019, RN002): a mesma requisição tira o material
+        da listagem, da busca, do detalhe, do arquivo e do perfil do autor — a elegibilidade é
+        derivada do estado persistido, não de cache.
+
+        **Pedir o estado em que o material já está responde 200 sem escrita** — idempotente, para
+        repetir o ato não virar erro de tela; `atualizadoEm` não se mexe por uma escrita que não
+        aconteceu.
+
+        **Repor no público é publicar** (ADR-0003 (b)): `RETIRADO → PUBLICADO` com conta
+        `PENDENTE_VERIFICACAO` responde **403** com mensagem que diz o que falta ("confirme seu
+        e-mail para republicar o material"), no mesmo formato acionável de `POST /materiais`.
+        **Retirar não exige verificação** — tirar do público não coloca nada novo nele —, e nem
+        editar ou excluir exigem. `publicadoEm` **não** muda na republicação; `atualizadoEm` sobe.
+
+        **`EXCLUIDO` não entra por valor de estado**: pedir esse estado no corpo responde **422** no
+        campo, com mensagem que aponta o `DELETE` — exclusão é ato próprio e terminal no MVP (RF019,
+        ADR-0011 §5–§6).
+
+        Material inexistente, de outra conta ou já `EXCLUIDO` responde o **404 indistinguível** do
+        404 público, com o mesmo corpo e nenhuma escrita (ADR-0011 §3): quem repete o ato depois de
+        excluir recebe 404, porque não há caminho de volta.
+
+        A escrita exige `X-CSRF-Token`: sem sessão **401**, sem o cabeçalho (com sessão) **403**. A
+        resposta é o `MaterialProprio` com o estado novo.
+      operationId: retirarOuRepublicarMaterialProprio
+      security:
+        - SessaoCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCsrf'
+        - $ref: '#/components/parameters/SlugRecurso'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransicaoDeMaterial'
+            examples:
+              retirada:
+                summary: Retira o material do público
+                value:
+                  estado: RETIRADO
+              republicacao:
+                summary: Repõe o material no público (exige conta ATIVO)
+                value:
+                  estado: PUBLICADO
+      responses:
+        '200':
+          description: |-
+            Estado do material após o ato — o novo quando houve escrita, o mesmo quando o pedido era
+            o estado em que ele já estava (idempotente).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialProprio'
+              examples:
+                retirado:
+                  summary: Material retirado do público
+                  value:
+                    slug: resumo-de-grafos
+                    titulo: Resumo de grafos
+                    descricao: Resumo de percurso em largura e em profundidade, com exercícios resolvidos.
+                    estado: RETIRADO
+                    categoria:
+                      slug: computacao-e-tecnologia
+                      nome: Computação e Tecnologia
+                    tipo:
+                      slug: slides
+                      nome: Slides
+                    licenca:
+                      slug: todos-os-direitos-reservados
+                      nome: Todos os direitos reservados
+                      descricaoCurta: O material continua protegido. Ler e baixar é permitido; reutilizar não é.
+                    arquivo:
+                      nomeOriginal: resumo-de-grafos.pdf
+                      tamanhoBytes: 204800
+                      disponivel: true
+                    publicadoEm: '2026-09-02T12:00:00Z'
+                    atualizadoEm: '2026-10-10T18:20:00Z'
+                republicado:
+                  summary: Material de volta ao público — `publicadoEm` é o da primeira publicação
+                  value:
+                    slug: resumo-de-grafos
+                    titulo: Resumo de grafos
+                    descricao: Resumo de percurso em largura e em profundidade, com exercícios resolvidos.
+                    estado: PUBLICADO
+                    categoria:
+                      slug: computacao-e-tecnologia
+                      nome: Computação e Tecnologia
+                    tipo:
+                      slug: slides
+                      nome: Slides
+                    licenca:
+                      slug: todos-os-direitos-reservados
+                      nome: Todos os direitos reservados
+                      descricaoCurta: O material continua protegido. Ler e baixar é permitido; reutilizar não é.
+                    arquivo:
+                      nomeOriginal: resumo-de-grafos.pdf
+                      tamanhoBytes: 204800
+                      disponivel: true
+                    publicadoEm: '2026-09-02T12:00:00Z'
+                    atualizadoEm: '2026-10-20T18:20:00Z'
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '401':
+          $ref: '#/components/responses/ErroNaoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErroAcessoNegado'
+        '404':
+          $ref: '#/components/responses/ErroNaoEncontrado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '415':
+          $ref: '#/components/responses/ErroTipoNaoSuportado'
+        '422':
+          $ref: '#/components/responses/ErroTransicaoDeEstado'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+    delete:
+      tags: [gerenciamento]
+      summary: Exclui logicamente um material próprio
+      description: |-
+        Exclui o material do dono (RF017). A exclusão é **lógica** (ADR-0005 §3 (b)): o material sai
+        de todas as superfícies públicas no mesmo instante — listagem, busca, detalhe, arquivo e
+        perfil do autor (RF019, RN002) —, os metadados **permanecem** e o binário é **purgado 7 dias
+        depois** pela rotina de retenção (card E5.5): nada é apagado do armazenamento neste ato.
+
+        **`EXCLUIDO` é terminal no MVP** (ADR-0011 §6): não existe restauração, e repetir o `DELETE`
+        no mesmo material responde **404**, como em material inexistente. É a diferença que a tela
+        precisa declarar — e é por isso que a confirmação do RF017 é diálogo explícito da interface,
+        que diz que não há como desfazer. A "confirmação" não é parâmetro deste contrato: um campo
+        `confirmacao` no corpo não confirmaria nada, já que o cliente sempre pode enviá-lo
+        (ADR-0011 §7).
+
+        Material de outra conta ou inexistente responde o **404 indistinguível** do 404 público, sem
+        escrita nenhuma (ADR-0011 §3, CA007).
+
+        Sucesso é **204 sem corpo**. A escrita exige `X-CSRF-Token`: sem sessão **401**, sem o
+        cabeçalho (com sessão) **403**.
+      operationId: excluirMaterialProprio
+      security:
+        - SessaoCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCsrf'
+        - $ref: '#/components/parameters/SlugRecurso'
+      responses:
+        '204':
+          description: Material excluído logicamente; a resposta não tem corpo.
+        '400':
+          $ref: '#/components/responses/ErroValidacao'
+        '401':
+          $ref: '#/components/responses/ErroNaoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErroAcessoNegado'
+        '404':
+          $ref: '#/components/responses/ErroNaoEncontrado'
+        '405':
+          $ref: '#/components/responses/ErroMetodoNaoPermitido'
+        '500':
+          $ref: '#/components/responses/ErroInesperado'
+
   /verificacao-email/reenvios:
     post:
       tags: [identidade]
@@ -1490,7 +2029,9 @@ components:
         login, conta `SUSPENSO` com credenciais corretas também responde este 403: quem provou ser
         o dono tem o direito de saber por que não entra. Na publicação, conta
         `PENDENTE_VERIFICACAO` responde este 403 (ADR-0003 (b)) — o `detail` diz que falta
-        confirmar o e-mail, para a tela oferecer o reenvio em vez de um erro cru. Sem `errors[]`.
+        confirmar o e-mail, para a tela oferecer o reenvio em vez de um erro cru. Na **republicação**
+        de material próprio (v0.6.0), vale a mesma regra, pela mesma razão: repor material no
+        público é publicar. Sem `errors[]`.
       content:
         application/problem+json:
           schema:
@@ -1520,6 +2061,14 @@ components:
                 status: 403
                 detail: Confirme seu e-mail para publicar material.
                 instance: /api/materiais
+            republicacaoSemVerificacao:
+              summary: Republicação de material próprio com e-mail ainda não confirmado
+              value:
+                type: urn:scipath:erro:acesso_negado
+                title: Acesso negado
+                status: 403
+                detail: Confirme seu e-mail para republicar o material.
+                instance: /api/perfil/atual/materiais/resumo-de-grafos
 
     ErroConflitoUnicidade:
       description: |
@@ -1677,6 +2226,40 @@ components:
                 errors:
                   - campo: declaracaoDireito
                     mensagem: é preciso confirmar que você tem o direito de compartilhar o material
+
+    ErroTransicaoDeEstado:
+      description: |-
+        O corpo de `PATCH /perfil/atual/materiais/{slug}` traz `estado` fora do que o ato aceita.
+        `EXCLUIDO` é recusado aqui de propósito: exclusão é o `DELETE`, ato próprio e terminal no MVP
+        (RF019, ADR-0011 §5), e a mensagem do campo diz isso. É a MESMA classe de erro do 422 de
+        campo — `urn:scipath:erro:validacao_campo` —, com `errors[]` apontando `estado`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            exclusaoPorEstado:
+              summary: Tentativa de excluir por valor de estado
+              value:
+                type: urn:scipath:erro:validacao_campo
+                title: Campo inválido
+                status: 422
+                detail: Um ou mais campos do corpo não foram aceitos.
+                instance: /api/perfil/atual/materiais/resumo-de-grafos
+                errors:
+                  - campo: estado
+                    mensagem: a exclusão é a operação DELETE; este campo aceita PUBLICADO ou RETIRADO
+            estadoForaDoEnum:
+              summary: Valor de estado que não existe
+              value:
+                type: urn:scipath:erro:validacao_campo
+                title: Campo inválido
+                status: 422
+                detail: Um ou mais campos do corpo não foram aceitos.
+                instance: /api/perfil/atual/materiais/resumo-de-grafos
+                errors:
+                  - campo: estado
+                    mensagem: deve ser PUBLICADO ou RETIRADO
 
     ErroReenvioEmCooldown:
       description: |
@@ -2189,6 +2772,88 @@ components:
             host nem expõe rota de API.
           example: /materiais/introducao-a-algoritmos-de-ordenacao
 
+    MaterialProprio:
+      type: object
+      description: |-
+        Material do próprio dono, na visão de gerenciamento (RF015). É o **mesmo** schema no item da
+        lista e no detalhe: o dono precisa dos mesmos campos nos dois, e dois schemas para a mesma
+        coisa divergiriam com o tempo (ADR-0011 §2).
+
+        **Sem `autor`.** A autoria é sempre o perfil da sessão (RN001); devolver o dono como autor de
+        si mesmo seria um campo com um valor só. É também por isso que o ADR-0011 descarta reusar
+        `MaterialResumo`/`MaterialDetalhe` aqui: os dois carregam `autor` e declaram `estado` apenas
+        como `PUBLICADO`.
+
+        **Os três estados aparecem** — `PUBLICADO`, `RETIRADO` e `EXCLUIDO` (RF015,
+        PAGE_BLUEPRINTS §12): esta é a visão do dono, não a do público, e ela não esconde o que ele
+        acabou de excluir.
+
+        Nenhum dado privado (RNF013): fora do schema ficam e-mail de login, hash de senha, token,
+        identificador de conta, vínculo de perfil e chave de armazenamento (RNF014). A licença
+        continua explícita, com o que ela permite (`LicencaRef`, RN006) — estar público não significa
+        domínio público, e a explicação não some porque quem lê é o dono.
+      required: [slug, titulo, descricao, estado, categoria, tipo, licenca, arquivo, publicadoEm, atualizadoEm]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: |-
+            Identificador público e estável do material (RNF025). É a chave da URL canônica pública
+            e **não muda** por esta superfície: editar metadados não troca o endereço.
+          example: introducao-a-algoritmos-de-ordenacao
+        titulo:
+          type: string
+          description: Título do material (RN004). Editável pelo dono (RF016).
+          example: Introdução a algoritmos de ordenação
+        descricao:
+          type: string
+          description: Descrição do material (RN004). Editável pelo dono (RF016).
+          example: Nota de aula sobre ordenação por comparação, com análise de complexidade e exemplos em pseudocódigo.
+        estado:
+          type: string
+          enum: [PUBLICADO, RETIRADO, EXCLUIDO]
+          description: |-
+            Estado de publicação. Só `PUBLICADO` é elegível à descoberta, à busca e ao download
+            (RN002, RF019); `RETIRADO` é reversível pelo dono (o `PATCH` o repõe no público) e
+            `EXCLUIDO` é **terminal** no MVP — não há restauração (ADR-0011 §6). As ações do dono
+            valem em `PUBLICADO` e `RETIRADO`; em `EXCLUIDO`, nenhuma (ADR-0011 §2).
+          example: PUBLICADO
+        categoria:
+          $ref: '#/components/schemas/CategoriaRef'
+        tipo:
+          $ref: '#/components/schemas/TipoMaterialRef'
+        licenca:
+          $ref: '#/components/schemas/LicencaRef'
+        arquivo:
+          $ref: '#/components/schemas/ArquivoMaterial'
+        publicadoEm:
+          type: string
+          format: date-time
+          description: |-
+            Instante da publicação. **Não muda** por edição nem por republicação — é a âncora da
+            ordenação pública `recentes`, e reescrevê-la faria de retirar/republicar uma manobra para
+            subir ao topo da listagem (ADR-0011 §4).
+          example: '2026-10-14T15:10:00Z'
+        atualizadoEm:
+          type: string
+          format: date-time
+          description: |-
+            Instante da última escrita que alterou o material — edição, retirada, republicação ou
+            exclusão. Não sobe quando a escrita não acontece (pedir o estado em que o material já
+            está responde 200 sem gravar). Ordena a lista do dono, `atualizadoEm` DESC.
+          example: '2026-10-20T18:20:00Z'
+
+    PaginaMateriaisProprios:
+      description: Envelope de paginação (ver `Pagina`) com os materiais do dono em `items`.
+      allOf:
+        - $ref: '#/components/schemas/Pagina'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/MaterialProprio'
+
     PerfilPublico:
       type: object
       description: |
@@ -2362,6 +3027,89 @@ components:
             maxLength: 300
           example: [https://github.com/maria-silva]
 
+    EdicaoDeMaterial:
+      type: object
+      description: |-
+        Conjunto editável dos metadados de um material próprio (RF016, ADR-0011 §4). Substitui o
+        conjunto: os cinco campos são **obrigatórios**, como na publicação, porque a tela os
+        apresenta todos preenchidos — campo obrigatório ausente devolve **400** (o servidor não
+        conseguiu ler o pedido como veio) e campo presente com valor inválido devolve **422**
+        `validacao_campo`, apontado em `errors[]`.
+
+        `categoriaSlug`, `tipoSlug` e `licencaSlug` são os `slug` estáveis da taxonomia (ADR-0006,
+        RF018) — os mesmos valores que a leitura devolve e que os filtros de descoberta aceitam.
+        `slug` bem formado mas inexistente (ou inativo) devolve **422** no campo correspondente, e
+        nenhuma licença é atribuída automaticamente: o dono escolhe.
+
+        **Fora deste schema, e por isso imutável por esta rota:** `slug` (a URL canônica pública,
+        RNF025 — trocá-lo quebraria link e indexação), autoria e propriedade (vêm da sessão, RN001:
+        `autorSlug`, `contaId` ou `perfilId` no corpo são **ignorados**, não há campo para tentar),
+        `estado` (é o `PATCH`, ato distinto), o arquivo (trocar o binário mexe em validação,
+        armazenamento, órfãos e retenção — é outra operação, sem requisito no MVP) e
+        `declaracaoDireito` (pertence ao ato de publicar, RF012, e não é re-perguntada: a autoria do
+        registro não muda).
+      required: [titulo, descricao, categoriaSlug, tipoSlug, licencaSlug]
+      properties:
+        titulo:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Título do material (RN004); é o `title` de SEO da página pública.
+          example: Introdução a algoritmos de ordenação (revisada)
+        descricao:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Descrição do material (RN004); é a base do `description` de SEO.
+          example: Nota de aula sobre ordenação por comparação, com análise de complexidade, exemplos em pseudocódigo e exercícios resolvidos.
+        categoriaSlug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: |-
+            `slug` da categoria (RF018). Precisa existir e estar ativa; inexistente ou inativa → 422
+            no campo.
+          example: computacao-e-tecnologia
+        tipoSlug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: |-
+            `slug` do tipo de material (RF018). Precisa existir e estar ativo; inexistente ou inativo
+            → 422 no campo.
+          example: nota-de-aula
+        licencaSlug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9.]+)*$'
+          description: |-
+            `slug` da licença de reutilização (RF018, RN006). Precisa existir e estar ativa;
+            inexistente ou inativa → 422 no campo.
+          example: cc-by-4.0
+
+    TransicaoDeMaterial:
+      type: object
+      description: |-
+        Ato de retirar o material do público ou repô-lo nele (RF017, RF019). Um campo, um ato: o
+        estado é a única dimensão que muda aqui, e a transição é a que a máquina de estados do
+        domínio já declara — o contrato não inventa uma segunda regra (ADR-0011 §5).
+
+        Os valores aceitos são `RETIRADO` e `PUBLICADO`. **Repor no público é publicar**
+        (ADR-0003 (b)): `RETIRADO → PUBLICADO` com conta `PENDENTE_VERIFICACAO` devolve **403** com
+        mensagem que diz o que falta ("confirme seu e-mail para republicar o material"). Retirar
+        **não** exige verificação — tirar do público não coloca nada novo nele.
+
+        `EXCLUIDO` **não** é valor aceito: a exclusão é o `DELETE`, ato próprio e terminal no MVP, e
+        tentar excluir por aqui devolve **422** no campo com mensagem que aponta a operação certa
+        (RF019). Pedir o estado em que o material já está responde **200 sem escrita** — idempotente.
+      required: [estado]
+      properties:
+        estado:
+          type: string
+          enum: [PUBLICADO, RETIRADO]
+          description: |-
+            Estado de destino do material. `RETIRADO` tira da descoberta, da busca e do download;
+            `PUBLICADO` o devolve ao público (exige conta `ATIVO`). Qualquer outro valor — inclusive
+            `EXCLUIDO` — → 422 no campo.
+          example: RETIRADO
+
     SessaoAtual:
       type: object
       description: |
@@ -2490,7 +3238,7 @@ components:
         |---|---|---|---|
         | `urn:scipath:erro:validacao` | 400 | o pedido não pôde ser processado como veio: valor recusado em consulta/caminho, ou corpo ilegível | sim, quando aponta o parâmetro |
         | `urn:scipath:erro:nao_autenticado` | 401 | a operação exige identidade e não há sessão válida (ausente, expirada ou revogada) | não |
-        | `urn:scipath:erro:acesso_negado` | 403 | há identidade e ela não tem permissão; inclui escrita sem `X-CSRF-Token`, login em conta suspensa e publicação com e-mail não verificado | não |
+        | `urn:scipath:erro:acesso_negado` | 403 | há identidade e ela não tem permissão; inclui escrita sem `X-CSRF-Token`, login em conta suspensa, publicação com e-mail não verificado e republicação de material próprio por conta não verificada | não |
         | `urn:scipath:erro:nao_encontrado` | 404 | o recurso pedido não existe, ou o endereço não corresponde a nenhum recurso ou endpoint | não |
         | `urn:scipath:erro:metodo_nao_permitido` | 405 | o endereço existe, mas não responde a este método | não |
         | `urn:scipath:erro:conflito_de_unicidade` | 409 | o valor já pertence a outro registro: e-mail já cadastrado ou `slug` já em uso | sim, o campo em conflito |
@@ -2508,11 +3256,13 @@ components:
 
         Um endpoint só documenta os status que o seu caminho pode produzir: 405 aparece em todo
         endpoint publicado (o caminho existe, o método errado é recusado); 404 aparece nos
-        endpoints com recurso no caminho (`/materiais/{slug}`, `/autores/{slug}` e
-        `/materiais/{slug}/arquivo`); 413 aparece na publicação quando o arquivo excede o limite;
+        endpoints com recurso no caminho (`/materiais/{slug}`, `/autores/{slug}`,
+        `/materiais/{slug}/arquivo` e, a partir da v0.6.0, `/perfil/atual/materiais/{slug}`, onde
+        ele é o mesmo corpo do 404 público); 413 aparece na publicação quando o arquivo excede o limite;
         415 nas escritas que recebem corpo (`application/json` ou o `multipart/form-data` da
         publicação); 401 nas operações que exigem identidade; 403 nas escritas que exigem
-        `X-CSRF-Token`, no login de conta suspensa e na publicação com e-mail não verificado; 409
+        `X-CSRF-Token`, no login de conta suspensa, na publicação com e-mail não verificado e na
+        republicação de material próprio por conta não verificada (v0.6.0); 409
         nos dois pontos de unicidade (cadastro e `slug` de perfil); 422 nos endpoints que leem
         corpo; 429 só no reenvio de verificação. A classe existe neste schema mesmo antes de o
         endpoint existir porque o formato foi implementado de uma vez (card E1.4) — o que muda
