@@ -1,10 +1,17 @@
 /**
- * Cliente único da API pública (fronteira: `contracts/openapi.yaml` v0.3.0).
+ * Cliente único da API (fronteira: `contracts/openapi.yaml` v0.6.0).
  *
  * Por que existe: a regra do projeto é um cliente tipado e não `fetch` espalhado pela
  * tela. Aqui moram a base da URL, o limite de tempo, a leitura do `ProblemDetail` e a
  * distinção entre "o servidor respondeu errado" e "não houve resposta" — a tela decide
  * o estado a exibir, o cliente só relata.
+ *
+ * Duas superfícies, um módulo: a DESCOBERTA PÚBLICA (listagem, detalhe, taxonomia,
+ * autor) e a LEITURA DO DONO (`/perfil/atual/materiais`, card E5.6). As duas são
+ * leituras de SERVIDOR e é por isso que cabem aqui; a segunda recebe o cabeçalho
+ * `Cookie` da requisição já montado (ver `requisitar`), sem este módulo conhecer o Next.
+ * As ESCRITAS não moram aqui, e não é esquecimento: elas exigem o `X-CSRF-Token` da
+ * cookie `XSRF-TOKEN`, que só existe no NAVEGADOR (`lib/sessao/navegador.ts`).
  *
  * ESTE MÓDULO É DE SERVIDOR. Nenhum componente de cliente (`'use client'`) pode
  * importá-lo: a base lê `process.env`, que no bundle do navegador não existe. A
@@ -18,6 +25,7 @@ import type {
   ItemTaxonomia,
   LicencaRef,
   MaterialDetalhe,
+  MaterialProprio,
   MaterialResumo,
   OrdemMateriais,
   Pagina,
@@ -78,11 +86,25 @@ function lerProblem(texto: string, tipoConteudo: string | null): ProblemDetail |
   }
 }
 
-async function requisitar<T>(caminho: string, init: IniciarRequisicao): Promise<Resultado<T>> {
+async function requisitar<T>(
+  caminho: string,
+  init: IniciarRequisicao,
+  /**
+   * Cabeçalho `Cookie` da requisição que a página está atendendo. Só as leituras da
+   * superfície do DONO o usam (`/perfil/atual/materiais`): sem sessão a resposta é 401, e a
+   * sessão do produto é a cookie `HttpOnly` (ADR-0003 (e)) — quem a tem em mãos é a página,
+   * que a recebe de `lib/sessao/servidor.ts`. Este módulo não importa nada do Next: ele
+   * RECEBE o cabeçalho pronto, e por isso continua sendo um cliente de API e nada mais.
+   */
+  cabecalhoDeCookie?: string,
+): Promise<Resultado<T>> {
   const url = `${baseDaApi()}${caminho}`;
+  const cabecalhos = new Headers(init.headers);
+  if (cabecalhoDeCookie) cabecalhos.set('cookie', cabecalhoDeCookie);
+
   let resposta: Response;
   try {
-    resposta = await fetch(url, { ...init, signal: AbortSignal.timeout(LIMITE_MS) });
+    resposta = await fetch(url, { ...init, headers: cabecalhos, signal: AbortSignal.timeout(LIMITE_MS) });
   } catch {
     return { ok: false, falha: { motivo: 'rede' } };
   }
@@ -237,4 +259,63 @@ export function obterAutor(slug: string, page: number): Promise<Resultado<AutorP
   return requisitar<AutorPublico>(`/autores/${encodeURIComponent(slug)}${comParametros(consulta)}`, {
     cache: 'no-store',
   });
+}
+
+/* ---------------------------------------------------------------------------
+   Leitura do DONO — `/perfil/atual/materiais` (tag `gerenciamento`, v0.6.0).
+   Recebem o cabeçalho `Cookie` da requisição: sem sessão o contrato responde 401,
+   e quem tem a cookie `HttpOnly` é a página que está renderizando.
+   --------------------------------------------------------------------------- */
+
+/**
+ * `GET /api/perfil/atual/materiais` — a visão do DONO (RF015, DRS §7.4).
+ *
+ * O que esta leitura tem de diferente das públicas, e por quê:
+ *
+ *   - **os três estados vêm na resposta** (`PUBLICADO`, `RETIRADO` e `EXCLUIDO`): o RF017
+ *     tira o material das listagens PÚBLICAS; esconder do dono o que ele acabou de excluir
+ *     seria desonesto (ADR-0011 §2). Quem a tela esconde — ou não oferece — é a AÇÃO, e
+ *     derivá-la do estado é apresentação: a autoridade continua no servidor (RNF010);
+ *   - **a propriedade vem da sessão, nunca do caminho** (RN001, CA007): não há parâmetro
+ *     que peça material de outra pessoa, e a lista de A nunca contém material de B;
+ *   - **`page` é 0-based** (contrato, `NumeroPagina`) e a PRIMEIRA página não é enviada:
+ *     o default do contrato é 0, e mandá-la criaria uma segunda URL pedindo a mesma coisa.
+ *     `size` não é enviado — o padrão do contrato (20) é o da tela, e o envelope devolve o
+ *     `size` aplicado, então nenhum número de itens por página é inventado no cliente;
+ *   - **conjunto vazio é 200 com `items: []`**, nunca erro (RNF004): é o estado normal de
+ *     quem ainda não publicou, e é dele que a tela tira o primeiro passo (RF015).
+ */
+export function listarMateriaisProprios(
+  cabecalhoDeCookie: string,
+  pagina: number,
+): Promise<Resultado<Pagina<MaterialProprio>>> {
+  const consulta = pagina > 0 ? `?page=${pagina}` : '';
+  return requisitar<Pagina<MaterialProprio>>(
+    `/perfil/atual/materiais${consulta}`,
+    { cache: 'no-store' },
+    cabecalhoDeCookie,
+  );
+}
+
+/**
+ * `GET /api/perfil/atual/materiais/{slug}` — lê um material PRÓPRIO em qualquer estado
+ * (RF015). É a leitura que pré-preenche a edição (card E5.7) e a única que enxerga o
+ * material `RETIRADO`, para o qual o detalhe público responde 404 (RN002).
+ *
+ * O `slug` vai codificado no caminho: ele vem da URL da página ou do envelope da lista, e
+ * um valor com caractere especial não pode virar consulta a outro endereço.
+ *
+ * O que ela NÃO distingue, e é decisão do contrato (ADR-0011 §3): material inexistente,
+ * de outra conta ou já `EXCLUIDO` respondem o MESMO 404 — a leitura do dono não vira
+ * oráculo de existência de material alheio.
+ */
+export function obterMaterialProprio(
+  cabecalhoDeCookie: string,
+  slug: string,
+): Promise<Resultado<MaterialProprio>> {
+  return requisitar<MaterialProprio>(
+    `/perfil/atual/materiais/${encodeURIComponent(slug)}`,
+    { cache: 'no-store' },
+    cabecalhoDeCookie,
+  );
 }

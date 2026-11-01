@@ -22,13 +22,15 @@ import { lerSessaoNoServidor } from '@/lib/sessao/servidor';
  * cache para outra pessoa.
  *
  * Sobre o que a área do usuário aponta, e isso é decisão registrada: ela leva às telas que
- * EXISTEM — a edição do perfil público e a publicação de material (`/painel/publicar`, entregue
- * no E4.6). A listagem dos materiais próprios com editar/retirar/excluir é de etapa seguinte do
- * produto (§15.2 a lista; o MVP a entrega depois) e o §21.5 proíbe deixar "pronto" o que não
- * existe — um cartão vazio prometendo tela futura é pior que a ausência. Então não há bloco nem
- * link para ela: há a frase que diz que ela ainda não existe. O cartão de publicação avisa que
- * publicar exige e-mail confirmado quando a conta está `PENDENTE_VERIFICACAO` (ADR-0003 (b)),
- * para esta área não mandar a pessoa a uma tela que a bloquearia sem aviso.
+ * EXISTEM — a listagem dos próprios materiais com editar, retirar, repor e excluir
+ * (`/painel/materiais`, entregue no E5.6), a edição do perfil público e a publicação de
+ * material (`/painel/publicar`, entregue no E4.6). O §21.5 proíbe deixar "pronto" o que não
+ * existe — um cartão vazio prometendo tela futura é pior que a ausência — e o defeito
+ * simétrico é a frase que NEGA uma tela que existe: até o E4.6 esta página dizia que a
+ * publicação não existia, e até o E5.6 dizia o mesmo da listagem. As duas frases saíram.
+ * O cartão de publicação avisa que publicar exige e-mail confirmado quando a conta está
+ * `PENDENTE_VERIFICACAO` (ADR-0003 (b)), para esta área não mandar a pessoa a uma tela que a
+ * bloquearia sem aviso.
  *
  * Dado privado (RNF013): o que esta tela exibe é escrito campo por campo, e o perfil que ela
  * recebe também já vem copiado campo a campo de `SessaoAtual`/`PerfilPublico` por
@@ -104,9 +106,10 @@ export default async function PainelPage() {
         <h1 className="sc-h1">{nome}</h1>
         <p className="sc-sec__lead">
           Esta é a sua área: o estado da conta, o que ela já pode fazer na plataforma e os
-          caminhos para editar o seu perfil público e publicar um material. A listagem dos seus
-          próprios materiais — com editar, retirar e excluir — ainda não existe nesta versão, e
-          por isso não há um caminho para ela aqui.
+          caminhos para editar o seu perfil público, publicar um material e gerenciar os que você
+          já publicou. A listagem dos seus próprios materiais — com editar, retirar, repor no
+          público e excluir — está em{' '}
+          <Link href="/painel/materiais">Materiais próprios</Link>.
         </p>
       </header>
 
@@ -186,6 +189,17 @@ export default async function PainelPage() {
               Publicar material
             </Link>
           </li>
+          <li className="sc-card sc-card--pad" data-acao="materiais-proprios">
+            <h3 className="sc-card__title">Gerenciar os seus materiais</h3>
+            <p className="sc-card__copy">
+              A lista de tudo o que você publicou, com o estado de publicação de cada material — no
+              ar, retirado ou excluído — e as ações de editar, retirar, repor no público e excluir.
+              Retirar e repor são reversíveis; excluir pede confirmação porque não tem volta.
+            </p>
+            <Link className="sc-btn sc-btn--ghost sc-btn--sm" href="/painel/materiais">
+              Ver os meus materiais
+            </Link>
+          </li>
           <li className="sc-card sc-card--pad" data-acao="editar-perfil">
             <h3 className="sc-card__title">Editar o perfil público</h3>
             <p className="sc-card__copy">
@@ -207,11 +221,6 @@ export default async function PainelPage() {
             </Link>
           </li>
         </ul>
-        <p className="sc-helper sc-measure mt-4">
-          A listagem dos seus próprios materiais — com editar, retirar e excluir — ainda não existe
-          nesta versão da plataforma; por isso ela ainda não aparece como card nesta lista. Quando
-          for entregue, passa a ter um.
-        </p>
       </section>
 
       <section className="mt-10" aria-labelledby="dados-da-conta">

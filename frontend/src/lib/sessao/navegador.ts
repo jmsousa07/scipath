@@ -24,7 +24,10 @@
 import type {
   CadastroConta,
   Credenciais,
+  EdicaoDeMaterial,
   EdicaoPerfil,
+  EstadoDeDestino,
+  MaterialProprio,
   MaterialPublicado,
   PerfilPublico,
   ProblemDetail,
@@ -108,7 +111,7 @@ function retryAfter(resposta: Response): number | undefined {
 async function executar<T>(
   operacao: OperacaoDeSessao,
   caminho: string,
-  metodo: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  metodo: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   corpo?: unknown,
   opcoes: {
     multipart?: boolean;
@@ -273,6 +276,92 @@ export function publicarMaterial(
   });
 }
 
+/* ---------------------------------------------------------------------------
+   Gerenciamento do material próprio — `PUT`/`PATCH`/`DELETE` de
+   `/perfil/atual/materiais/{slug}` (tag `gerenciamento` do contrato v0.6.0,
+   RF015–RF017). MORAM AQUI, e não em `lib/api/client.ts`, por uma razão só: as
+   três são ESCRITAS, e escrita exige `X-CSRF-Token` — que só o navegador tem, na
+   cookie `XSRF-TOKEN` legível (`garantirTokenCsrf` acima). As duas LEITURAS da
+   mesma superfície ficam no cliente de servidor, onde a cookie de sessão está.
+   --------------------------------------------------------------------------- */
+
+/**
+ * `PUT /api/perfil/atual/materiais/{slug}` — edita os metadados (RF016, ADR-0011 §4).
+ *
+ * Três coisas que este envio NÃO manda, e são o desenho do contrato:
+ *   - **não manda `slug`**: a URL canônica pública não muda por edição (RNF025) — o
+ *     `EdicaoDeMaterial` não tem o campo, então não existe requisição que troque o
+ *     endereço do material;
+ *   - **não manda autoria nem propriedade**: vêm da sessão (RN001, CA007). `autorSlug`,
+ *     `contaId` e `perfilId` não existem no corpo — não há como editar material alheio
+ *     nem publicar em nome de outra conta;
+ *   - **não manda `estado`**: é o `PATCH`, ato distinto; e não manda `declaracaoDireito`,
+ *     que pertence ao ato de publicar (RF012) e não é re-perguntada.
+ *
+ * O `slug` vai codificado no caminho pelo mesmo motivo da leitura: ele vem da URL e um
+ * valor com caractere especial não pode virar consulta a outro endereço.
+ */
+export function editarMaterialProprio(
+  slug: string,
+  dados: EdicaoDeMaterial,
+  contexto: { contaVerificada: boolean },
+): Promise<ResultadoDeEnvio<MaterialProprio>> {
+  return executar<MaterialProprio>(
+    'editar-material',
+    `/perfil/atual/materiais/${encodeURIComponent(slug)}`,
+    'PUT',
+    dados,
+    { contexto },
+  );
+}
+
+/**
+ * `PATCH /api/perfil/atual/materiais/{slug}` — retira do público ou repõe (RF017, RF019).
+ *
+ * Um campo, um ato: `{"estado": "RETIRADO" | "PUBLICADO"}`. O corpo não aceita `EXCLUIDO`
+ * (o contrato responde 422 apontando o `DELETE`, ADR-0011 §5), e por isso o tipo do
+ * destino é `EstadoDeDestino` — a exclusão sai por `excluirMaterialProprio`, abaixo.
+ *
+ * O `contaVerificada` viaja como contexto porque o 403 desta rota pode ser duas coisas
+ * diferentes: CSRF ausente (acesso negado comum) ou conta `PENDENTE_VERIFICACAO` pedindo
+ * `PUBLICADO` — repor no público é publicar (ADR-0003 (b), ADR-0011 §5). Sem saber o
+ * estado da conta, o cliente não inventa a causa: fica o acesso negado genérico.
+ */
+export function mudarEstadoMaterialProprio(
+  slug: string,
+  estado: EstadoDeDestino,
+  contexto: { contaVerificada: boolean },
+): Promise<ResultadoDeEnvio<MaterialProprio>> {
+  return executar<MaterialProprio>(
+    'mudar-estado-material',
+    `/perfil/atual/materiais/${encodeURIComponent(slug)}`,
+    'PATCH',
+    { estado },
+    { contexto },
+  );
+}
+
+/**
+ * `DELETE /api/perfil/atual/materiais/{slug}` — exclui (RF017). Exclusão LÓGICA: os
+ * metadados permanecem e o binário é purgado 7 dias depois (ADR-0005 §3).
+ *
+ * **Não há campo de confirmação no corpo, e é deliberado** (ADR-0011 §7): um
+ * `confirmacao=true` não confirmaria nada — o cliente sempre pode enviá-lo. A confirmação
+ * que o RF017 pede é o diálogo da tela (`CONFIRMACAO_DE_EXCLUSAO`), que diz que não há
+ * como desfazer; ela acontece ANTES desta função ser chamada.
+ *
+ * Sucesso é **204 sem corpo**, e é por isso que o retorno é `void`: não há o que mostrar
+ * do material depois da exclusão. O que a tela mostra é o estado novo (`EXCLUIDO`) na
+ * lista, relida do servidor.
+ */
+export function excluirMaterialProprio(slug: string): Promise<ResultadoDeEnvio<void>> {
+  return executar<void>(
+    'excluir-material',
+    `/perfil/atual/materiais/${encodeURIComponent(slug)}`,
+    'DELETE',
+  );
+}
+
 /**
  * Desfecho de sucesso da EDIÇÃO DO PERFIL (RF011).
  *
@@ -367,3 +456,4 @@ export function segundosDeEspera(reenvio: ReenvioVerificacao, agoraMs: number): 
   if (Number.isNaN(alvo)) return 0;
   return Math.max(0, Math.ceil((alvo - agoraMs) / 1000));
 }
+

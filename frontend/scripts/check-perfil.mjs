@@ -148,8 +148,8 @@ console.log('\n2. GET /painel com cookie de conta PENDENTE_VERIFICACAO');
     contem(html, 'href="/painel/publicar"'),
   );
   verificar(
-    'NÃO aponta para a listagem de materiais próprios, que ainda não existe',
-    !contem(html, 'href="/painel/materiais"'),
+    'aponta para a listagem de materiais próprios, que existe desde o E5.6 (/painel/materiais)',
+    contem(html, 'href="/painel/materiais"'),
   );
   verificar(
     'NÃO afirma mais que não existem telas de publicação (frase falsa do E4.6 removida)',
@@ -159,9 +159,16 @@ console.log('\n2. GET /painel com cookie de conta PENDENTE_VERIFICACAO');
     'o cartão de publicação avisa que publicar exige e-mail confirmado (ADR-0003 (b))',
     contem(html, 'data-acao="publicar"') && /Publicar exige[\s\S]{0,120}e-mail confirmado/.test(html),
   );
+  // Critério 6 do card E5.6: as frases que NEGAVAM a listagem saíram (eram duas: a do lead e a
+  // do parágrafo abaixo dos cartões). Negar tela existente e prometer tela inexistente são o
+  // MESMO defeito — o §21.5 vale nos dois sentidos.
   verificar(
-    'e diz que a listagem dos materiais próprios ainda não existe (o que segue verdade)',
-    /listagem dos seus próprios materiais[\s\S]{0,160}ainda não existe/i.test(html),
+    'NÃO afirma mais que a listagem dos materiais próprios não existe (o que deixou de ser verdade no E5.6)',
+    !/listagem dos (seus )?próprios materiais[\s\S]{0,160}ainda não existe/i.test(html),
+  );
+  verificar(
+    'e o cartão de gerenciamento entrou na área do usuário, com o link para a listagem',
+    contem(html, 'data-acao="materiais-proprios"') && /Ver os meus materiais/.test(html),
   );
   verificar(
     'mostra a afiliação como declaração (RN011)',

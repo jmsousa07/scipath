@@ -23,7 +23,9 @@
  * | 401 `nao_autenticado` | escrita com identidade | `recoverable-failure` + `sessaoEncerrada` | resumo |
  * | 403 `acesso_negado` | qualquer | `recoverable-failure` + `acessoNegado` | resumo (`detail` do contrato) |
  * | 403 `acesso_negado` | publicar, conta NÃO confirmada | `recoverable-failure` + `publicacaoBloqueada` | resumo (`detail`) + caminho de reenvio |
- * | 404 `nao_encontrado` | qualquer | `recoverable-failure` | resumo |
+ * | 403 `acesso_negado` | repor no público, conta NÃO confirmada | `recoverable-failure` + `republicacaoBloqueada` | resumo (`detail`) + caminho de reenvio |
+ * | 404 `nao_encontrado` | gerenciamento (E5.6) | `recoverable-failure` | resumo (inexistente = alheio = excluído) |
+ * | 404 `nao_encontrado` | qualquer outra | `recoverable-failure` | resumo |
  * | 409 `conflito_de_unicidade` | qualquer | `invalid-field` | CAMPO em conflito (`errors[]`) |
  * | 413 `arquivo_muito_grande` | publicar | `invalid-file` (`tamanho`) | resumo (`detail` = limite corrente) |
  * | 415 `tipo_nao_suportado` | publicar | `invalid-file` (`formato`) | resumo (`detail`) |
@@ -51,7 +53,21 @@ export type OperacaoDeSessao =
   | 'editar-perfil'
   | 'encerrar-sessao'
   | 'reenviar-verificacao'
-  | 'publicar-material';
+  | 'publicar-material'
+  // E5.6 — as três escritas da superfície de gerenciamento (`/perfil/atual/materiais`).
+  // Elas compartilham o vocabulário de status do contrato, mas não o sentido: nelas o 404
+  // é o "não é seu, não existe ou já foi excluído" da ADR-0011 §3, e o 403 de uma delas
+  // (`mudar-estado-material`) pode ser o e-mail não confirmado da republicação (ADR-0003 (b)).
+  | 'editar-material'
+  | 'mudar-estado-material'
+  | 'excluir-material';
+
+/** Operações da superfície de gerenciamento do material próprio (card E5.6). */
+const OPERACOES_DE_MATERIAL = new Set<OperacaoDeSessao>([
+  'editar-material',
+  'mudar-estado-material',
+  'excluir-material',
+]);
 
 /**
  * Falha na granularidade que o cliente distingue, espelhando `lib/api/client.ts` (a
@@ -97,6 +113,13 @@ export type Desfecho = {
    * tela troca o "acesso negado" genérico pelo caminho de reenvio da confirmação.
    */
   publicacaoBloqueada?: boolean;
+  /**
+   * 403 em `mudar-estado-material` pedindo `PUBLICADO` numa conta de e-mail NÃO confirmado
+   * (ADR-0003 (b), ADR-0011 §5): repor material no público é publicar, e a conta pendente
+   * não publica. É o mesmo caminho de reenvio do `publicacaoBloqueada`, com outro verbo —
+   * a tela não pode dizer "publicar" a quem clicou em "repor".
+   */
+  republicacaoBloqueada?: boolean;
   /** `invalid-file`: o motivo, para `<FormState>` compor a mensagem específica. */
   arquivoMotivo?: 'tamanho' | 'formato';
   /** `invalid-file` por tamanho: o limite em texto, como o ADR-0005 o configura. */
@@ -299,6 +322,21 @@ export function mapearFalhaDeEnvio(
           publicacaoBloqueada: true,
         };
       }
+      // Repor material no público É publicar (ADR-0011 §5): o 403 da republicação numa
+      // conta PENDENTE_VERIFICACAO tem a mesma causa do 403 da publicação e o mesmo
+      // caminho de saída — reenviar a confirmação. Retirar, editar e excluir não passam
+      // por aqui: não colocam nada novo no público e não exigem verificação.
+      if (operacao === 'mudar-estado-material' && contexto.contaVerificada === false) {
+        return {
+          estado: 'recoverable-failure',
+          classe: 'acesso_negado',
+          titulo: 'Confirme seu e-mail para repor no público',
+          mensagem: `${detalheDoServidor ?? 'Repor um material no público exige e-mail confirmado, e o da sua conta ainda não foi.'} Nada mudou: o material continua como estava. Repor é publicar, e a verificação é a única operação que ela exige. Peça outro link de confirmação no caminho abaixo — o endereço da conta não aparece nesta tela (RNF013).`,
+          campos: {},
+          foraDosCampos: [],
+          republicacaoBloqueada: true,
+        };
+      }
       return {
         estado: 'recoverable-failure',
         classe: 'acesso_negado',
@@ -312,6 +350,23 @@ export function mapearFalhaDeEnvio(
       };
 
     case 404:
+      // Na superfície de gerenciamento, o 404 tem um sentido próprio e declarado
+      // (ADR-0011 §3): o MESMO corpo para material inexistente, de outra conta ou já
+      // `EXCLUIDO`. A tela não pode desfazer essa decisão dizendo "este material não é
+      // seu" (confirmaria a existência de material alheio) nem "não existe" (seria falso
+      // para o caso mais provável, o que acabou de ser excluído em outra aba). O que ela
+      // pode dizer — e diz — é que a operação não encontrou material vivo para agir, e que
+      // a lista é a visão atualizada.
+      if (OPERACOES_DE_MATERIAL.has(operacao)) {
+        return {
+          estado: 'recoverable-failure',
+          classe: 'nao_encontrado',
+          titulo: 'Este material não está disponível para esta operação',
+          mensagem: `${detalheDoServidor ?? 'O servidor não encontrou um material seu para este endereço.'} Material inexistente, de outra conta ou já excluído respondem a MESMA resposta — a plataforma não distingue os três casos, para não confirmar a existência de material de outra pessoa (ADR-0011). Nada foi alterado: a lista abaixo é a visão do dono, recarregue-a para ver o estado atual.`,
+          campos: {},
+          foraDosCampos: [],
+        };
+      }
       return {
         estado: 'recoverable-failure',
         classe: 'nao_encontrado',
