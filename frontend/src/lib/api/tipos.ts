@@ -310,3 +310,89 @@ export type MaterialPublicado = {
   /** Caminho da página pública do material (ex.: `/materiais/…`). */
   urlPublica: string;
 };
+
+/* ---------------------------------------------------------------------------
+   Gerenciamento do material próprio — recorte da tag `gerenciamento` do
+   contrato v0.6.0 (RF015–RF017, ADR-0011) que a superfície `/painel/materiais`
+   lê e escreve. Mesma fronteira contra ficção do topo deste arquivo: entra o
+   campo que a tela usa. E-mail de login, hash, token, identificador de conta,
+   vínculo de perfil e chave de armazenamento não existem neste schema e não são
+   copiados para cá (RNF013, RNF014).
+   --------------------------------------------------------------------------- */
+
+/**
+ * Estado de publicação do material (`MaterialProprio.estado`, ADR-0011 §2).
+ *
+ * Os TRÊS valores aparecem na visão do dono, e é deliberado: `RETIRADO` é reversível
+ * pelo próprio dono (o `PATCH` o repõe no público) e `EXCLUIDO` é **terminal** no MVP —
+ * não há restauração (ADR-0011 §6). As ações do dono valem em `PUBLICADO` e `RETIRADO`;
+ * em `EXCLUIDO`, nenhuma.
+ */
+export type EstadoDeMaterial = 'PUBLICADO' | 'RETIRADO' | 'EXCLUIDO';
+
+/**
+ * Estado de DESTINO aceito por `PATCH /perfil/atual/materiais/{slug}`
+ * (`TransicaoDeMaterial`): `EXCLUIDO` não entra por valor de estado — a exclusão é o
+ * `DELETE`, ato próprio e terminal (RF019, ADR-0011 §5).
+ */
+export type EstadoDeDestino = 'PUBLICADO' | 'RETIRADO';
+
+/**
+ * Metadados do arquivo na visão do dono (`ArquivoMaterial` do contrato).
+ *
+ * `disponivel` é `false` quando o binário já foi purgado pela rotina de retenção
+ * (7 dias depois da exclusão, ADR-0005 §3): o METADADO permanece, o arquivo não. É
+ * informação que a tela mostra em vez de deixar a pessoa concluir sozinha que o
+ * botão de download sumiu por defeito (RF017).
+ */
+export type ArquivoDoMaterial = {
+  nomeOriginal: string;
+  tamanhoBytes: number;
+  disponivel: boolean;
+};
+
+/**
+ * Material do próprio dono, na visão de gerenciamento (RF015) — o MESMO schema no item
+ * da lista e no detalhe (ADR-0011 §2), e por isso um tipo só aqui.
+ *
+ * **Sem `autor`**: a autoria é sempre o perfil da sessão (RN001); devolver o dono como
+ * autor de si mesmo seria um campo com um valor só. É também o que impede reusar
+ * `MaterialResumo`/`MaterialDetalhe` — os dois carregam `autor` e declaram `estado`
+ * apenas como `PUBLICADO`.
+ */
+export type MaterialProprio = {
+  slug: string;
+  titulo: string;
+  descricao: string;
+  estado: EstadoDeMaterial;
+  categoria: CategoriaRef;
+  tipo: TipoMaterialRef;
+  licenca: LicencaRef;
+  arquivo: ArquivoDoMaterial;
+  /** Instante da publicação; **não muda** por edição nem por republicação (ADR-0011 §4). */
+  publicadoEm: string;
+  /** Instante da última escrita que alterou o material — é a ordem da lista do dono. */
+  atualizadoEm: string;
+};
+
+/**
+ * `PUT /perfil/atual/materiais/{slug}` — o conjunto editável inteiro (RF016, ADR-0011 §4).
+ *
+ * Os cinco campos são obrigatórios porque a tela os apresenta todos preenchidos: a edição
+ * SUBSTITUI o conjunto. Fora do schema, e por isso imutável por esta rota: `slug` (é a URL
+ * canônica, RNF025), autoria/propriedade (vem da sessão, RN001), `estado` (é o `PATCH`), o
+ * arquivo (trocar o binário é outra operação, sem requisito no MVP) e `declaracaoDireito`
+ * (pertence ao ato de publicar, RF012).
+ */
+export type EdicaoDeMaterial = {
+  titulo: string;
+  descricao: string;
+  categoriaSlug: string;
+  tipoSlug: string;
+  licencaSlug: string;
+};
+
+/** `PATCH /perfil/atual/materiais/{slug}` — um campo, um ato (RF017, RF019). */
+export type TransicaoDeMaterial = {
+  estado: EstadoDeDestino;
+};

@@ -22,7 +22,10 @@
     "check:perfil-erros": "node --import ./scripts/ts-registrar.mjs scripts/check-perfil-erros.mjs",
     "check:publicar": "node scripts/check-publicar.mjs",
     "check:publicar-erros": "node --import ./scripts/ts-registrar.mjs scripts/check-publicar-erros.mjs",
-    "verify": "npm run check:tokens && npm run check:style && npm run check:layout && npm run typecheck && npm run lint && npm run check:erros-sessao && npm run check:perfil-erros && npm run check:publicar-erros && npm run build && npm run check:states"
+    "check:materiais": "node scripts/check-materiais.mjs",
+    "check:materiais-erros": "node --import ./scripts/ts-registrar.mjs scripts/check-materiais-erros.mjs",
+    "check:materiais-api": "node --import ./scripts/ts-registrar.mjs scripts/check-materiais-api.mjs",
+    "verify": "npm run check:tokens && npm run check:style && npm run check:layout && npm run typecheck && npm run lint && npm run check:erros-sessao && npm run check:perfil-erros && npm run check:publicar-erros && npm run check:materiais-erros && npm run build && npm run check:states"
   },
   "dependencies": {
     "next": "16.4.2",

@@ -54,6 +54,25 @@ export function rotaExplorar(url: string): Route {
 }
 
 /**
+ * `/painel/materiais/[slug]/editar` — edição dos metadados de um material próprio
+ * (RF016, PAGE_BLUEPRINTS.md §13).
+ *
+ * O identificador é o **slug**, não um `id`: o slug é a chave canônica e estável do
+ * material (RNF025) e é o que a lista do dono já tem em mãos — usar um `id` interno
+ * obrigaria o contrato a publicá-lo, e ele não publica. A correção da tabela de rotas do
+ * `PAGE_BLUEPRINTS.md`, que dizia `[id]`, é do card E5.6.
+ *
+ * Com `as Route` porque a página ainda NÃO existe nesta branch — ela é o card E5.7 — e o
+ * `typedRoutes` só conhece as rotas escritas no projeto. É o MESMO mecanismo (e o mesmo
+ * motivo registrado) de `rotaAutor` e `rotaCategoria` quando as páginas delas não
+ * existiam: sem o cast, o link não compila; sem o link, o dono lê uma lista de materiais
+ * que não leva a lugar nenhum. Ao entregar a página, o cast pode sair (card próprio).
+ */
+export function rotaEditarMaterial(slug: string): Route {
+  return `/painel/materiais/${slug}/editar` as Route;
+}
+
+/**
  * Destino interno preservado pelo parâmetro `proximo` (DRS §15.3: 401 → login com o
  * destino preservado). O valor vem da barra de endereços, então é montado em tempo de
  * execução e o `typedRoutes` não o verifica: daí o cast. Quem ACEITA esse valor é
