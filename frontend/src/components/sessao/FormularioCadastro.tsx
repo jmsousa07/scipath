@@ -173,7 +173,7 @@ export function FormularioCadastro() {
             value={senha}
             onChange={(evento) => setSenha(evento.target.value)}
             error={erroDe('senha')}
-            hint="De 8 a 72 caracteres. A plataforma guarda só o hash da senha, nunca o texto."
+            hint="De 8 a 72 caracteres e até 72 bytes em UTF-8 (limite do bcrypt). A plataforma guarda só o hash da senha, nunca o texto."
           />
 
           <TextField

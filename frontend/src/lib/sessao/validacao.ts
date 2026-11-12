@@ -18,9 +18,10 @@ export type ErrosDeCampo = Record<string, string>;
 const TAMANHO_MAXIMO_EMAIL = 254;
 /** `CadastroConta.nomePublico`: minLength 1, maxLength 120. */
 const TAMANHO_MAXIMO_NOME = 120;
-/** `CadastroConta.senha`: minLength 8 e maxLength 72 (o teto vem do bcrypt — ADR-0003 (a)). */
+/** `CadastroConta.senha`: minLength 8, maxLength 72 e limite bcrypt de 72 bytes UTF-8. */
 const SENHA_MINIMA = 8;
 const SENHA_MAXIMA = 72;
+const SENHA_MAXIMA_BYTES = 72;
 
 /**
  * Formato de e-mail: a checagem é deliberadamente simples — o que ela pega é o dedo
@@ -49,6 +50,8 @@ function validarSenha(senha: string, tarefa: 'entrar' | 'criar'): string | undef
       return `A senha precisa de ${SENHA_MINIMA} caracteres no mínimo.`;
     if (senha.length > SENHA_MAXIMA)
       return `A senha não pode passar de ${SENHA_MAXIMA} caracteres.`;
+    if (new TextEncoder().encode(senha).length > SENHA_MAXIMA_BYTES)
+      return `A senha não pode passar de ${SENHA_MAXIMA_BYTES} bytes em UTF-8 (limite do bcrypt).`;
   }
   return undefined;
 }
@@ -75,7 +78,7 @@ export function validarCadastro(valores: {
   const email = validarEmail(valores.email);
   if (email) erros.email = email;
 
-  // A senha do cadastro é regra NOVA, não a do login: 8 a 72 caracteres (CadastroConta).
+  // A senha do cadastro é regra NOVA: 8–72 caracteres e até 72 bytes UTF-8 (CadastroConta/BCrypt).
   const senha = validarSenha(valores.senha, 'criar');
   if (senha) erros.senha = senha;
 

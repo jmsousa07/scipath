@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -176,6 +177,42 @@ class CadastroContaIntegrationTest {
         assertThat(campos).contains("email", "senha");
         assertThat(corpo.get("errors").findValues("mensagem").stream().map(JsonNode::asText))
                 .contains("deve ser um endereço de e-mail válido", "deve ter entre 8 e 72 caracteres");
+    }
+
+    @Test
+    @DisplayName("senha de 72 bytes UTF-8 é aceita e 74 bytes é recusada sem persistir")
+    void limiteDeBytesUtf8DaSenhaNoCadastro() throws Exception {
+        String senhaAsciiNoLimite = "a".repeat(72);
+        assertThat(senhaAsciiNoLimite.getBytes(StandardCharsets.UTF_8)).hasSize(72);
+        String emailAscii = PREFIXO + "limite-ascii" + DOMINIO;
+        ResponseEntity<String> asciiAceita = cadastrar(emailAscii, senhaAsciiNoLimite, NOME);
+        assertThat(asciiAceita.getStatusCode().value()).isEqualTo(201);
+        String hashAscii = jdbc.queryForObject("SELECT senha_hash FROM account WHERE email = ?", String.class, emailAscii);
+        assertThat(hashAscii).matches(BCRYPT_CUSTO_12);
+        assertThat(codificador.matches(senhaAsciiNoLimite, hashAscii)).isTrue();
+
+        String senhaNoLimite = "é".repeat(36);
+        String senhaAcimaDoLimite = "é".repeat(37);
+        assertThat(senhaNoLimite.getBytes(StandardCharsets.UTF_8)).hasSize(72);
+        assertThat(senhaAcimaDoLimite.getBytes(StandardCharsets.UTF_8)).hasSize(74);
+
+        String emailValido = PREFIXO + "limite-bytes" + DOMINIO;
+        ResponseEntity<String> aceita = cadastrar(emailValido, senhaNoLimite, NOME);
+        assertThat(aceita.getStatusCode().value()).isEqualTo(201);
+        String hash = jdbc.queryForObject("SELECT senha_hash FROM account WHERE email = ?", String.class, emailValido);
+        assertThat(hash).matches(BCRYPT_CUSTO_12);
+        assertThat(codificador.matches(senhaNoLimite, hash)).isTrue();
+
+        String emailInvalido = PREFIXO + "acima-bytes" + DOMINIO;
+        ResponseEntity<String> recusa = cadastrar(emailInvalido, senhaAcimaDoLimite, NOME);
+        assertThat(recusa.getStatusCode().value()).isEqualTo(422);
+        JsonNode corpo = JSON.readTree(recusa.getBody());
+        assertThat(corpo.get("errors").findValues("campo").stream().map(JsonNode::asText))
+                .contains("senha");
+        assertThat(corpo.get("errors").findValues("mensagem").stream().map(JsonNode::asText))
+                .anyMatch(mensagem -> mensagem.contains("72 bytes"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM account WHERE email = ?", Integer.class, emailInvalido))
+                .isZero();
     }
 
     @Test
