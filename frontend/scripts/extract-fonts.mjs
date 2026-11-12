@@ -22,7 +22,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const frontendDir = path.resolve(here, '..');
 const repoRoot = path.resolve(frontendDir, '..');
 
-const SRC_DIR = path.join(repoRoot, 'assets/templates/research.google/assets');
+const SRC_DIR = path.join(repoRoot, 'assets/fonts/google-sans/source');
 const OUT_FONTS_DIR = path.join(frontendDir, 'public/fonts');
 const OUT_CSS = path.join(frontendDir, 'src/styles/fonts.css');
 
@@ -106,7 +106,7 @@ const generated = `/* ==========================================================
    ----------------------------------------------------------------------------
    ARQUIVO GERADO. Não edite à mão: rode \`npm run fonts\` (frontend/).
    Gerador: frontend/scripts/extract-fonts.mjs
-   Origem:  assets/templates/research.google/assets/css2_*.css (templates locais)
+   Origem:  assets/fonts/google-sans/source/css2_*.css (subset de fontes licenciado)
    Escopo:  subconjunto LATINO (unicode-range com ${LATIN_MARKER}) de
             ${[...new Set(faces.map((f) => f.family))].sort().join(', ')}.
    Volume:  ${bySrc.size} arquivos .woff2, ${(totalBytes / 1024).toFixed(0)} KB, ${faces.length} declarações @font-face.

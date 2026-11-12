@@ -107,8 +107,8 @@ try {
     autenticado.html.includes('Trocar o arquivo de um material publicado é outra operação') &&
     !/name="(?:slug|arquivo|fileAssetId)"/.test(autenticado.html));
   verify('o HTML não expõe valores privados servidos pelo duplo',
-    !['maria.silva@exemplo.br', 'senhaHash', 'tokenSessao', 'chaveArmazenamento', 'uploads/2026/09'].some((privado) => autenticado.html.includes(privado)),
-    ['maria.silva@exemplo.br', 'senhaHash', 'tokenSessao', 'chaveArmazenamento', 'uploads/2026/09'].filter((privado) => autenticado.html.includes(privado)).join(', '));
+    !['maria.silva@exemplo.invalid', 'senhaHash', 'tokenSessao', 'chaveArmazenamento', 'uploads/2026/09'].some((privado) => autenticado.html.includes(privado)),
+    ['maria.silva@exemplo.invalid', 'senhaHash', 'tokenSessao', 'chaveArmazenamento', 'uploads/2026/09'].filter((privado) => autenticado.html.includes(privado)).join(', '));
 
   const retirado = await documento('SCIPATH_SESSAO=retirado');
   verify('material RETIRADO continua editável e explica por que não há link público',

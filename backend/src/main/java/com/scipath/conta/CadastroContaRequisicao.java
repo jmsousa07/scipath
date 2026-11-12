@@ -16,8 +16,8 @@ import java.util.Locale;
  *
  * <p><b>Normalização do e-mail no construtor compacto.</b> O contrato diz que o e-mail é
  * "validado e normalizado (minúsculas, sem espaços)"; normalizar <i>antes</i> de validar é o
- * que faz {@code "  Maria.Silva@Exemplo.BR  "} ser aceito e tratado como o mesmo
- * identificador de {@code maria.silva@exemplo.br} — e é o que torna o 409 de e-mail
+ * que faz {@code "  Maria.Silva@exemplo.invalid  "} ser aceito e tratado como o mesmo
+ * identificador de {@code maria.silva@exemplo.invalid} — e é o que torna o 409 de e-mail
  * duplicado independente de caixa e espaço (RN009). Validar o texto cru recusaria com 422
  * uma entrada que o próprio contrato promete aceitar. A coluna
  * {@code account_email_normalizado} do V1 é a rede de segurança: nada é gravado fora disso.
@@ -25,10 +25,10 @@ import java.util.Locale;
  * <p>A normalização também é o que mantém o e-mail fora do valor exibido em erro: os campos
  * enviados pelo cliente não são repetidos em nenhuma mensagem de erro (RNF013).
  *
- * <p><b>Senha.</b> {@code @NotNull} + {@code @Size(8..72)}: o teto de 72 acompanha o limite
- * de 72 bytes do bcrypt (ADR-0003 (a)) — aceitar mais seria descartar o excedente em
- * silêncio. A senha existe só nesta requisição: nunca é registrada em log nem devolvida
- * (RNF009).
+ * <p><b>Senha.</b> {@code @NotNull}, {@code @Size(8..72)} e {@link SenhaBcryptValida}: o teto
+ * em caracteres preserva o contrato e o limite em bytes UTF-8 acompanha o que o bcrypt (ADR-0003
+ * (a)) processa sem truncamento. A senha existe só nesta requisição: nunca é registrada em log
+ * nem devolvida (RNF009).
  */
 public record CadastroContaRequisicao(
 
@@ -39,6 +39,7 @@ public record CadastroContaRequisicao(
 
         @NotNull(message = "informe a senha")
         @Size(min = 8, max = 72, message = "deve ter entre 8 e 72 caracteres")
+        @SenhaBcryptValida
         String senha,
 
         @NotBlank(message = "informe o nome público")

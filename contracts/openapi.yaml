@@ -198,7 +198,6 @@ info:
   contact:
     name: João Mateus de Sousa
     url: https://github.com/jmsousa07
-    email: jmsousa07@users.noreply.github.com
 
 servers:
   - url: http://localhost:8080/api
@@ -843,7 +842,7 @@ paths:
               cadastro:
                 summary: Cadastro válido
                 value:
-                  email: maria.silva@exemplo.br
+                  email: maria.silva@exemplo.invalid
                   senha: nota-de-aula-2026
                   nomePublico: Maria Silva
       responses:
@@ -916,7 +915,7 @@ paths:
               login:
                 summary: Credenciais de login
                 value:
-                  email: maria.silva@exemplo.br
+                  email: maria.silva@exemplo.invalid
                   senha: nota-de-aula-2026
       responses:
         '200':
@@ -1671,7 +1670,7 @@ paths:
               confirmacao:
                 summary: Token recebido no link do e-mail
                 value:
-                  token: <token-omitido>
+                  token: token
       responses:
         '204':
           description: E-mail confirmado e conta em `ATIVO`; a resposta não tem corpo.
@@ -1712,7 +1711,7 @@ paths:
               pedido:
                 summary: Pedido de recuperação
                 value:
-                  email: maria.silva@exemplo.br
+                  email: maria.silva@exemplo.invalid
       responses:
         '202':
           description: |
@@ -1754,7 +1753,7 @@ paths:
               redefinicao:
                 summary: Token do e-mail e senha nova
                 value:
-                  token: <token-omitido>
+                  token: token
                   novaSenha: nova-senha-2026
       responses:
         '204':
@@ -2899,7 +2898,7 @@ components:
             Lista vazia quando o autor não informou.
           items:
             type: string
-          example: [https://github.com/maria-silva]
+          example: ["https://github.com/maria-silva"]
 
     AutorPublico:
       description: |
@@ -2936,16 +2935,16 @@ components:
           format: email
           maxLength: 254
           description: E-mail de login, validado e normalizado; é o identificador único de identidade (RN009).
-          example: maria.silva@exemplo.br
+          example: maria.silva@exemplo.invalid
         senha:
           type: string
           minLength: 8
           maxLength: 72
           description: |
             Senha em texto puro, existente só nesta requisição: o servidor guarda apenas o hash
-            bcrypt 12 (ADR-0003 (a)). O teto de 72 caracteres acompanha o limite de 72 bytes do
-            bcrypt — aceitar mais seria descartar o excedente em silêncio. Nunca é registrada em
-            log nem devolvida em resposta (RNF009).
+            bcrypt 12 (ADR-0003 (a)). O limite é 72 caracteres e 72 bytes em UTF-8, para que o
+            bcrypt não descarte entrada silenciosamente. Nunca é registrada em log nem devolvida
+            em resposta (RNF009).
           example: nota-de-aula-2026
         nomePublico:
           type: string
@@ -2967,7 +2966,7 @@ components:
           format: email
           maxLength: 254
           description: E-mail de login (normalizado pelo servidor).
-          example: maria.silva@exemplo.br
+          example: maria.silva@exemplo.invalid
         senha:
           type: string
           description: Senha em texto puro. Nunca registrada em log nem devolvida (RNF009).
@@ -3025,7 +3024,7 @@ components:
           items:
             type: string
             maxLength: 300
-          example: [https://github.com/maria-silva]
+          example: ["https://github.com/maria-silva"]
 
     EdicaoDeMaterial:
       type: object
@@ -3171,7 +3170,7 @@ components:
             Token opaco de 32 bytes URL-safe. O servidor guarda apenas o hash (SHA-256) — o valor
             em claro existe só no link enviado. Inválido, expirado ou já consumido recebem a mesma
             resposta (422).
-          example: 3vJ8kQ2mR7sT1wX5yZ9aB4cD6eF0gH2i
+          example: token-de-exemplo
 
     RecuperacaoSolicitacao:
       type: object
@@ -3185,7 +3184,7 @@ components:
           format: email
           maxLength: 254
           description: E-mail da conta a recuperar.
-          example: maria.silva@exemplo.br
+          example: maria.silva@exemplo.invalid
 
     RecuperacaoConfirmacao:
       type: object
@@ -3198,15 +3197,16 @@ components:
         token:
           type: string
           description: Token de recuperação recebido por e-mail; vai no corpo, nunca no caminho (RNF009).
-          example: 9dC1eB5aF3gH7iJ0kL2mN4oP6qR8sT1u
+          example: token-de-exemplo
         novaSenha:
           type: string
           minLength: 8
           maxLength: 72
           description: |
             Nova senha em texto puro; o servidor guarda só o hash bcrypt 12. Mesmo intervalo do
-            cadastro (8 a 72 caracteres — o teto vem do bcrypt). Trocar a senha invalida todas as
-            sessões abertas da conta.
+            cadastro (8 a 72 caracteres e no máximo 72 bytes UTF-8, o limite do bcrypt). Uma senha
+            acima do limite devolve 422 em `novaSenha` sem consumir o token. Trocar a senha invalida
+            todas as sessões abertas da conta.
           example: nova-senha-2026
 
     PaginaMateriais:

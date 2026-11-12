@@ -34,7 +34,7 @@ const BASE = (() => {
 const COOKIE = 'SCIPATH_SESSAO';
 /** Dados que o contrato NÃO tem e a tela não pode exibir (servidos de propósito pelo duplo). */
 const PRIVADOS = [
-  'maria.silva@exemplo.br',
+  'maria.silva@exemplo.invalid',
   'contaId',
   'senhaHash',
   'tokenSessao',

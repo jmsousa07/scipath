@@ -24,7 +24,7 @@ class NomesDeArquivoTest {
                 "../../etc/passwd.pdf",
                 "..\\..\\Windows\\nota.pdf",
                 "/etc/scipath/nota.pdf",
-                "C:\\Users\\ana\\nota.pdf",
+                "C:/Users/test-user/Downloads/nota-de-aula.pdf",
                 "./nota.pdf",
                 "nota..pdf",
                 "....//nota.pdf",
@@ -44,7 +44,7 @@ class NomesDeArquivoTest {
     @DisplayName("só o último componente do caminho é guardado")
     void soOUltimoComponente() {
         assertThat(NomesDeArquivo.sanitizar("../../etc/passwd.pdf")).isEqualTo("passwd.pdf");
-        assertThat(NomesDeArquivo.sanitizar("C:\\Users\\ana\\nota-de-aula.pdf")).isEqualTo("nota-de-aula.pdf");
+        assertThat(NomesDeArquivo.sanitizar("C:/Users/test-user/Downloads/nota-de-aula.pdf")).isEqualTo("nota-de-aula.pdf");
         assertThat(NomesDeArquivo.sanitizar("/tmp/relatorio.pdf")).isEqualTo("relatorio.pdf");
     }
 

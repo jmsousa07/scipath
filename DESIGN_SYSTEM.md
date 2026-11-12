@@ -31,7 +31,7 @@
 | Texto primário / UI | `--font-primary` | Google Sans Flex → Google Sans → Google Sans Text → Roboto |
 | Corpo editorial | `--font-text` | Google Sans Text → Google Sans Flex → Roboto |
 | Código / dados | `--font-mono` | Roboto Mono → Geist Mono → Google Sans Flex → ui-monospace |
-| Ícones | `--font-symbol` | Google Symbols → Material Symbols Outlined |
+| Ícones | `--font-symbol` | stack de referência do DS2; não carregada no app, que usa SVG inline |
 
 **Escala real do DS2** (extraída do arquivo; `h5`/`h6` existem e devem ser lidos de lá):
 
@@ -47,11 +47,11 @@
 | `.sc-caption` | text | 400 | `.78125rem` | 1.45 | 0.01em (cor `--sc-ink-muted`) |
 | `.sc-label` | — | — | — | — | `font-variant-numeric: tabular-nums` |
 
-**Carregamento:** as famílias são servidas de **arquivos locais** — há 237 `.woff2` em
-`assets/templates/research.google/assets/`, com `@font-face` declarado nos `css2_*.css` do
-template. O frontend **não** usa CDN de fontes: copia os subconjuntos necessários (Flex, Display,
-Text, Roboto Mono, Symbols) para `frontend/public/fonts/`, declara `@font-face` próprio com
-`font-display: swap` e mantém as pilhas de fallback acima.
+**Carregamento:** as famílias são servidas de **arquivos locais**, sem CDN. O gerador usa os
+subconjuntos latinos licenciados em `assets/fonts/google-sans/source/`, copia os 12 arquivos
+necessários para `frontend/public/fonts/` e gera `@font-face` com `font-display: swap`. Google Sans
+(incluindo Flex, Display e Text) e Roboto Mono acompanham seus textos SIL Open Font License 1.1;
+consulte `assets/fonts/OFL-*.txt`.
 
 **Regenerar os valores em vez de adivinhar:**
 
@@ -141,9 +141,7 @@ estão; **não** redefinir.
 
 ## 5. Ícones
 
-Fonte de ícones `Google Symbols` + material inline (`--font-symbol`). Regras: ícone decorativo tem
-`aria-hidden`; ícone com significado tem nome acessível (`RNF007`); tamanho e alinhamento pelos
-tokens de tipografia, não por largura fixa inventada.
+A stack `--font-symbol` de `Google Symbols` / `Material Symbols Outlined` preserva a referência do DS2; o frontend atual não carrega uma fonte de ícones e usa SVG inline (`frontend/README.md`). Regras: ícone decorativo tem `aria-hidden`; ícone com significado tem nome acessível (`RNF007`); tamanho e alinhamento pelos tokens de tipografia, não por largura fixa inventada.
 
 ## 6. Layout e responsividade
 

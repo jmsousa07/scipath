@@ -1,0 +1,18 @@
+# Exceções de varredura de segredo para ESTE repositório.
+#
+# Todo item abaixo é dado de EVIDÊNCIA de QA, versionado de propósito (AGENTS.md, DRS
+# §17.5): o log de teste é a prova, e ele cita literais que parecem credencial sem serem.
+# Cada exceção é ancorada no texto exato, não no arquivo inteiro: se o literal mudar, a
+# varredura volta a acusar.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Dummy explícito do instrumento E1.2b (o monitor de argv é provado com um valor que se declara NÃO segredo)"
+regexes = ['''DUMMY_NAO_E_SEGREDO_123''']
+
+[[allowlists]]
+description = "SHA-256 do token de uso único, gravado como prova de que o banco não guarda o valor em claro — o hash não permite reconstruir o token"
+regexTarget = "line"
+regexes = ['''o hash gravado é o SHA-256 do token do link = [0-9a-f]{64}''']

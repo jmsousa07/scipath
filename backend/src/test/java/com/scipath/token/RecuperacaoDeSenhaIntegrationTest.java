@@ -231,6 +231,48 @@ class RecuperacaoDeSenhaIntegrationTest extends ApoioDeTestesDeToken {
         assertThat(codificador.matches(SENHA_NOVA, senhaHashDaConta(email))).isTrue();
     }
 
+    @Test
+    @DisplayName("nova senha acima de 72 bytes UTF-8 responde 422 sem consumir o token")
+    void senhaAcimaDoLimiteUtf8NaoConsomeToken() throws Exception {
+        String email = PREFIXO + "senha-bytes" + DOMINIO;
+        criarConta(email, "Recuperacao Senha Bytes");
+        chamar(HttpMethod.POST, URL_SOLICITACAO_DE_RECUPERACAO, corpoDaSolicitacaoDeRecuperacao(email), null, null, null);
+        String token = tokenDoLink(ultimaMensagemPara(email, TipoDeToken.RECUPERACAO_SENHA).orElseThrow().link());
+        String senhaAcimaDoLimite = "é".repeat(37);
+
+        ResponseEntity<String> resposta = confirmarRecuperacaoComoResposta(token, senhaAcimaDoLimite);
+
+        assertThat(resposta.getStatusCode().value()).isEqualTo(422);
+        var corpo = JSON.readTree(resposta.getBody());
+        assertThat(corpo.get("errors").findValues("campo").stream().map(com.fasterxml.jackson.databind.JsonNode::asText))
+                .contains("novaSenha");
+        assertThat(corpo.get("errors").findValues("mensagem").stream().map(com.fasterxml.jackson.databind.JsonNode::asText))
+                .anyMatch(mensagem -> mensagem.contains("72 bytes"));
+        assertThat(resposta.getBody()).doesNotContain(senhaAcimaDoLimite);
+        assertThat(consumidoEmDoToken(token, TipoDeToken.RECUPERACAO_SENHA)).isNull();
+
+        String senhaNoLimite = "é".repeat(36);
+        assertThat(confirmarRecuperacao(token, senhaNoLimite)).isEqualTo(204);
+        String hash = senhaHashDaConta(email);
+        assertThat(hash).startsWith("$2").contains("$12$").hasSize(60);
+        assertThat(codificador.matches(senhaNoLimite, hash)).isTrue();
+    }
+
+    @Test
+    @DisplayName("nova senha ASCII de 72 bytes é aceita na recuperação")
+    void senhaAsciiNoLimiteEhAceitaNaRecuperacao() {
+        String email = PREFIXO + "senha-ascii-limite" + DOMINIO;
+        criarConta(email, "Recuperacao Senha ASCII");
+        chamar(HttpMethod.POST, URL_SOLICITACAO_DE_RECUPERACAO, corpoDaSolicitacaoDeRecuperacao(email), null, null, null);
+        String token = tokenDoLink(ultimaMensagemPara(email, TipoDeToken.RECUPERACAO_SENHA).orElseThrow().link());
+        String senhaNoLimite = "a".repeat(72);
+
+        assertThat(confirmarRecuperacao(token, senhaNoLimite)).isEqualTo(204);
+        String hash = senhaHashDaConta(email);
+        assertThat(hash).startsWith("$2").contains("$12$").hasSize(60);
+        assertThat(codificador.matches(senhaNoLimite, hash)).isTrue();
+    }
+
     // -------------------------------------------------------------- utilidades
 
     private int confirmarRecuperacao(String token, String novaSenha) {

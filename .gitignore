@@ -37,3 +37,5 @@ tmp/
 assets/w_*.html
 assets/debug2.html
 assets/probe.html
+# Capturas de sites de terceiros usadas como referência; não versionar.
+assets/templates/
