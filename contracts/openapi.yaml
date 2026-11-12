@@ -1670,7 +1670,7 @@ paths:
               confirmacao:
                 summary: Token recebido no link do e-mail
                 value:
-                  token: <token-omitido>
+                  token: token
       responses:
         '204':
           description: E-mail confirmado e conta em `ATIVO`; a resposta não tem corpo.
@@ -1753,7 +1753,7 @@ paths:
               redefinicao:
                 summary: Token do e-mail e senha nova
                 value:
-                  token: <token-omitido>
+                  token: token
                   novaSenha: nova-senha-2026
       responses:
         '204':
@@ -3170,7 +3170,7 @@ components:
             Token opaco de 32 bytes URL-safe. O servidor guarda apenas o hash (SHA-256) — o valor
             em claro existe só no link enviado. Inválido, expirado ou já consumido recebem a mesma
             resposta (422).
-          example: 3vJ8kQ2mR7sT1wX5yZ9aB4cD6eF0gH2i
+          example: token-de-exemplo
 
     RecuperacaoSolicitacao:
       type: object
@@ -3197,7 +3197,7 @@ components:
         token:
           type: string
           description: Token de recuperação recebido por e-mail; vai no corpo, nunca no caminho (RNF009).
-          example: 9dC1eB5aF3gH7iJ0kL2mN4oP6qR8sT1u
+          example: token-de-exemplo
         novaSenha:
           type: string
           minLength: 8
