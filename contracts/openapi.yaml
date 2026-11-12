@@ -2942,9 +2942,9 @@ components:
           maxLength: 72
           description: |
             Senha em texto puro, existente só nesta requisição: o servidor guarda apenas o hash
-            bcrypt 12 (ADR-0003 (a)). O teto de 72 caracteres acompanha o limite de 72 bytes do
-            bcrypt — aceitar mais seria descartar o excedente em silêncio. Nunca é registrada em
-            log nem devolvida em resposta (RNF009).
+            bcrypt 12 (ADR-0003 (a)). O limite é 72 caracteres e 72 bytes em UTF-8, para que o
+            bcrypt não descarte entrada silenciosamente. Nunca é registrada em log nem devolvida
+            em resposta (RNF009).
           example: nota-de-aula-2026
         nomePublico:
           type: string
@@ -3204,8 +3204,9 @@ components:
           maxLength: 72
           description: |
             Nova senha em texto puro; o servidor guarda só o hash bcrypt 12. Mesmo intervalo do
-            cadastro (8 a 72 caracteres — o teto vem do bcrypt). Trocar a senha invalida todas as
-            sessões abertas da conta.
+            cadastro (8 a 72 caracteres e no máximo 72 bytes UTF-8, o limite do bcrypt). Uma senha
+            acima do limite devolve 422 em `novaSenha` sem consumir o token. Trocar a senha invalida
+            todas as sessões abertas da conta.
           example: nova-senha-2026
 
     PaginaMateriais:
