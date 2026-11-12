@@ -21,7 +21,7 @@ Base do frontend do SciPath (card E1.6). O contrato visual é `../assets/design_
 ```
 assets/design_system_2.html ──┬─→ src/styles/tokens.css        (paleta, escala de tipo, motion)
                               ├─→ src/styles/design-system.css  (76 regras de componente, verbatim)
-assets/templates/…/css2_*.css ─→ src/styles/fonts.css + public/fonts/*.woff2 (subset latino)
+assets/fonts/google-sans/source/css2_*.css ─→ src/styles/fonts.css + public/fonts/*.woff2 (subset latino)
 src/styles/base.css            (fundação, valores por token)
 src/styles/layout.css          (regra de projeto: breakpoints, container, toque)
 src/app/globals.css            (importa tudo em camadas e mapeia token → utilitário Tailwind)
@@ -39,7 +39,7 @@ linha de origem de cada regra. Se o DS2 mudar, `npm run tokens` produz o diff.
    `/fonts`, `font-display: swap`. Ícone não usa fonte de ícone — é SVG inline.
 3. **Sem `overflow-x: hidden`.** Esconder o estouro esconde o defeito. A correção está em
    `layout.css` e a verificação em `check:layout`.
-4. **`/explorar` ainda não responde.** A busca do cabeçalho é um formulário `GET` para a rota
-   canônica da descoberta (`PAGE_BLUEPRINTS.md`), que chega na Etapa 2.
+4. **`/explorar`** é a descoberta pública: lista, busca textual, filtros e paginação. A tela
+   usa os mesmos critérios de elegibilidade da API; o QA E2.11 e o aceite P5 registram essa jornada.
 5. **`NEXT_PUBLIC_SITE_URL`** define o domínio canônico dos metadados; sem ela o build usa
    `http://localhost:3000` (ver `.env.example`).

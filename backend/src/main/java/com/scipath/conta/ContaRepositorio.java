@@ -59,8 +59,8 @@ public class ContaRepositorio {
      * Conta identificada pelo e-mail normalizado, se existir.
      *
      * <p>A busca é pela coluna como ela está gravada (minúsculas, sem espaços) e o parâmetro
-     * chega normalizado — é isso que faz {@code Maria.Silva@Exemplo.BR} e
-     * {@code maria.silva@exemplo.br} serem a <b>mesma</b> identidade (RN009). A coluna é
+     * chega normalizado — é isso que faz {@code Maria.Silva@exemplo.invalid} e
+     * {@code maria.silva@exemplo.invalid} serem a <b>mesma</b> identidade (RN009). A coluna é
      * {@code UNIQUE}, então a consulta é uma leitura por índice e devolve no máximo uma linha.
      */
     public Optional<Conta> buscarPorEmail(String email) {

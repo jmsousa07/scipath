@@ -12,8 +12,8 @@ import java.util.Locale;
  * <p><b>Mesma normalização do cadastro.</b> O e-mail é aparado e passado a minúsculas no
  * construtor compacto, pelo mesmo motivo do {@link com.scipath.conta.CadastroContaRequisicao}:
  * é a coluna {@code account.email} que guarda o valor normalizado, e é isso que faz
- * {@code "  Maria.Silva@Exemplo.BR  "} entrar na <b>mesma</b> conta de
- * {@code maria.silva@exemplo.br}. Sem isso, quem digitasse a senha certa com o e-mail em
+ * {@code "  Maria.Silva@exemplo.invalid  "} entrar na <b>mesma</b> conta de
+ * {@code maria.silva@exemplo.invalid}. Sem isso, quem digitasse a senha certa com o e-mail em
  * caixa alta receberia 401 — e o login diria, por acidente, que aquele e-mail não existe.
  *
  * <p><b>A senha não tem regra de tamanho aqui.</b> É decisão do contrato: o schema

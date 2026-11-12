@@ -16,8 +16,8 @@ import java.util.Locale;
  *
  * <p><b>Normalização do e-mail no construtor compacto.</b> O contrato diz que o e-mail é
  * "validado e normalizado (minúsculas, sem espaços)"; normalizar <i>antes</i> de validar é o
- * que faz {@code "  Maria.Silva@Exemplo.BR  "} ser aceito e tratado como o mesmo
- * identificador de {@code maria.silva@exemplo.br} — e é o que torna o 409 de e-mail
+ * que faz {@code "  Maria.Silva@exemplo.invalid  "} ser aceito e tratado como o mesmo
+ * identificador de {@code maria.silva@exemplo.invalid} — e é o que torna o 409 de e-mail
  * duplicado independente de caixa e espaço (RN009). Validar o texto cru recusaria com 422
  * uma entrada que o próprio contrato promete aceitar. A coluna
  * {@code account_email_normalizado} do V1 é a rede de segurança: nada é gravado fora disso.

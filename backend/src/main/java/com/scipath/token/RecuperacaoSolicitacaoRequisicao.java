@@ -11,7 +11,7 @@ import java.util.Locale;
  *
  * <p><b>Normalização igual à do cadastro</b> (mesmo construtor compacto de
  * {@code CadastroContaRequisicao}): minúsculas e sem espaços nas pontas, antes da validação de
- * formato. A mesma normalização é o que faz {@code "  Maria.Silva@Exemplo.BR  "} encontrar a
+ * formato. A mesma normalização é o que faz {@code "  Maria.Silva@exemplo.invalid  "} encontrar a
  * conta que o cadastro gravou — e é a coluna {@code account_email_normalizado} do V1 que
  * garante que nada foi gravado fora disso.
  *

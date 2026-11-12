@@ -166,16 +166,16 @@ console.log('\n11. validação do próprio formulário (antes da requisição)')
   const formato = validarCredenciais({ email: 'maria.silva', senha: 'nota-de-aula-2026' });
   verificar('login: e-mail sem @ → erro no campo', /@/.test(formato.email ?? ''), JSON.stringify(formato));
 
-  const curta = validarCadastro({ email: 'a@b.br', senha: '1234567', senhaConfirmacao: '1234567', nomePublico: 'Maria' });
+  const curta = validarCadastro({ email: 'a@b.invalid', senha: '1234567', senhaConfirmacao: '1234567', nomePublico: 'Maria' });
   verificar('cadastro: senha de 7 caracteres → erro (minLength 8)', /8 caracteres/.test(curta.senha ?? ''), JSON.stringify(curta));
 
-  const longa = validarCadastro({ email: 'a@b.br', senha: 'x'.repeat(73), senhaConfirmacao: 'x'.repeat(73), nomePublico: 'Maria' });
+  const longa = validarCadastro({ email: 'a@b.invalid', senha: 'x'.repeat(73), senhaConfirmacao: 'x'.repeat(73), nomePublico: 'Maria' });
   verificar('cadastro: senha de 73 caracteres → erro (teto do bcrypt)', /72/.test(longa.senha ?? ''), JSON.stringify(longa));
 
-  const diferentes = validarCadastro({ email: 'a@b.br', senha: 'nota-de-aula-2026', senhaConfirmacao: 'outra-senha', nomePublico: 'Maria' });
+  const diferentes = validarCadastro({ email: 'a@b.invalid', senha: 'nota-de-aula-2026', senhaConfirmacao: 'outra-senha', nomePublico: 'Maria' });
   verificar('cadastro: confirmação diferente → erro no campo de confirmação', Boolean(diferentes.senhaConfirmacao), JSON.stringify(diferentes));
 
-  const ok = validarCadastro({ email: 'maria.silva@exemplo.br', senha: 'nota-de-aula-2026', senhaConfirmacao: 'nota-de-aula-2026', nomePublico: 'Maria Silva' });
+  const ok = validarCadastro({ email: 'maria.silva@exemplo.invalid', senha: 'nota-de-aula-2026', senhaConfirmacao: 'nota-de-aula-2026', nomePublico: 'Maria Silva' });
   verificar('cadastro válido → nenhum erro', Object.keys(ok).length === 0, JSON.stringify(ok));
 
   const desfecho = desfechoDeCamposInvalidos(diferentes);

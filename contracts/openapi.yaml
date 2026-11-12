@@ -198,7 +198,6 @@ info:
   contact:
     name: João Mateus de Sousa
     url: https://github.com/jmsousa07
-    email: jmsousa07@users.noreply.github.com
 
 servers:
   - url: http://localhost:8080/api
@@ -843,7 +842,7 @@ paths:
               cadastro:
                 summary: Cadastro válido
                 value:
-                  email: maria.silva@exemplo.br
+                  email: maria.silva@exemplo.invalid
                   senha: nota-de-aula-2026
                   nomePublico: Maria Silva
       responses:
@@ -916,7 +915,7 @@ paths:
               login:
                 summary: Credenciais de login
                 value:
-                  email: maria.silva@exemplo.br
+                  email: maria.silva@exemplo.invalid
                   senha: nota-de-aula-2026
       responses:
         '200':
@@ -1712,7 +1711,7 @@ paths:
               pedido:
                 summary: Pedido de recuperação
                 value:
-                  email: maria.silva@exemplo.br
+                  email: maria.silva@exemplo.invalid
       responses:
         '202':
           description: |
@@ -2899,7 +2898,7 @@ components:
             Lista vazia quando o autor não informou.
           items:
             type: string
-          example: [https://github.com/maria-silva]
+          example: ["https://github.com/maria-silva"]
 
     AutorPublico:
       description: |
@@ -2936,7 +2935,7 @@ components:
           format: email
           maxLength: 254
           description: E-mail de login, validado e normalizado; é o identificador único de identidade (RN009).
-          example: maria.silva@exemplo.br
+          example: maria.silva@exemplo.invalid
         senha:
           type: string
           minLength: 8
@@ -2967,7 +2966,7 @@ components:
           format: email
           maxLength: 254
           description: E-mail de login (normalizado pelo servidor).
-          example: maria.silva@exemplo.br
+          example: maria.silva@exemplo.invalid
         senha:
           type: string
           description: Senha em texto puro. Nunca registrada em log nem devolvida (RNF009).
@@ -3025,7 +3024,7 @@ components:
           items:
             type: string
             maxLength: 300
-          example: [https://github.com/maria-silva]
+          example: ["https://github.com/maria-silva"]
 
     EdicaoDeMaterial:
       type: object
@@ -3185,7 +3184,7 @@ components:
           format: email
           maxLength: 254
           description: E-mail da conta a recuperar.
-          example: maria.silva@exemplo.br
+          example: maria.silva@exemplo.invalid
 
     RecuperacaoConfirmacao:
       type: object

@@ -17,9 +17,10 @@
 
 ```
 backend/     Java 21 + Spring Boot 3 (Maven)   regras, autenticação, autorização, API REST
+backend/src/main/resources/db/migration/      migrações Flyway versionadas
 frontend/    Next.js (App Router) + TS + Tailwind   público indexável + workspace autenticado
-e2e/         Playwright                         jornadas ponta a ponta
-contracts/   openapi.yaml + db/migrations/      as duas fronteiras
+docs/qa/     scripts e evidências de aceitação/teste
+contracts/   openapi.yaml                       fronteira da API
 docs/        visão, arquitetura, ADRs, cards, evidências de QA
 infra/       scripts de ambiente (banco, setup)
 assets/      design systems (contrato visual)
@@ -29,7 +30,7 @@ assets/      design systems (contrato visual)
 paginação e filtros uniformes, recursos públicos e privados distinguidos, sem expor entidades de
 persistência (§14.3). Prefixo único (`/api`), decidido aqui e não reinventado em cada tela.
 
-**Fronteira 2 — dados** (`contracts/db/migrations/`): migrações versionadas e imutáveis
+**Fronteira 2 — dados** (`backend/src/main/resources/db/migration/`): migrações versionadas e imutáveis
 (RNF028). O front nunca conhece o banco.
 
 ## 2. Modelo de dados (v1, derivado do §11)
@@ -119,7 +120,7 @@ Interface `StorageService` (domínio não conhece provedor) com implementação 
 - `checksum` e `tipo_detectado` no `file_asset`; tipo validado por conteúdo, não só extensão;
 - gravação trata **falha parcial**: sem arquivo validado não existe material publicado (RN008);
 - limites em configuração (§5.4): `scipath.upload.tipos-permitidos=pdf`,
-  `scipath.upload.tamanho-maximo=50MB`.
+  `scipath.upload.tamanho-maximo=30MB`.
 
 ### 4.1 Coletor de arquivos órfãos (RN008, RN012; ADR-0005 §2 e §3)
 
@@ -187,7 +188,7 @@ vazio, erro de rede/servidor, não encontrado, não autorizado, sessão expirada
 trata **seis** (campo inválido, envio em andamento, falha recuperável, sucesso, tentativa
 duplicada, arquivo acima do limite ou formato inválido). São **componentes reutilizáveis**, não
 implementações por tela — RNF003 exige seguir `DESIGN_SYSTEM.md` e `PAGE_BLUEPRINTS.md`
-(a criar). Proibido: dado mockado numa tela como se fosse real (§15.3).
+(RNF003; verificados e versionados). Proibido: dado mockado numa tela como se fosse real (§15.3).
 
 ## 6. Testes e qualidade (§17)
 
@@ -224,7 +225,7 @@ configuração/ambiente e **nunca** entram no repositório (RNF012).
 | ~~Verificação de e-mail antes de publicar?~~ **decidido:** obrigatória para publicar; navegar e editar perfil liberados | §5, fluxo de publicação | **ADR-0003 — registrado** |
 | Taxonomia inicial: categorias, tipos, licenças | §2 (seeds), §5 | ADR-0004 (Etapa 0) |
 | Política de exclusão e retenção (lógica ou física) | §2 (estados), §4 (limpeza) | ADR-0005 (Etapa 0) |
-| Limite de upload (confirmar 50 MB) e tipos | §4 | ADR-0005 |
+| Limite de upload: 30 MB e somente PDF | §4 | ADR-0005 |
 | Painel administrativo mínimo vs seed/migração | §2 (gestão de categorias/licenças) | ADR-0004 |
 | Hospedagem, backup e restauração | §7 | ADR-0006 (Etapa 0) |
 | Quem recebe denúncia de conteúdo e como | §5 (transparência), lançamento | ADR-0006 |

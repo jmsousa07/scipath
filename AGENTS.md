@@ -169,9 +169,6 @@ make e2e           # Playwright
 make contract:check# valida openapi.yaml
 ```
 
-## Contexto do dono
+## Comunicação do projeto
 
-João Mateus de Sousa, Aracati/CE, Ciência da Computação no IFCE Aracati. Aprende
-implementando antes de usar biblioteca — em dúvida técnica, explique a intuição e o
-trade-off antes de despejar solução pronta. Comunicação direta, sem elogio genérico,
-separando fato de hipótese.
+Português brasileiro. Em explicações técnicas, apresente intuição e trade-offs; separe fatos de hipóteses.

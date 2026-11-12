@@ -38,7 +38,7 @@ function validarEmail(email: string): string | undefined {
   if (email.trim().length > TAMANHO_MAXIMO_EMAIL)
     return `O e-mail passa de ${TAMANHO_MAXIMO_EMAIL} caracteres. Use um endereço mais curto.`;
   if (!emailPareceValido(email))
-    return 'Confira o endereço: falta o @ ou o domínio (exemplo: nome@instituicao.br).';
+    return 'Confira o endereço: falta o @ ou o domínio (exemplo: nome@instituicao.invalid).';
   return undefined;
 }
 

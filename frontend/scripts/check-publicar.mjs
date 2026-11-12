@@ -40,7 +40,7 @@ const BASE = (() => {
 /** Cookie de sessão como o contrato o publica; o VALOR é o que distingue o estado da conta. */
 const COOKIE = 'SCIPATH_SESSAO';
 /** Dados que o contrato NÃO tem e a tela não pode exibir (servidos de propósito pelo duplo). */
-const PRIVADOS = ['maria.silva@exemplo.br', 'contaId', 'senhaHash', 'tokenSessao', '$2a$12$', 'opaca-de-exemplo'];
+const PRIVADOS = ['maria.silva@exemplo.invalid', 'contaId', 'senhaHash', 'tokenSessao', '$2a$12$', 'opaca-de-exemplo'];
 
 let falhas = 0;
 let total = 0;

@@ -254,10 +254,10 @@ class EdicaoPerfilIntegrationTest {
         String emailA = PREFIXO + "ana" + DOMINIO;
         String emailB = PREFIXO + "bruno" + DOMINIO;
         cadastrar(emailA, "Ana de Perfil");
-        cadastrar(emailB, "Maria Silva");
+        cadastrar(emailB, "Maria Silva E3.5");
 
         // 409: o slug pertence a outra conta (RN009), com o campo culpado em errors[].
-        ResponseEntity<String> conflito = editar(logar(emailA), corpoDeEdicao("Ana de Perfil", "maria-silva"));
+        ResponseEntity<String> conflito = editar(logar(emailA), corpoDeEdicao("Ana de Perfil", "maria-silva-e3-5"));
         assertThat(conflito.getStatusCode().value()).isEqualTo(409);
         JsonNode corpoDoConflito = JSON.readTree(conflito.getBody());
         System.out.println("[E3.5] slug de outra conta -> 409 " + conflito.getBody());
@@ -266,7 +266,7 @@ class EdicaoPerfilIntegrationTest {
         assertThat(corpoDoConflito.get("instance").asText()).isEqualTo(URL_DA_EDICAO);
         assertThat(corpoDoConflito.get("errors").get(0).get("campo").asText()).isEqualTo("slug");
         assertThat(perfilNoBanco(emailA).get("slug")).as("o 409 não grava nada").isEqualTo("ana-de-perfil");
-        assertThat(perfilNoBanco(emailB).get("slug")).as("nem mexe no perfil dono do slug").isEqualTo("maria-silva");
+        assertThat(perfilNoBanco(emailB).get("slug")).as("nem mexe no perfil dono do slug").isEqualTo("maria-silva-e3-5");
 
         // 422: formato, tamanho e reserva — cada um com o campo slug apontado.
         Map<String, String> invalidos = new java.util.LinkedHashMap<>();

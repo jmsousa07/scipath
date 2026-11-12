@@ -104,7 +104,7 @@ rascunho**; para reduzir complexidade, rascunhos podem ser omitidos — e nesse 
 ## 8. Limites iniciais (parâmetros de produto, centralizados em configuração)
 
 - Formato inicial: **PDF**. Outros formatos só com decisão explícita.
-- Tamanho máximo: **50 MB**, configurável.
+- Tamanho máximo: **30 MB**, configurável (ADR-0005 §1).
 - Categorias: conjunto inicial administrável, expansível (seed/migração controlada).
 - Idioma da interface: **pt-BR**. Público inicial: web responsiva.
 
@@ -140,5 +140,4 @@ No repositório, a direção visual está materializada em:
 - Tagline: o DRS usa "Conhecimento científico **em contexto**" e "Descobrir, compreender e
   compartilhar conhecimento"; o DS2 traz o lettering "Conhecimento científico, interligado".
   Revisão vira card próprio — nenhum agente altera o DS2 por conta própria.
-- `DESIGN_SYSTEM.md` e `PAGE_BLUEPRINTS.md` **não existem** no repositório e são exigidos pelo
-  DRS (RNF003, §21.1): precisam ser derivados do DS2 e do §15 antes das telas do MVP.
+- `DESIGN_SYSTEM.md` e `PAGE_BLUEPRINTS.md` já estão versionados e derivados do DS2 e do §15; devem permanecer sincronizados com esses artefatos.
