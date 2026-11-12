@@ -47,7 +47,7 @@ docs/00-visao.md                   objetivo, escopo, fora de escopo, público
 docs/01-arquitetura.md             módulos, modelo de dados, decisões técnicas
 docs/adr/ADR-XXXX-*.md             decisão tomada, com contexto e consequência
 docs/cards/<id>-<slug>.md          spec de cada tarefa (escrita pelo PO)
-docs/qa/<card>-<data>.log          evidência de verificação (escrita pelo QA)
+docs/qa/aceite-*.md                aceite da etapa (evidência bruta fora do repo — ADR-0012)
 DESIGN_SYSTEM.md                   tokens, tipografia, componentes, movimento
 PAGE_BLUEPRINTS.md                 rotas, responsabilidade das páginas, estados
 contracts/openapi.yaml             A FRONTEIRA entre backend e frontend
@@ -67,8 +67,10 @@ Makefile                           atalhos: up, db:migrate, api:dev, web:dev, te
    própria. Dois cards nunca escrevem no mesmo arquivo.
 3. **Um card = um assunto**, ≤ ~400 palavras de corpo, autossuficiente (o executor não vê
    o histórico da conversa).
-4. **Evidência ou não aconteceu.** Log de teste, print, diff de contrato — em arquivo,
-   anexado ao card. Nunca declarar teste verde sem a saída colada.
+4. **Evidência ou não aconteceu.** O log bruto, o print e o diff ficam **fora do
+   repositório** (`SCIPATH_EVIDENCIA_DIR`, padrão `$HOME/.scipath/evidencia`, ADR-0012);
+   o que entra no repositório é o **aceite** em `docs/qa/*.md`, com veredito, comandos e
+   números. Nunca declarar teste verde sem ter rodado e registrado a saída.
 5. **Quem implementa não verifica.** O QA é outro perfil.
 6. **Sem mudança não pedida.** Refatoração, "melhoria" e limpeza oportunista são
    proibidas: se vale a pena, vira card.
@@ -84,7 +86,7 @@ Makefile                           atalhos: up, db:migrate, api:dev, web:dev, te
 11. **O id do card é único e imutável.** O id (`E2.6-f2`) identifica **um** card: dois cards
     nunca dividem o mesmo id, e o id não muda depois de criado. Assunto com duas frentes ganha
     ids distintos (`E2.6-f2a` e `E2.6-f2b`), nunca o mesmo id em dois cards. O nome do arquivo
-    de evidência **contém o id do card** (`docs/qa/<card>-<data>.log`); id reaproveitado faz uma
+    de evidência **contém o id do card** (`<card>-<data>`, ADR-0012); id reaproveitado faz uma
     evidência sobrescrever a outra na integração e a prova de um dos cards desaparece sem
     ninguém notar — foi o conflito `add/add` de `docs/qa/e2-6-f2-evidencia.sh` (dois documentos
     distintos com o mesmo nome: `make web:dev` no backend e `db-setup.sh` no QA), resolvido
@@ -142,7 +144,8 @@ Ao aumentar a RAM, baixe esse limiar junto, senão a configuração é no-op sil
 `make test` + `make lint` + `make contract:check` verdes, **executados do jeito que a
 evidência registra** (e reproduzíveis de shell limpo, sem depender de variável de ambiente
 de quem rodou) · migração nova e reversível · contrato atualizado se a fronteira mudou ·
-evidência anexada ao card · documentação tocada quando o comportamento mudou. Sem isso, o
+aceite da etapa versionado em `docs/qa/` com a evidência bruta guardada fora do repositório
+(ADR-0012) · documentação tocada quando o comportamento mudou. Sem isso, o
 card volta. Se um teste falhar, isso é evidência — nunca opinião, nunca silêncio.
 
 ## Higiene de contexto (o projeto não mora no chat)
@@ -150,9 +153,10 @@ card volta. Se um teste falhar, isso é evidência — nunca opinião, nunca sil
 - Decisão tomada em conversa → `docs/adr/ADR-XXXX-*.md`.
 - Convenção combinada → este arquivo.
 - Fronteira de API → `contracts/openapi.yaml`.
-- Evidência → arquivo em `docs/qa/`, **versionado**: `docs/qa/*.log` é exceção explícita à regra
-  `*.log` do `.gitignore`. Evidência que não está no repositório não é evidência (§17.5, §21.3);
-  mantenha o log em texto e enxuto.
+- Evidência bruta → arquivo **fora do repositório**, em `SCIPATH_EVIDENCIA_DIR`
+  (padrão `$HOME/.scipath/evidencia`, ADR-0012): log, print, diff, sonda. O repositório
+  guarda o **aceite** (`docs/qa/*.md`) — veredito, comandos e números — e o `.gitignore`
+  ignora `*.log` sem exceção.
 - **Se só existe no chat, vai ser comprimido e perdido.** Escreva no repositório.
 
 ## Ambiente e comandos

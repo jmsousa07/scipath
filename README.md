@@ -87,7 +87,7 @@ make lint
 make contract:check
 ```
 
-`make lint` regenera os tipos de rota antes do ESLint e do typecheck. `make test` usa o banco de teste e não precisa carregar o `.env`. O aceite E5.10 registrou 267 testes backend sem falhas; veja os logs versionados em `docs/qa/` para os comandos e ressalvas.
+`make lint` regenera os tipos de rota antes do ESLint e do typecheck. `make test` usa o banco de teste e não precisa carregar o `.env`. O aceite E5.10 registrou 267 testes backend sem falhas. Os **aceites por etapa** ficam em [`docs/qa/`](docs/qa/), e o log bruto de execução (que não é versionado) é anexo local — ver [ADR-0012](docs/adr/ADR-0012-evidencia-bruta-fora-do-repositorio.md).
 
 ## Escopo e decisões
 
@@ -96,11 +96,11 @@ make contract:check
 - [Arquitetura](docs/01-arquitetura.md)
 - [ADRs](docs/adr/) — decisões técnicas e limites aceitos.
 - [OpenAPI](contracts/openapi.yaml) — fronteira entre web e API.
-- [Aceite da Etapa 5](docs/qa/aceite-etapa-5.md) — verificação independente do gerenciamento de materiais.
+- [Aceites por etapa](docs/qa/) — verificação independente de cada etapa (2 a 5) e do MVP.
 
 ## Como foi desenvolvido
 
-O projeto foi conduzido por João Mateus de Sousa com apoio de agentes Hermes (perfis de produto, backend, frontend, QA e gerência), organizados por cards e worktrees. Os agentes foram ferramentas de desenvolvimento; **não fazem parte do produto em execução**. Requisitos, decisões e evidências ficam registrados no DRS, ADRs, contrato e `docs/qa/`.
+O projeto foi conduzido por João Mateus de Sousa com apoio de agentes Hermes (perfis de produto, backend, frontend, QA e gerência), organizados por cards e worktrees. Os agentes foram ferramentas de desenvolvimento; **não fazem parte do produto em execução**. Requisitos, decisões e aceites ficam registrados no DRS, nos ADRs, no contrato e em `docs/qa/`; o log bruto de cada rodada não é versionado ([ADR-0012](docs/adr/ADR-0012-evidencia-bruta-fora-do-repositorio.md)).
 
 ## Licença
 

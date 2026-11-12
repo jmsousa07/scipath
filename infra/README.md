@@ -214,8 +214,8 @@ contraprova do laboratório mostra (`session_user=scipath current_user=scipath` 
   visível, mas quebra os scripts de evidência do E1.2/E1.3 e o próprio `make db:migrate:test`,
   que o card exige que continuem funcionando.
 - *`REASSIGN OWNED` no alvo `db:migrate:test`* normalizaria só o caminho que passa pelo alvo: os
-  scripts de evidência que falam Flyway direto com a role de dev (`docs/qa/e1-2-evidencia.sh`,
-  `e1-3-evidencia.sh`) continuariam envenenando o banco. O `SET role` por banco é o mesmo
+  scripts de evidência que falam Flyway direto com a role de dev (`e1-2-evidencia.sh`,
+  `e1-3-evidencia.sh` — hoje fora do repositório, ADR-0012) continuariam envenenando o banco. O `SET role` por banco é o mesmo
   conserto no lugar onde ele vale para qualquer caminho — a própria conexão.
 
 **Custo aceito.** A role de dev pode `SET ROLE scipath_test` (é o mecanismo) e, no banco de

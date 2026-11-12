@@ -183,8 +183,8 @@ Sem rolagem horizontal (`RNF002`). Grade de 12 colunas do template (`glue-grid__
    gerados (`check:tokens`) e `check:style` (A) proíbe hex de cor fora deles; por isso o override
    entra em `frontend/src/styles/layout.css` (camada de projeto, carregada depois de
    `design-system.css`) usando o token da paleta, com o comentário de divergência no próprio CSS.
-   Medição reproduzível: `python3 docs/qa/e2-14-contraste.py`; laudo em
-   `docs/qa/e2-14-contraste-2026-10-31.log`. Rastreabilidade: RNF008, CA009, achado B do E2.11.
+   Medição reproduzível: `python3 e2-14-contraste.py` (instrumento e laudo vivem fora do
+   repositório desde o ADR-0012). Rastreabilidade: RNF008, CA009, achado B do E2.11.
 8. **Contraste dos papéis de texto FORA do `<main>` (E2.16 — corrigido em 2026-10-31).** A verificação
    do E2.14 mediu o documento INTEIRO e achou dois pares abaixo de 4.5:1 que a bateria do E2.11 não
    vê, porque ela varre só o `main` (achado na seção 4.5 de `docs/qa/e2-14-verificacao-2026-10-31.log`):

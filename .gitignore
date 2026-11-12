@@ -2,9 +2,9 @@
 .env
 .env.local
 *.log
-# Evidencia de QA e versionada por convencao (E1.11): sem isso, cada worker
-# precisava de `git add -f` e quem nao soubesse perdia a prova em silencio.
-!docs/qa/*.log
+# Evidencia bruta (log, print, diff, sonda) vive FORA do repositorio, em
+# SCIPATH_EVIDENCIA_DIR (padrao $HOME/.scipath/evidencia) — ADR-0012. O que entra
+# versionado e o aceite em docs/qa/*.md, entao nao ha excecao para *.log aqui.
 
 # --- java / maven
 backend/target/

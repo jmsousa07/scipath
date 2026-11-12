@@ -12,8 +12,9 @@
 # reversão, roda a suíte em shell limpo, valida o contrato, mede o frontend e
 # faz a higiene. Não depende de estado deixado por outro agente.
 #
-# Uso (a evidência é a saída; grave-a versionada — AGENTS.md, DRS §17.5/§21.3):
-#   bash infra/qa-harness.sh | tee docs/qa/e1-base-$(date -u +%Y-%m-%d).log
+# Uso (a evidência é a saída; grave o log BRUTO fora do repositório — AGENTS.md,
+# ADR-0012 — e publique só o aceite em docs/qa/*.md):
+#   bash infra/qa-harness.sh | tee "${SCIPATH_EVIDENCIA_DIR:-$HOME/.scipath/evidencia}/e1-base-$(date -u +%Y-%m-%d).log"
 #
 # Nunca imprime segredo: o .env é carregado com `set -a` só para psql/flyway, e
 # a senha nunca vai para a saída (há conferência no fim).
@@ -27,7 +28,8 @@ WORKTREE="$(git rev-parse --show-toplevel)"
 GIT_COMMON="$(git rev-parse --path-format=absolute --git-common-dir)"
 MAIN_ROOT="$(cd "$GIT_COMMON/.." && pwd)"
 ENV_FILE="$MAIN_ROOT/.env"
-DOCS_QA="$WORKTREE/docs/qa"
+EVIDENCIA="${SCIPATH_EVIDENCIA_DIR:-$HOME/.scipath/evidencia}"
+mkdir -p "$EVIDENCIA"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -42,7 +44,8 @@ achado() { ACHADOS+=("$1"); }
 
 # ------------------------------------------------------- E5.10-f1: decisão do ACHADO do E1.8
 # Único lugar onde se decide se o harness DECLARA o achado de permissão do E1.8. Fica em
-# função justamente para que a evidência (docs/qa/e5-10-f1-evidencia.sh) extraia e exercite
+# função justamente para que a evidência (e5-10-f1-evidencia.sh, fora do repositório
+# desde o ADR-0012) extraia e exercite
 # EXATAMENTE esta regra — sem uma segunda cópia que possa divergir do instrumento.
 # Três estados, nunca dois: a ausência de medição não é prova da ausência do achado.
 # >>> E5.10-f1-decisao >>>
@@ -434,14 +437,14 @@ echo "-- arquivos VERSIONADOS com o valor da senha (esperado 0): $ocorrencias"
 h2 "7.2 Padrões de segredo (chave privada, token, senha literais)"
 echo "Escopo: TODO o repositório versionado, menos os lugares onde um literal com forma de"
 echo "segredo é legítimo por construção — duplo de teste (backend/**/src/test/**), script de"
-echo "verificação (frontend/scripts/check-*.mjs) e a própria evidência (docs/qa/**). Segredo"
+echo "verificação (frontend/scripts/check-*.mjs). Segredo"
 echo "REAL não escapa: a senha do .env é procurada em arquivo algum com essas exclusões (7.1)."
 padroes=$(grep -rInE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target \
   --exclude='*.log' --exclude='*.md' --exclude='*.example' \
   -e 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' \
   -e '(password|senha|secret|token)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{8,}' \
   "$WORKTREE" 2>/dev/null | grep -viE 'password.*\$|senha_hash|hash-de-teste|PASSWORD NULL|"password": ""' \
-  | grep -vE '/(docs/qa/|src/test/|scripts/check-)' | head -20 || true)
+  | grep -vE '/(src/test/|scripts/check-)' | head -20 || true)
 echo "${padroes:-(0 ocorrências)}"
 npad=$(printf '%s' "$padroes" | grep -c . || true)
 if [[ "$ocorrencias" -eq 0 && "${npad:-0}" -eq 0 ]]; then

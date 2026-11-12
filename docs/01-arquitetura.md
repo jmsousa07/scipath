@@ -19,9 +19,9 @@
 backend/     Java 21 + Spring Boot 3 (Maven)   regras, autenticação, autorização, API REST
 backend/src/main/resources/db/migration/      migrações Flyway versionadas
 frontend/    Next.js (App Router) + TS + Tailwind   público indexável + workspace autenticado
-docs/qa/     scripts e evidências de aceitação/teste
+docs/qa/     aceites por etapa (a evidência bruta fica fora do repositório — ADR-0012)
 contracts/   openapi.yaml                       fronteira da API
-docs/        visão, arquitetura, ADRs, cards, evidências de QA
+docs/        visão, arquitetura, ADRs, cards, aceites de QA
 infra/       scripts de ambiente (banco, setup)
 assets/      design systems (contrato visual)
 ```

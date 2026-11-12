@@ -1,8 +1,9 @@
 # Template de evidência de QA — SciPath
 
-> Toda verificação entregue como arquivo versionado em `docs/qa/<card>-<data>.log`
-> (AGENTS.md: `!docs/qa/*.log` é exceção ao `*.log` do `.gitignore`). Evidência que só
-> existe no chat é evidência perdida (DRS §17.5, §21.3).
+> Toda verificação entrega **duas** peças: o log bruto, guardado **fora do repositório**
+> em `SCIPATH_EVIDENCIA_DIR` (padrão `$HOME/.scipath/evidencia`, no formato
+> `<card>-<data>.log`), e o **aceite** versionado em `docs/qa/*.md`, com veredito, comandos e
+> números (ADR-0012). Evidência que só existe no chat é evidência perdida (DRS §17.5, §21.3).
 >
 > Este template é o **contrato do que conta como prova**. Ele existe porque a verificação
 > do F0.1 nunca aconteceu por falta de um instrumento repetível — o mesmo motivo do
