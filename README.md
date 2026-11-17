@@ -104,4 +104,4 @@ O projeto foi conduzido por João Mateus de Sousa com apoio de agentes Hermes (p
 
 ## Licença
 
-O código original do SciPath em `backend/`, `frontend/` (exceto fontes de terceiros), `infra/` e `contracts/` está sob **MIT**; consulte [`LICENSE`](LICENSE). Essa licença não cobre `docs/`, o DRS PDF nem arquivos com licença própria. As fontes Google Sans/Google Sans Flex e Roboto Mono são componentes de terceiros sob **SIL Open Font License 1.1**; os avisos estão em [`assets/fonts/`](assets/fonts/) e `frontend/public/fonts/`.
+O código original do SciPath em `backend/`, `frontend/` (exceto fontes de terceiros), `infra/` e `contracts/` está sob **Apache License 2.0** (`Apache-2.0`); consulte [`LICENSE`](LICENSE). Essa licença não cobre `docs/`, o DRS PDF nem arquivos com licença própria. As fontes Google Sans/Google Sans Flex e Roboto Mono são componentes de terceiros sob **SIL Open Font License 1.1**; os avisos estão em [`assets/fonts/`](assets/fonts/) e `frontend/public/fonts/`.

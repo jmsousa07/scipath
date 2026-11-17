@@ -8,7 +8,7 @@ repositório — [ADR-0012](../adr/ADR-0012-evidencia-bruta-fora-do-repositorio.
 
 - `README.md` na raiz: proposta, estado de MVP, o que faz, o que **não** faz, arquitetura,
   setup, testes e limites — sem alegar prontidão para produção.
-- `LICENSE` MIT com escopo explícito: código original e API; `docs/`, DRS e material de
+- `LICENSE` **Apache-2.0** com escopo explícito: código original e API; `docs/`, DRS e material de
   terceiros fora do escopo. Fontes Google Sans/Flex e Roboto Mono sob SIL OFL 1.1, com os
   avisos oficiais preservados e comparados com as fontes upstream.
 - Documentação corrigida contra o que o código faz: limite de upload em 30 MB, rota
